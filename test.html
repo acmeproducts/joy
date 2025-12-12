@@ -1,4 +1,4 @@
-<!-- A Time to Relax - v13.3 - 2025-12-13 12:45 AM - PERFECT SYNC -->
+<!-- A Time to Relax - v13.4 - 2025-12-13 01:00 AM - SCALE SELECTOR -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,6 +41,14 @@
         
         #custom-message-container { pointer-events: auto; }
         #custom-message-container a { color: #8ec5fc; text-decoration: underline; }
+        
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 12px;
+        }
     </style>
 </head>
 <body class="overflow-hidden h-screen w-screen font-sans text-slate-800">
@@ -89,6 +97,19 @@
                     <input type="checkbox" id="audio-toggle" class="sr-only peer" checked>
                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-300"></div>
                 </label>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Musical Scale</span>
+                <select id="scale-selector" class="w-full px-4 py-2.5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 cursor-pointer">
+                    <option value="extended_pentatonic">Extended Pentatonic (18 notes)</option>
+                    <option value="original">Original Scale (13 notes)</option>
+                    <option value="major_pentatonic">Major Pentatonic</option>
+                    <option value="minor_pentatonic">Minor Pentatonic</option>
+                    <option value="chromatic">Chromatic (12 notes)</option>
+                    <option value="whole_tone">Whole Tone</option>
+                    <option value="blues">Blues Scale</option>
+                </select>
             </div>
 
             <div class="space-y-3">
@@ -242,13 +263,12 @@
                 </button>
             </div>
             <div class="overflow-y-auto max-h-[60vh] space-y-3 text-sm text-gray-700">
-                <p class="font-bold text-gray-900">v13.3 Changelog (Frame-Perfect Sync):</p>
+                <p class="font-bold text-gray-900">v13.4 Changelog (Scale Selector):</p>
                 <ul class="list-decimal pl-5 space-y-1">
-                    <li><strong>Pre-Generated Buffers:</strong> All pluck sounds pre-generated at startup (zero generation overhead).</li>
-                    <li><strong>Event Queue System:</strong> User interactions queue audio events instead of playing immediately.</li>
-                    <li><strong>Frame Synchronization:</strong> Audio queue processed at exact start of each render frame.</li>
-                    <li><strong>Scheduled Playback:</strong> All audio scheduled using AudioContext.currentTime for precise timing.</li>
-                    <li><strong>Zero Drift:</strong> Audio and visuals locked to same animation frame timeline.</li>
+                    <li><strong>Musical Scale Selector:</strong> Dropdown menu to choose from 7 different scales.</li>
+                    <li><strong>Dynamic Audio Buffer Regeneration:</strong> Buffers regenerate when scale changes.</li>
+                    <li><strong>Scale Options:</strong> Extended Pentatonic (18), Original (13), Major/Minor Pentatonic, Chromatic, Whole Tone, Blues.</li>
+                    <li><strong>Persistent Selection:</strong> Scale choice saved to localStorage.</li>
                 </ul>
             </div>
         </div>
@@ -258,7 +278,7 @@
         const config = {
             currentThemeIndex: 0,
             defaultWords: [
-                                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
+                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
                 "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "❤️❤️❤️", "🪷🪷🪷", "Balance", "Harmony",
                 "Inner Peace", "Radiate", "Stillness", "Presence", "Gratitude", "Acceptance", "Flow", "Healing", "Strength",
                 "Wisdom", "Patience", "Courage", "Hi Joy  :)", "Clarity", "Unity", "☕☕☕"," 😴😴😴","ดีที่สุดอย่างแท้จริง","จอยประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","🪷 Joy 🪷เกี่ยวดองกัน","🏵️ Joy 🏵️","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม","Relax...","Deep Breath","หายใจเข้าลึกๆ"
@@ -271,7 +291,8 @@
             useGradient: true,
             backgroundImage: null,
             currentTrail: '♥',
-            lastTrailSwitch: Date.now()
+            lastTrailSwitch: Date.now(),
+            currentScale: 'extended_pentatonic'
         };
 
         const themes = [
@@ -286,6 +307,16 @@
             "I Love You", "You are my Sunshine", "I Love You My Sweetheart", "❤️❤️❤️", "🥰❤️♥️🧡🫰","whereever you go that's where I want to be", "Forever Yours", "My One and Only", "Soulmate", "Endless Love","My Heart is Yours", "Together Always", "You Complete Me", "My Happy Place", "Love of My Life", "Dream Come True","My Everything", "Cherished", "Adored", "My Rock", "Purest Love", "Only You", "Sweetheart", "Darling",
             "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
         ];
+        
+        const scales = {
+            extended_pentatonic: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            original: [329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99, 783.99, 880.00, 987.77, 1046.50],
+            major_pentatonic: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            minor_pentatonic: [220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50],
+            chromatic: [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88],
+            whole_tone: [261.63, 293.66, 329.63, 369.99, 415.30, 466.16, 523.25, 587.33, 659.25, 739.99, 830.61, 932.33],
+            blues: [261.63, 311.13, 349.23, 369.99, 392.00, 466.16, 523.25, 622.25, 698.46, 739.99, 783.99, 932.33]
+        };
         
         let visualEntities = [];
         let wordEntities = [];
@@ -303,7 +334,7 @@
             bgSource: null,
             bgGain: null,
             pluckBuffers: {},
-            scale: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            scale: scales.extended_pentatonic,
             
             init: function() {
                 if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
@@ -321,6 +352,8 @@
 
             generatePluckBuffers: function() {
                 if (!this.ctx) return;
+                
+                this.pluckBuffers = {};
                 
                 this.scale.forEach(freq => {
                     const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2.0, this.ctx.sampleRate);
@@ -340,6 +373,13 @@
                     
                     this.pluckBuffers[freq] = buffer;
                 });
+            },
+            
+            changeScale: function(scaleName) {
+                if (scales[scaleName]) {
+                    this.scale = scales[scaleName];
+                    this.generatePluckBuffers();
+                }
             },
 
             loadBackground: async function(url) {
@@ -992,6 +1032,19 @@
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');
         document.getElementById('close-btn').onclick = ()=>panel.classList.add('translate-x-full');
         document.getElementById('audio-toggle').onchange=e=>ZenAudio.enabled=e.target.checked;
+        
+        const scaleSelector = document.getElementById('scale-selector');
+        if(localStorage.getItem('garden_scale')) {
+            config.currentScale = localStorage.getItem('garden_scale');
+            scaleSelector.value = config.currentScale;
+            ZenAudio.changeScale(config.currentScale);
+        }
+        
+        scaleSelector.onchange = (e) => {
+            config.currentScale = e.target.value;
+            localStorage.setItem('garden_scale', config.currentScale);
+            ZenAudio.changeScale(config.currentScale);
+        };
         
         document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
         document.getElementById('trail-slider').oninput=e=>{

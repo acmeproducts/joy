@@ -1,4 +1,4 @@
-<!-- A Time to Relax - v13.4 - 2025-12-13 01:00 AM - SCALE SELECTOR -->
+<!-- A Time to Relax - v13.5 - 2025-12-13 01:15 AM - RECORDING RESET FIX -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -263,12 +263,13 @@
                 </button>
             </div>
             <div class="overflow-y-auto max-h-[60vh] space-y-3 text-sm text-gray-700">
-                <p class="font-bold text-gray-900">v13.4 Changelog (Scale Selector):</p>
+                <p class="font-bold text-gray-900">v13.5 Changelog (Recording Reset Fix):</p>
                 <ul class="list-decimal pl-5 space-y-1">
-                    <li><strong>Musical Scale Selector:</strong> Dropdown menu to choose from 7 different scales.</li>
-                    <li><strong>Dynamic Audio Buffer Regeneration:</strong> Buffers regenerate when scale changes.</li>
-                    <li><strong>Scale Options:</strong> Extended Pentatonic (18), Original (13), Major/Minor Pentatonic, Chromatic, Whole Tone, Blues.</li>
-                    <li><strong>Persistent Selection:</strong> Scale choice saved to localStorage.</li>
+                    <li><strong>Complete Recording Cleanup:</strong> All tracks stopped, streams released, proper state reset after each recording.</li>
+                    <li><strong>Page Exit Handling:</strong> Recording automatically stops and downloads if user navigates away or closes page.</li>
+                    <li><strong>Stream Management:</strong> Proper disposal of canvas and audio streams after recording stops.</li>
+                    <li><strong>Error Prevention:</strong> MediaRecorder fully reset between recordings to prevent download errors.</li>
+                    <li><strong>Background Music Sync:</strong> Ensured background music restarts from t=0 on each recording for perfect sync.</li>
                 </ul>
             </div>
         </div>
@@ -1152,76 +1153,144 @@
             };
         }
 
-        let mediaRecorder, recordedChunks = [], isRecording = false;
+        let mediaRecorder, recordedChunks = [], isRecording = false, currentStream = null, currentMimeType = null;
         const recBtn = document.getElementById('record-btn');
         const recInd = document.getElementById('rec-indicator');
         
         recBtn.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
         
+        function cleanupRecording() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            if (mediaRecorder) {
+                if (mediaRecorder.state !== 'inactive') {
+                    try {
+                        mediaRecorder.stop();
+                    } catch(e) {
+                        console.error('Error stopping recorder:', e);
+                    }
+                }
+                mediaRecorder = null;
+            }
+            
+            recordedChunks = [];
+            isRecording = false;
+            recInd.style.opacity = '0';
+            recBtn.innerText = "Record";
+            recBtn.classList.remove('bg-red-100', 'text-red-700', 'animate-pulse');
+        }
+        
+        function downloadRecording() {
+            if (recordedChunks.length === 0) return;
+            
+            const blob = new Blob(recordedChunks, { type: currentMimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            
+            let ext = "webm";
+            if (currentMimeType && currentMimeType.includes("mp4")) ext = "mp4";
+            
+            a.download = `garden-${Date.now()}.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+        
         function startRecording() {
             ZenAudio.init();
             
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            mediaRecorder = null;
-            recordedChunks = [];
-
+            cleanupRecording();
+            
             if (ZenAudio.ctx && ZenAudio.ctx.state === 'suspended') {
                 ZenAudio.ctx.resume();
             }
-
+            
             ZenAudio.playBackground();
-
-            const stream = canvas.captureStream(60); 
+            
+            const canvasStream = canvas.captureStream(60);
+            currentStream = canvasStream;
             
             if (ZenAudio.dest && ZenAudio.dest.stream.getAudioTracks().length > 0) {
-                const audioTrack = ZenAudio.dest.stream.getAudioTracks()[0].clone();
-                stream.addTrack(audioTrack);
+                const audioTrack = ZenAudio.dest.stream.getAudioTracks()[0];
+                currentStream.addTrack(audioTrack);
             }
-
+            
             const mimeTypes = [
-                "video/mp4", 
-                "video/webm;codecs=h264", 
-                "video/webm;codecs=vp9", 
+                "video/mp4",
+                "video/webm;codecs=h264",
+                "video/webm;codecs=vp9",
                 "video/webm"
             ];
             
             let selectedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
-
-            if (!selectedType) { alert("Screen recording is not supported."); return; }
-
-            try { mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType }); } 
-            catch (e) { console.error(e); alert("Recording init failed."); return; }
-
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: selectedType });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a"); 
-                a.style.display="none"; a.href=url; 
-                
-                let ext = "webm";
-                if (selectedType.includes("mp4")) ext = "mp4";
-                
-                a.download=`garden-${Date.now()}.${ext}`;
-                document.body.appendChild(a); a.click(); 
-                setTimeout(()=>URL.revokeObjectURL(url),100);
+            
+            if (!selectedType) {
+                alert("Screen recording is not supported.");
+                cleanupRecording();
+                return;
+            }
+            
+            currentMimeType = selectedType;
+            
+            try {
+                mediaRecorder = new MediaRecorder(currentStream, { mimeType: selectedType });
+            } catch (e) {
+                console.error(e);
+                alert("Recording init failed.");
+                cleanupRecording();
+                return;
+            }
+            
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
             };
             
-            mediaRecorder.start(); 
-            isRecording = true; 
-            recInd.style.opacity = '1'; 
-            recBtn.innerText = "Stop"; 
-            recBtn.classList.add('bg-red-100','text-red-700','animate-pulse'); 
+            mediaRecorder.onstop = () => {
+                downloadRecording();
+                cleanupRecording();
+            };
+            
+            mediaRecorder.onerror = (e) => {
+                console.error('MediaRecorder error:', e);
+                cleanupRecording();
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            recInd.style.opacity = '1';
+            recBtn.innerText = "Stop";
+            recBtn.classList.add('bg-red-100', 'text-red-700', 'animate-pulse');
             panel.classList.add('translate-x-full');
         }
-
-        function stopRecording() { 
-            if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); 
-            isRecording=false; recInd.style.opacity='0'; recBtn.innerText="Record"; 
-            recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
+        
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            } else {
+                cleanupRecording();
+            }
         }
+        
+        window.addEventListener('beforeunload', (e) => {
+            if (isRecording) {
+                stopRecording();
+            }
+        });
+        
+        window.addEventListener('pagehide', () => {
+            if (isRecording) {
+                stopRecording();
+            }
+        });
 
         requestAnimationFrame(loop);
     </script>

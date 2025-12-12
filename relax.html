@@ -1,4 +1,4 @@
-<!-- A Gift for Joy - v13.2 - 2025-12-13 12:30 AM - SYNC FIX -->
+<!-- A Gift for Joy - v13.3 - 2025-12-13 12:45 AM - PERFECT SYNC -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,11 +14,9 @@
             -webkit-tap-highlight-color: transparent;
             background-color: #000;
         }
-        /* Hide scrollbar for settings panel */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Slider Styling */
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
             height: 16px; width: 16px;
@@ -31,7 +29,6 @@
             background: #e2e8f0; border-radius: 2px;
         }
         
-        /* Modal Animation Classes */
         .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal.invisible { opacity: 0; visibility: hidden; pointer-events: none; }
         .modal.visible { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -40,10 +37,8 @@
         .scale-in { transform: scale(1); }
         .scale-out { transform: scale(0.95); }
 
-        /* Code Block Styling */
         pre { white-space: pre-wrap; word-wrap: break-word; }
         
-        /* Added for v13 Text Injection support */
         #custom-message-container { pointer-events: auto; }
         #custom-message-container a { color: #8ec5fc; text-decoration: underline; }
     </style>
@@ -53,7 +48,7 @@
     <canvas class="block absolute top-0 left-0 w-full h-full z-0" id="gameCanvas"></canvas>
 
     <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 transition-opacity duration-1000 opacity-100 text-white/90 text-center drop-shadow-md" id="overlay">
-        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">Time to Relax</h1>
+        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">A Gift for Joy</h1>
         <div id="main-subtitle-container">
             <p class="text-lg md:text-xl font-light leading-relaxed">
                 Tap to Bloom<br>
@@ -70,7 +65,7 @@
     </div>
 
     <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
-      • Time to Relax • Penang 2025 • v13.2 <span id="clock">--:--</span>
+      • A Gift for Joy • Penang 2025 • v13.3 <span id="clock">--:--</span>
     </div>
 
     <button class="fixed top-5 right-5 w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/30 active:scale-95 transition-all shadow-lg z-50" id="settings-trigger">
@@ -247,27 +242,23 @@
                 </button>
             </div>
             <div class="overflow-y-auto max-h-[60vh] space-y-3 text-sm text-gray-700">
-                <p class="font-bold text-gray-900">v13.2 Changelog (Perfect Sync):</p>
+                <p class="font-bold text-gray-900">v13.3 Changelog (Frame-Perfect Sync):</p>
                 <ul class="list-decimal pl-5 space-y-1">
-                    <li><strong>Audio Sync Fix:</strong> Background music now loads via AudioBuffer instead of HTML audio element.</li>
-                    <li><strong>Single Timeline:</strong> All audio (background + effects) runs through Web Audio API on same clock.</li>
-                    <li><strong>Recording Restart:</strong> Background music restarts from t=0 when recording starts for perfect sync.</li>
-                    <li><strong>Zero Drift:</strong> Eliminated temporal misalignment between canvas and audio streams.</li>
+                    <li><strong>Pre-Generated Buffers:</strong> All pluck sounds pre-generated at startup (zero generation overhead).</li>
+                    <li><strong>Event Queue System:</strong> User interactions queue audio events instead of playing immediately.</li>
+                    <li><strong>Frame Synchronization:</strong> Audio queue processed at exact start of each render frame.</li>
+                    <li><strong>Scheduled Playback:</strong> All audio scheduled using AudioContext.currentTime for precise timing.</li>
+                    <li><strong>Zero Drift:</strong> Audio and visuals locked to same animation frame timeline.</li>
                 </ul>
             </div>
         </div>
     </div>
 
     <script>
-        /**
-         * A Gift for Joy - Penang 2025 (v13.2 - Perfect Sync)
-         */
-
-        // --- 1. Core Config & State ---
         const config = {
             currentThemeIndex: 0,
             defaultWords: [
-                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
+                                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
                 "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "❤️❤️❤️", "🪷🪷🪷", "Balance", "Harmony",
                 "Inner Peace", "Radiate", "Stillness", "Presence", "Gratitude", "Acceptance", "Flow", "Healing", "Strength",
                 "Wisdom", "Patience", "Courage", "Hi Joy  :)", "Clarity", "Unity", "☕☕☕"," 😴😴😴","ดีที่สุดอย่างแท้จริง","จอยประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","🪷 Joy 🪷เกี่ยวดองกัน","🏵️ Joy 🏵️","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม","Relax...","Deep Breath","หายใจเข้าลึกๆ"
@@ -300,9 +291,9 @@
         let wordEntities = [];
         let particles = []; 
         let foundEggs = JSON.parse(localStorage.getItem('garden_egg_ids') || "[]");
-        let inputBuffer = ""; 
+        let inputBuffer = "";
+        let pendingAudioEvents = [];
 
-        // --- 2. Audio Engine (FIXED: AudioBuffer Loading) ---
         const ZenAudio = {
             ctx: null, 
             enabled: true, 
@@ -311,6 +302,7 @@
             bgBuffer: null,
             bgSource: null,
             bgGain: null,
+            pluckBuffers: {},
             scale: [329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99, 880.00, 987.77, 1174.66, 1318.51],
             
             init: function() {
@@ -322,7 +314,32 @@
                     this.dest = this.ctx.createMediaStreamDestination();
                     this.masterGain.connect(this.ctx.destination);
                     this.masterGain.connect(this.dest);
+                    
+                    this.generatePluckBuffers();
                 }
+            },
+
+            generatePluckBuffers: function() {
+                if (!this.ctx) return;
+                
+                this.scale.forEach(freq => {
+                    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2.0, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    const delayLength = Math.floor(this.ctx.sampleRate / freq);
+                    let idx = 0, last = 0;
+                    
+                    const noise = new Float32Array(delayLength).map(() => Math.random()*2-1);
+                    
+                    for (let i = 0; i < buffer.length; i++) {
+                        const sample = (noise[idx] + last) * 0.5 * 0.99; 
+                        last = noise[idx]; 
+                        noise[idx] = sample;
+                        data[i] = sample;
+                        idx = (idx + 1) % delayLength;
+                    }
+                    
+                    this.pluckBuffers[freq] = buffer;
+                });
             },
 
             loadBackground: async function(url) {
@@ -339,22 +356,18 @@
             playBackground: function() {
                 if (!this.bgBuffer || !this.ctx) return;
                 
-                // Stop existing source if playing
                 if (this.bgSource) {
                     try { this.bgSource.stop(); } catch(e) {}
                 }
                 
-                // Resume context if suspended
                 if (this.ctx.state === 'suspended') {
                     this.ctx.resume();
                 }
                 
-                // Create and start new source
                 this.bgSource = this.ctx.createBufferSource();
                 this.bgSource.buffer = this.bgBuffer;
                 this.bgSource.loop = true;
                 
-                // Volume control
                 if (!this.bgGain) {
                     this.bgGain = this.ctx.createGain();
                     this.bgGain.connect(this.masterGain);
@@ -387,46 +400,47 @@
                 return Math.floor(norm * (this.scale.length - 1));
             },
             
-            playPluck: function(freq, volume = 0.3) {
+            playPluckScheduled: function(freq, volume = 0.3, when = 0) {
                 if (!this.ctx || !this.enabled) return;
                 if (this.ctx.state !== 'running') this.ctx.resume().catch(()=>{});
 
-                const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2.0, this.ctx.sampleRate);
-                const data = buffer.getChannelData(0);
-                const delayLength = Math.floor(this.ctx.sampleRate / freq);
-                let idx = 0, last = 0;
+                const buffer = this.pluckBuffers[freq];
+                if (!buffer) return;
+
+                const src = this.ctx.createBufferSource();
+                const gain = this.ctx.createGain();
+                gain.gain.value = volume;
                 
-                const noise = new Float32Array(delayLength).map(() => Math.random()*2-1);
+                src.buffer = buffer;
+                src.connect(gain);
+                gain.connect(this.masterGain);
                 
-                for (let i = 0; i < buffer.length; i++) {
-                    const sample = (noise[idx] + last) * 0.5 * 0.99; 
-                    last = noise[idx]; noise[idx] = sample;
-                    data[i] = sample * volume;
-                    idx = (idx + 1) % delayLength;
-                }
-                const src = this.ctx.createBufferSource(); src.buffer = buffer; src.connect(this.masterGain); src.start();
+                const startTime = when > 0 ? when : this.ctx.currentTime;
+                src.start(startTime);
             },
             
-            playChord: function(baseIdx) {
+            playChord: function(baseIdx, when = 0) {
                 if (!this.ctx || !this.enabled) return;
-                this.playPluck(this.scale[baseIdx], 0.2);
-                setTimeout(() => {
-                    const idx2 = Math.min(this.scale.length-1, baseIdx + 2);
-                    this.playPluck(this.scale[idx2], 0.15);
-                }, 40);
-                setTimeout(() => {
-                    const idx3 = Math.min(this.scale.length-1, baseIdx + 4);
-                    this.playPluck(this.scale[idx3], 0.15);
-                }, 80);
+                const startTime = when > 0 ? when : this.ctx.currentTime;
+                
+                this.playPluckScheduled(this.scale[baseIdx], 0.2, startTime);
+                
+                const idx2 = Math.min(this.scale.length-1, baseIdx + 2);
+                this.playPluckScheduled(this.scale[idx2], 0.15, startTime + 0.04);
+                
+                const idx3 = Math.min(this.scale.length-1, baseIdx + 4);
+                this.playPluckScheduled(this.scale[idx3], 0.15, startTime + 0.08);
             },
             
             playDiscovery: function() {
                 if (!this.ctx || !this.enabled) return;
-                [261.63, 329.63, 392.00, 523.25].forEach((f, i) => { setTimeout(() => this.playPluck(f, 0.2), i * 150); });
+                const startTime = this.ctx.currentTime;
+                [261.63, 329.63, 392.00, 523.25].forEach((f, i) => { 
+                    this.playPluckScheduled(f, 0.2, startTime + (i * 0.15)); 
+                });
             }
         };
 
-        // --- 3. Graphics & Entities ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         let width, height;
@@ -759,7 +773,6 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        // --- 4. Input Handling ---
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
@@ -799,7 +812,11 @@
                 
                 if(Date.now()-lastDragSound > 60) { 
                     const idx = ZenAudio.getFreqIndex(y, height);
-                    ZenAudio.playPluck(ZenAudio.scale[idx], 0.1); 
+                    pendingAudioEvents.push({
+                        type: 'pluck',
+                        freq: ZenAudio.scale[idx],
+                        volume: 0.1
+                    });
                     lastDragSound=Date.now(); 
                 }
             }
@@ -823,7 +840,11 @@
                 visualEntities.push(ent);
                 wordEntities.push(new Word(x,y-30));
                 
-                ZenAudio.playPluck(freq, 0.3);
+                pendingAudioEvents.push({
+                    type: 'pluck',
+                    freq: freq,
+                    volume: 0.3
+                });
                 
                 window.telemetryStats.taps++;
 
@@ -834,7 +855,12 @@
 
                 if(isDoubleTap) {
                     visualEntities.push(new HeartCloud(x,y));
-                    ZenAudio.playChord(idx);
+                    
+                    pendingAudioEvents.push({
+                        type: 'chord',
+                        baseIdx: idx
+                    });
+                    
                     window.telemetryStats.drags++;
                 }
                 lastTap = now;
@@ -851,7 +877,6 @@
         canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
 
-        // --- 5. Secrets Logic ---
         const rhythmSequences = [
             { code: "TTT", id: 1, desc: "Tap Tap Tap", title: "Jewel Core" }, 
             { code: "TTS", id: 2, desc: "Tap Tap Swipe", title: "Gold Filigree" }, 
@@ -889,7 +914,6 @@
             }
         }
 
-        // --- 6. Rendering ---
         function drawBackground(ctx, img, cw, ch) {
             if (!img.complete || img.naturalWidth === 0) return;
             const scale = Math.max(cw / img.width, ch / img.height);
@@ -906,6 +930,20 @@
 
             if (delta >= TARGET_FRAME_MS) {
                 lastFrameTime = timestamp - (delta % TARGET_FRAME_MS);
+                
+                if (ZenAudio.ctx && pendingAudioEvents.length > 0) {
+                    const audioTime = ZenAudio.ctx.currentTime;
+                    
+                    pendingAudioEvents.forEach(event => {
+                        if (event.type === 'pluck') {
+                            ZenAudio.playPluckScheduled(event.freq, event.volume, audioTime);
+                        } else if (event.type === 'chord') {
+                            ZenAudio.playChord(event.baseIdx, audioTime);
+                        }
+                    });
+                    
+                    pendingAudioEvents = [];
+                }
                 
                 if(config.useGradient || !config.backgroundImage) {
                     const t=themes[config.currentThemeIndex]; const g=ctx.createLinearGradient(0,0,0,height);
@@ -927,7 +965,6 @@
             requestAnimationFrame(loop);
         }
 
-        // --- 7. UI Logic ---
         const bgInput=document.getElementById('bg-upload-input');
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
@@ -1062,7 +1099,6 @@
             };
         }
 
-        // --- 8. Recording (FIXED) ---
         let mediaRecorder, recordedChunks = [], isRecording = false;
         const recBtn = document.getElementById('record-btn');
         const recInd = document.getElementById('rec-indicator');
@@ -1082,7 +1118,6 @@
                 ZenAudio.ctx.resume();
             }
 
-            // RESTART background music from t=0 for perfect sync
             ZenAudio.playBackground();
 
             const stream = canvas.captureStream(60); 
@@ -1139,7 +1174,6 @@
     </script>
 
     <script>
-        // --- TELEMETRY ---
         const FORM_ID = "1FAIpQLSe3k3uGy3zjEIJ8QVDhjpQOG6EAjWCZ9pCFlhDKle8NeUhg9w";
         const MAPPING = {
             "entry.320935448": "@session_end_iso",
@@ -1251,11 +1285,9 @@
     </script>
 
     <script>
-        // --- ENVIRONMENT INIT (FIXED) ---
         const AppState = { bgImage: null, useGradient: true };
         
         async function initEnvironment() {
-            // Text
             try {
                 const r = await fetch('msg.txt');
                 if (r.ok) {
@@ -1270,7 +1302,6 @@
                 }
             } catch(e){}
             
-            // Audio - Load via Web Audio API
             try {
                 const r = await fetch('sound.mp3', {method:'HEAD'});
                 if(r.ok) {
@@ -1286,7 +1317,6 @@
                 }
             } catch(e){}
             
-            // Image
             for(const ext of ['png','jpg','jpeg','gif']) {
                 try {
                     const r = await fetch(`img.${ext}`, {method:'HEAD'});

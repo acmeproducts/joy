@@ -1,4 +1,4 @@
-<!-- A Time to Relax - v13.6 - 2025-12-13 01:50 AM - PERSISTENT TELEMETRY -->
+<!-- A Time to Relax - v13.6.1 - 2025-12-13 02:00 AM - BUGFIX: Recording & Telemetry -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -283,13 +283,12 @@
                 </button>
             </div>
             <div class="overflow-y-auto max-h-[60vh] space-y-3 text-sm text-gray-700">
-                <p class="font-bold text-gray-900">v13.6 Changelog (Persistent Telemetry):</p>
+                <p class="font-bold text-gray-900">v13.6.1 Changelog (Bugfix Release):</p>
                 <ul class="list-decimal pl-5 space-y-1">
-                    <li><strong>Logical Data Pipeline:</strong> Remapped fields into logical groups (Timing, Session, Interaction, Network, Device, etc.).</li>
-                    <li><strong>Crash Recovery:</strong> Write initial payload on launch, recover incomplete sessions on restart.</li>
-                    <li><strong>Persistent Storage:</strong> Last 10 payloads stored locally with circular buffer.</li>
-                    <li><strong>Debug Interface:</strong> Type "/stats" in Custom Words field to view telemetry history.</li>
-                    <li><strong>Dual-Phase Logging:</strong> Static data captured immediately, dynamic data on session end.</li>
+                    <li><strong>Recording Fix:</strong> Properly reset MediaRecorder state between recordings - no relaunch needed.</li>
+                    <li><strong>Telemetry Throttle:</strong> Session finalization now only fires once, preventing duplicate submissions.</li>
+                    <li><strong>Stream Cleanup:</strong> Complete track disposal after each recording session.</li>
+                    <li><strong>State Isolation:</strong> Recording variables properly scoped and reset.</li>
                 </ul>
             </div>
         </div>
@@ -1214,142 +1213,180 @@
             };
         }
 
-        let mediaRecorder, recordedChunks = [], isRecording = false, currentStream = null, currentMimeType = null;
-        const recBtn = document.getElementById('record-btn');
-        const recInd = document.getElementById('rec-indicator');
+        // ===================================================================
+        // RECORDING SYSTEM - FIXED FOR BACK-TO-BACK RECORDINGS
+        // ===================================================================
         
-        recBtn.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
-        
-        function cleanupRecording() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-                currentStream = null;
-            }
+        const RecordingManager = {
+            recorder: null,
+            chunks: [],
+            isRecording: false,
+            stream: null,
+            mimeType: null,
             
-            if (mediaRecorder) {
-                if (mediaRecorder.state !== 'inactive') {
-                    try {
-                        mediaRecorder.stop();
-                    } catch(e) {
-                        console.error('Error stopping recorder:', e);
-                    }
+            reset() {
+                // Stop and cleanup stream
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => {
+                        track.stop();
+                        this.stream.removeTrack(track);
+                    });
+                    this.stream = null;
                 }
-                mediaRecorder = null;
-            }
+                
+                // Stop recorder
+                if (this.recorder) {
+                    if (this.recorder.state !== 'inactive') {
+                        try {
+                            this.recorder.stop();
+                        } catch(e) {
+                            console.error('Error stopping recorder:', e);
+                        }
+                    }
+                    this.recorder = null;
+                }
+                
+                this.chunks = [];
+                this.isRecording = false;
+                this.mimeType = null;
+                
+                // Reset UI
+                document.getElementById('rec-indicator').style.opacity = '0';
+                document.getElementById('record-btn').innerText = "Record";
+                document.getElementById('record-btn').classList.remove('bg-red-100', 'text-red-700', 'animate-pulse');
+            },
             
-            recordedChunks = [];
-            isRecording = false;
-            recInd.style.opacity = '0';
-            recBtn.innerText = "Record";
-            recBtn.classList.remove('bg-red-100', 'text-red-700', 'animate-pulse');
-        }
+            download() {
+                if (this.chunks.length === 0) return;
+                
+                const blob = new Blob(this.chunks, { type: this.mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.style.display = "none";
+                a.href = url;
+                
+                let ext = "webm";
+                if (this.mimeType && this.mimeType.includes("mp4")) ext = "mp4";
+                
+                a.download = `garden-${Date.now()}.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            },
+            
+            start() {
+                // Ensure audio context is ready
+                ZenAudio.init();
+                
+                // Complete reset before starting
+                this.reset();
+                
+                if (ZenAudio.ctx && ZenAudio.ctx.state === 'suspended') {
+                    ZenAudio.ctx.resume();
+                }
+                
+                // Restart background music from t=0
+                ZenAudio.playBackground();
+                
+                // Create fresh canvas stream
+                const canvasStream = canvas.captureStream(60);
+                this.stream = canvasStream;
+                
+                // Add audio track if available
+                if (ZenAudio.dest && ZenAudio.dest.stream.getAudioTracks().length > 0) {
+                    const audioTrack = ZenAudio.dest.stream.getAudioTracks()[0].clone();
+                    this.stream.addTrack(audioTrack);
+                }
+                
+                // Determine best MIME type
+                const mimeTypes = [
+                    "video/mp4",
+                    "video/webm;codecs=h264",
+                    "video/webm;codecs=vp9",
+                    "video/webm"
+                ];
+                
+                this.mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+                
+                if (!this.mimeType) {
+                    alert("Screen recording is not supported.");
+                    this.reset();
+                    return false;
+                }
+                
+                // Create new MediaRecorder
+                try {
+                    this.recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType });
+                } catch (e) {
+                    console.error('MediaRecorder creation failed:', e);
+                    alert("Recording initialization failed.");
+                    this.reset();
+                    return false;
+                }
+                
+                // Setup event handlers
+                this.recorder.ondataavailable = e => {
+                    if (e.data && e.data.size > 0) {
+                        this.chunks.push(e.data);
+                    }
+                };
+                
+                this.recorder.onstop = () => {
+                    this.download();
+                    // Auto-reset after download
+                    setTimeout(() => this.reset(), 100);
+                };
+                
+                this.recorder.onerror = (e) => {
+                    console.error('MediaRecorder error:', e);
+                    this.reset();
+                };
+                
+                // Start recording
+                this.recorder.start();
+                this.isRecording = true;
+                
+                // Update UI
+                document.getElementById('rec-indicator').style.opacity = '1';
+                document.getElementById('record-btn').innerText = "Stop";
+                document.getElementById('record-btn').classList.add('bg-red-100', 'text-red-700', 'animate-pulse');
+                document.getElementById('settings-panel').classList.add('translate-x-full');
+                
+                return true;
+            },
+            
+            stop() {
+                if (this.recorder && this.recorder.state !== 'inactive') {
+                    this.recorder.stop();
+                } else {
+                    this.reset();
+                }
+            }
+        };
         
-        function downloadRecording() {
-            if (recordedChunks.length === 0) return;
-            
-            const blob = new Blob(recordedChunks, { type: currentMimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = url;
-            
-            let ext = "webm";
-            if (currentMimeType && currentMimeType.includes("mp4")) ext = "mp4";
-            
-            a.download = `garden-${Date.now()}.${ext}`;
-            document.body.appendChild(a);
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
-        }
-        
-        function startRecording() {
-            ZenAudio.init();
-            
-            cleanupRecording();
-            
-            if (ZenAudio.ctx && ZenAudio.ctx.state === 'suspended') {
-                ZenAudio.ctx.resume();
-            }
-            
-            ZenAudio.playBackground();
-            
-            const canvasStream = canvas.captureStream(60);
-            currentStream = canvasStream;
-            
-            if (ZenAudio.dest && ZenAudio.dest.stream.getAudioTracks().length > 0) {
-                const audioTrack = ZenAudio.dest.stream.getAudioTracks()[0];
-                currentStream.addTrack(audioTrack);
-            }
-            
-            const mimeTypes = [
-                "video/mp4",
-                "video/webm;codecs=h264",
-                "video/webm;codecs=vp9",
-                "video/webm"
-            ];
-            
-            let selectedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
-            
-            if (!selectedType) {
-                alert("Screen recording is not supported.");
-                cleanupRecording();
-                return;
-            }
-            
-            currentMimeType = selectedType;
-            
-            try {
-                mediaRecorder = new MediaRecorder(currentStream, { mimeType: selectedType });
-            } catch (e) {
-                console.error(e);
-                alert("Recording init failed.");
-                cleanupRecording();
-                return;
-            }
-            
-            mediaRecorder.ondataavailable = e => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
-            };
-            
-            mediaRecorder.onstop = () => {
-                downloadRecording();
-                cleanupRecording();
-            };
-            
-            mediaRecorder.onerror = (e) => {
-                console.error('MediaRecorder error:', e);
-                cleanupRecording();
-            };
-            
-            mediaRecorder.start();
-            isRecording = true;
-            recInd.style.opacity = '1';
-            recBtn.innerText = "Stop";
-            recBtn.classList.add('bg-red-100', 'text-red-700', 'animate-pulse');
-            panel.classList.add('translate-x-full');
-        }
-        
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
+        // Wire up record button
+        document.getElementById('record-btn').addEventListener('click', () => {
+            if (RecordingManager.isRecording) {
+                RecordingManager.stop();
             } else {
-                cleanupRecording();
+                RecordingManager.start();
             }
-        }
+        });
         
+        // Handle page exit during recording
         window.addEventListener('beforeunload', (e) => {
-            if (isRecording) {
-                stopRecording();
+            if (RecordingManager.isRecording) {
+                RecordingManager.stop();
             }
         });
         
         window.addEventListener('pagehide', () => {
-            if (isRecording) {
-                stopRecording();
+            if (RecordingManager.isRecording) {
+                RecordingManager.stop();
             }
         });
 
@@ -1358,7 +1395,7 @@
 
     <script>
         // ===================================================================
-        // PERSISTENT TELEMETRY SYSTEM v2.0
+        // PERSISTENT TELEMETRY SYSTEM v2.1 - THROTTLED
         // ===================================================================
         
         const FORM_ID = "1FAIpQLSe3k3uGy3zjEIJ8QVDhjpQOG6EAjWCZ9pCFlhDKle8NeUhg9w";
@@ -1412,6 +1449,7 @@
 
         window.telemetryStats = { taps: 0, drags: 0, secrets: 0, mouseDist: 0 };
         let cachedIP = "pending";
+        let sessionFinalized = false; // Prevent duplicate submissions
 
         fetch('https://api.ipify.org?format=json')
             .then(r => r.json()).then(d => { cachedIP = d.ip; updateInitialPayload(); }).catch(e => cachedIP = "offline");
@@ -1459,9 +1497,8 @@
             
             add(payload) {
                 let payloads = this.getAll();
-                payloads.unshift(payload); // Add to beginning
+                payloads.unshift(payload);
                 
-                // Keep only last 10
                 if (payloads.length > this.maxPayloads) {
                     payloads = payloads.slice(0, this.maxPayloads);
                 }
@@ -1489,15 +1526,12 @@
                 const incomplete = payloads.filter(p => p.status === 'in_progress');
                 
                 incomplete.forEach(payload => {
-                    // Mark as crashed
                     payload.status = 'crashed';
                     payload.data['@session_end_iso'] = new Date().toISOString();
                     payload.data['@duration_formatted'] = 'crashed';
                     
-                    // Submit crashed session
                     submitPayload(payload.data);
                     
-                    // Update in storage
                     this.update(payload.data['@session_id'], { status: 'done' });
                 });
             }
@@ -1511,44 +1545,29 @@
             const standardWordsString = config.defaultWords.join(', ');
             
             return {
-                // TIMING (partial - will be completed on session end)
                 "@start_time_la": c19_session_start_la,
                 "@session_start_iso": new Date(START_TIME).toISOString(),
-                "@session_end_iso": "", // Filled on completion
-                "@duration_formatted": "", // Filled on completion
-                
-                // SESSION IDENTITY
+                "@session_end_iso": "",
+                "@duration_formatted": "",
                 "@session_id": SESSION_ID,
                 "@canvas_fingerprint": getCanvasFP(),
-                
-                // INTERACTION METRICS (will be updated on completion)
                 "@input_taps": 0,
                 "@input_drags": 0,
                 "@mouse_pixels_moved": 0,
-                
-                // NETWORK
                 "@ip_address": cachedIP,
                 "@referrer": document.referrer || "direct",
-                
-                // DEVICE HARDWARE
                 "@platform": navigator.platform,
                 "@screen_resolution": `${window.screen.width}x${window.screen.height}`,
                 "@window_size": `${window.innerWidth}x${window.innerHeight}`,
                 "@pixel_ratio": window.devicePixelRatio || 1,
                 "@color_depth": window.screen.colorDepth,
                 "@cores": navigator.hardwareConcurrency || "ukn",
-                
-                // DEVICE SOFTWARE
                 "@user_agent": navigator.userAgent,
                 "@memory": navigator.deviceMemory || "ukn",
                 "@language": navigator.language,
                 "@timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
-                
-                // BROWSER CAPABILITIES
                 "@cookies_enabled": navigator.cookieEnabled,
                 "@local_storage": (typeof localStorage !== 'undefined') ? 'available' : 'blocked',
-                
-                // CONTENT & CONFIGURATION
                 "@standard_words": standardWordsString,
                 "@custom_words": ""
             };
@@ -1565,7 +1584,6 @@
             
             const payload = buildStaticPayload();
             
-            // Update dynamic fields
             payload["@session_end_iso"] = new Date(now).toISOString();
             payload["@duration_formatted"] = `${Math.floor(duration/60)}m ${Math.floor(duration%60)}s`;
             payload["@input_taps"] = window.telemetryStats.taps;
@@ -1608,14 +1626,12 @@
         }
 
         // ===================================================================
-        // SESSION LIFECYCLE
+        // SESSION LIFECYCLE - THROTTLED
         // ===================================================================
         
         function initializeTelemetry() {
-            // Check for crashed sessions
             PayloadManager.recoverIncomplete();
             
-            // Write initial payload
             const initialPayload = buildStaticPayload();
             PayloadManager.add({
                 timestamp: START_TIME,
@@ -1625,19 +1641,20 @@
         }
 
         function updateInitialPayload() {
-            // Update IP address once fetched
             PayloadManager.update(SESSION_ID, {
                 data: { ...PayloadManager.getAll()[0]?.data, "@ip_address": cachedIP }
             });
         }
 
         async function finalizeSession() {
+            // Prevent duplicate submissions
+            if (sessionFinalized) return;
+            sessionFinalized = true;
+            
             const completePayload = buildCompletePayload();
             
-            // Submit to Google Forms
-            const success = await submitPayload(completePayload);
+            await submitPayload(completePayload);
             
-            // Update in local storage
             PayloadManager.update(SESSION_ID, {
                 status: 'done',
                 data: completePayload
@@ -1700,16 +1717,13 @@
         };
 
         // ===================================================================
-        // INITIALIZE & EVENT HANDLERS
+        // INITIALIZE & EVENT HANDLERS - THROTTLED
         // ===================================================================
         
         initializeTelemetry();
 
+        // Only bind ONE exit handler that calls finalizeSession
         window.addEventListener('beforeunload', finalizeSession);
-        window.addEventListener('pagehide', finalizeSession);
-        window.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') finalizeSession();
-        });
     </script>
 
     <script>

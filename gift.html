@@ -116,6 +116,18 @@
                 <textarea class="w-full p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300 resize-none h-24" id="custom-words" placeholder="e.g. Joy, Peace, Kindness..."></textarea>
             </div>
 
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Collab Room</span>
+                    <span class="text-[10px] text-gray-400">Share code with a friend</span>
+                </div>
+                <div class="flex gap-2">
+                    <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. joy-garden">
+                    <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
+                </div>
+                <p class="text-[11px] text-gray-500 leading-snug">When connected, taps and drags are shared live via a lightweight relay.</p>
+            </div>
+
             <div class="space-y-6">
                 <div class="space-y-2">
                     <div class="flex justify-between">
@@ -147,6 +159,7 @@
                 <button class="col-span-1 px-4 py-3 bg-orange-50 text-orange-700 text-sm font-semibold rounded-xl hover:bg-orange-100 transition text-center" id="record-btn">Record</button>
                 <button class="col-span-1 px-4 py-3 bg-green-50 text-green-700 text-sm font-semibold rounded-xl hover:bg-green-100 transition text-center" id="save-btn">Snapshot</button>
                 <button class="col-span-1 px-4 py-3 bg-gray-50 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-100 transition text-center" id="theme-btn">Theme</button>
+                <button class="col-span-1 px-4 py-3 bg-indigo-50 text-indigo-700 text-sm font-semibold rounded-xl hover:bg-indigo-100 transition text-center" id="autoplay-btn">Auto-Play</button>
                 <button class="col-span-1 px-4 py-3 bg-red-50 text-red-700 text-sm font-medium rounded-xl hover:bg-red-100 transition text-center" id="clear-btn">Clear</button>
                 
                 <button class="col-span-2 mt-2 py-4 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition text-center flex items-center justify-center gap-2 border border-amber-200 shadow-sm" id="secrets-btn">
@@ -257,12 +270,78 @@
         </div>
     </div>
 
+    <div id="autoplay-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-2xl p-6 transform scale-out modal-content flex flex-col gap-4">
+            <div class="flex justify-between items-center mb-2 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-indigo-500">autoplay</span> Auto-Play Studio
+                </h3>
+                <button id="close-autoplay" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p class="text-sm text-gray-600">Dial in hands-free play, save your presets locally, and export/import setups to share.</p>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-gray-500 uppercase"><span>Events per Minute</span><span id="auto-rate-label">60</span></div>
+                        <input type="range" id="auto-rate" min="10" max="200" value="60" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-gray-500 uppercase"><span>Randomness</span><span id="auto-random-label">40%</span></div>
+                        <input type="range" id="auto-random" min="0" max="100" value="40" class="w-full">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-gray-500 uppercase"><span>Chord Chance</span><span id="auto-chord-label">20%</span></div>
+                        <input type="range" id="auto-chord" min="0" max="100" value="20" class="w-full">
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input id="auto-drags" type="checkbox" class="rounded border-gray-300 text-indigo-600"> Include drags (sparingly)
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input id="auto-soundscape" type="checkbox" class="rounded border-gray-300 text-indigo-600"> Favor melodic sequences
+                    </label>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2 text-sm">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Preset</label>
+                        <select id="auto-preset" class="flex-1 border border-gray-200 rounded px-2 py-1 text-sm">
+                            <option value="calm">Calm Drift</option>
+                            <option value="balanced">Balanced</option>
+                            <option value="intense">Bloom Storm</option>
+                        </select>
+                        <button id="auto-save-preset" class="px-3 py-2 bg-indigo-50 text-indigo-700 rounded text-xs font-bold border border-indigo-200 hover:bg-indigo-100">Save</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="auto-start" class="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                            <span class="material-symbols-outlined text-sm">play_arrow</span> Start
+                        </button>
+                        <button id="auto-stop" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                            <span class="material-symbols-outlined text-sm">stop_circle</span> Stop
+                        </button>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2 text-xs text-gray-700">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-gray-600">Export / Import</span>
+                            <div class="flex gap-2">
+                                <button id="auto-export" class="px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-100 font-semibold">Export</button>
+                                <button id="auto-import" class="px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-100 font-semibold">Import</button>
+                            </div>
+                        </div>
+                        <textarea id="auto-json" class="w-full h-24 text-[11px] font-mono border border-gray-200 rounded p-2" placeholder="Paste settings JSON here..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         /**
          * A Gift for Joy - Penang 2025 (Baseline + Injection)
          */
 
         // --- 1. Core Config & State ---
+        const GOOGLE_SHEET_SPLASH_CSV = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/export?format=csv&gid=0";
         const config = {
             currentThemeIndex: 0,
             defaultWords: [
@@ -749,9 +828,39 @@
 
         // --- 4. Input Handling ---
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
+        let lastCollabDragEmit = 0;
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
-        
+        const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        let collabActive = false, collabTopic = null, collabSource = null;
+        let collabRoomCode = '';
+        function emitCollabEvent(kind, payload={}) {
+            if (!collabActive || !collabTopic || payload.silentCollab) return;
+            const body = JSON.stringify({ kind, ...payload, sender: collabClientId, ts: Date.now() });
+            fetch(`https://ntfy.sh/${collabTopic}`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Title': 'garden-collab' } }).catch(()=>{});
+        }
+        function connectCollab(roomCode) {
+            if (!roomCode) return;
+            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'joy-garden';
+            collabTopic = `garden-${collabRoomCode}`;
+            if (collabSource) collabSource.close();
+            collabActive = true;
+            collabSource = new EventSource(`https://ntfy.sh/${collabTopic}/sse`);
+            collabSource.onmessage = evt => {
+                try {
+                    const data = JSON.parse(evt.data || '{}');
+                    if (!data.message) return;
+                    const msg = JSON.parse(data.message);
+                    if (msg.sender === collabClientId) return;
+                    applyRemoteEvent(msg);
+                } catch(e) { console.warn('collab parse error', e); }
+            };
+        }
+        function applyRemoteEvent(msg) {
+            if (msg.kind === 'tap') simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double });
+            if (msg.kind === 'drag') simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true });
+        }
+
         // Immediate Audio Wake Up
         function wakeAudio() {
             ZenAudio.warmUp();
@@ -761,7 +870,7 @@
         document.addEventListener('touchstart', wakeAudio, {passive: false});
         document.addEventListener('mousedown', wakeAudio);
 
-        function handleInputStart(x,y) { 
+        function handleInputStart(x,y, options = {}) { 
             ZenAudio.warmUp(); // Instant engagement
             document.getElementById('overlay').style.opacity='0'; 
             startX=x; startY=y; 
@@ -769,7 +878,7 @@
             isDragging=false; 
         }
         
-        function handleInputMove(x,y) {
+        function handleInputMove(x,y, options = {}) {
             if(!startX) return;
             if(Math.sqrt((x-startX)**2 + (y-startY)**2) > 10) {
                 isDragging=true;
@@ -793,14 +902,19 @@
                     ZenAudio.playPluck(ZenAudio.scale[idx], 0.1); 
                     lastDragSound=Date.now(); 
                 }
+                if (!options.silentCollab && Date.now() - lastCollabDragEmit > 120) {
+                    emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, silentCollab: options.silentCollab });
+                    lastCollabDragEmit = Date.now();
+                }
             }
         }
 
-        function handleInputEnd(x,y) {
+        function handleInputEnd(x,y, options = {}) {
             const now = Date.now();
             if(isDragging) { 
                 registerInput('S'); 
                 checkDragUnlock(now-dragStart); 
+                emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, silentCollab: options.silentCollab });
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const freq = ZenAudio.scale[idx];
@@ -829,6 +943,9 @@
                     ZenAudio.playChord(idx);
                     // TELEMETRY DRAG (Chord)
                     window.telemetryStats.drags++;
+                    emitCollabEvent('tap', { x, y, double: true, silentCollab: options.silentCollab });
+                } else {
+                    emitCollabEvent('tap', { x, y, double: false, silentCollab: options.silentCollab });
                 }
                 lastTap = now;
                 lastTapX = x;
@@ -843,6 +960,27 @@
         canvas.addEventListener('touchstart',e=>{e.preventDefault();handleInputStart(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
+
+        function simulateTap(x, y, options = {}) {
+            handleInputStart(x, y, options);
+            setTimeout(() => handleInputEnd(x, y, options), 30);
+            if (options.forceDouble) {
+                setTimeout(() => {
+                    handleInputStart(x + 5, y + 5, options);
+                    handleInputEnd(x + 5, y + 5, options);
+                }, 80);
+            }
+        }
+
+        function simulateDrag(x1, y1, x2, y2, options = {}) {
+            const steps = 6;
+            handleInputStart(x1, y1, options);
+            for (let i=1; i<=steps; i++) {
+                const t = i/steps;
+                setTimeout(() => handleInputMove(x1 + (x2 - x1)*t, y1 + (y2 - y1)*t, options), t * 400);
+            }
+            setTimeout(() => handleInputEnd(x2, y2, options), 450);
+        }
 
         // --- 5. Secrets Logic ---
         const rhythmSequences = [
@@ -969,11 +1107,18 @@
         const cBox=document.getElementById('custom-words');
         cBox.value=localStorage.getItem('garden_words')||"";
         cBox.onblur=e=>{localStorage.setItem('garden_words',e.target.value);if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];else config.customWords=e.target.value.split(',').filter(s=>s.trim());};
+        document.getElementById('collab-connect').onclick=()=>{
+            const room = document.getElementById('collab-room').value.trim();
+            connectCollab(room);
+            document.getElementById('collab-connect').innerText = "Connected";
+            document.getElementById('collab-connect').classList.add('bg-emerald-100');
+        };
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),
             code: document.getElementById('code-modal'),
-            req: document.getElementById('req-modal')
+            req: document.getElementById('req-modal'),
+            autoplay: document.getElementById('autoplay-modal')
         };
 
         function toggleModal(id, show) {
@@ -992,6 +1137,8 @@
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
+        document.getElementById('autoplay-btn').onclick=()=>toggleModal('autoplay', true);
+        document.getElementById('close-autoplay').onclick=()=>toggleModal('autoplay', false);
         document.getElementById('info-btn').onclick=()=>{
             document.getElementById('source-code-display').textContent = document.documentElement.outerHTML;
             toggleModal('code', true);
@@ -1058,6 +1205,91 @@
                 }, 300);
             };
         }
+
+        // --- Auto-Play Studio ---
+        const AUTO_STORAGE_KEY = 'garden_autoplay_settings';
+        const autoInputs = {
+            rate: document.getElementById('auto-rate'),
+            random: document.getElementById('auto-random'),
+            chord: document.getElementById('auto-chord'),
+            drags: document.getElementById('auto-drags'),
+            soundscape: document.getElementById('auto-soundscape'),
+            preset: document.getElementById('auto-preset'),
+            json: document.getElementById('auto-json')
+        };
+        const autoLabels = {
+            rate: document.getElementById('auto-rate-label'),
+            random: document.getElementById('auto-random-label'),
+            chord: document.getElementById('auto-chord-label')
+        };
+        let autoConfig = {
+            rate: 60,
+            random: 40,
+            chord: 20,
+            drags: false,
+            soundscape: false,
+            preset: 'balanced'
+        };
+        let autoTimer = null;
+
+        function saveAutoConfig() { localStorage.setItem(AUTO_STORAGE_KEY, JSON.stringify(autoConfig)); }
+        function loadAutoConfig() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(AUTO_STORAGE_KEY) || '{}');
+                autoConfig = { ...autoConfig, ...saved };
+            } catch(e){}
+            syncAutoUI();
+        }
+        function syncAutoUI() {
+            autoInputs.rate.value = autoConfig.rate;
+            autoInputs.random.value = autoConfig.random;
+            autoInputs.chord.value = autoConfig.chord;
+            autoInputs.drags.checked = autoConfig.drags;
+            autoInputs.soundscape.checked = autoConfig.soundscape;
+            autoInputs.preset.value = autoConfig.preset;
+            autoLabels.rate.innerText = autoConfig.rate;
+            autoLabels.random.innerText = `${autoConfig.random}%`;
+            autoLabels.chord.innerText = `${autoConfig.chord}%`;
+        }
+        function setAutoPreset(name) {
+            if (name === 'calm') autoConfig = { ...autoConfig, rate: 30, random: 20, chord: 10, drags: false, soundscape: true, preset: 'calm' };
+            if (name === 'balanced') autoConfig = { ...autoConfig, rate: 60, random: 40, chord: 20, drags: false, soundscape: false, preset: 'balanced' };
+            if (name === 'intense') autoConfig = { ...autoConfig, rate: 120, random: 60, chord: 35, drags: true, soundscape: true, preset: 'intense' };
+            syncAutoUI(); saveAutoConfig();
+        }
+        function autoLoop() {
+            const interval = Math.max(200, 60000 / Math.max(1, autoConfig.rate));
+            clearInterval(autoTimer);
+            autoTimer = setInterval(() => {
+                const jitter = autoConfig.random / 100;
+                const x = random(40, width-40);
+                const y = random(60, height-60);
+                const shouldDrag = autoConfig.drags && Math.random() < (0.1 + jitter*0.3);
+                const shouldChord = Math.random() < (autoConfig.chord/100);
+                if (shouldDrag) {
+                    const x2 = x + random(-100, 100) * Math.max(0.5, jitter);
+                    const y2 = y + random(-80, 120) * Math.max(0.5, jitter);
+                    simulateDrag(x, y, Math.max(20, Math.min(width-20, x2)), Math.max(20, Math.min(height-20, y2)), {});
+                } else {
+                    simulateTap(x, y, { forceDouble: shouldChord && Math.random() < (0.5 + jitter/2) });
+                }
+                if (autoConfig.soundscape && Math.random() < 0.25) {
+                    ZenAudio.playDiscovery();
+                }
+            }, interval);
+        }
+        document.getElementById('auto-rate').oninput = e => { autoConfig.rate = parseInt(e.target.value); autoLabels.rate.innerText = autoConfig.rate; saveAutoConfig(); if(autoTimer) autoLoop(); };
+        document.getElementById('auto-random').oninput = e => { autoConfig.random = parseInt(e.target.value); autoLabels.random.innerText = `${autoConfig.random}%`; saveAutoConfig(); if(autoTimer) autoLoop(); };
+        document.getElementById('auto-chord').oninput = e => { autoConfig.chord = parseInt(e.target.value); autoLabels.chord.innerText = `${autoConfig.chord}%`; saveAutoConfig(); if(autoTimer) autoLoop(); };
+        document.getElementById('auto-drags').onchange = e => { autoConfig.drags = e.target.checked; saveAutoConfig(); if(autoTimer) autoLoop(); };
+        document.getElementById('auto-soundscape').onchange = e => { autoConfig.soundscape = e.target.checked; saveAutoConfig(); if(autoTimer) autoLoop(); };
+        document.getElementById('auto-preset').onchange = e => setAutoPreset(e.target.value);
+        document.getElementById('auto-save-preset').onclick = () => { autoConfig.preset = autoInputs.preset.value; saveAutoConfig(); };
+        document.getElementById('auto-start').onclick = () => { autoLoop(); };
+        document.getElementById('auto-stop').onclick = () => { clearInterval(autoTimer); };
+        document.getElementById('auto-export').onclick = () => { autoInputs.json.value = JSON.stringify(autoConfig, null, 2); };
+        document.getElementById('auto-import').onclick = () => { try { const cfg = JSON.parse(autoInputs.json.value || '{}'); autoConfig = { ...autoConfig, ...cfg }; syncAutoUI(); saveAutoConfig(); } catch(e){ alert('Invalid JSON'); } };
+        loadAutoConfig();
 
         // Recording
         let mediaRecorder, recordedChunks = [], isRecording = false;
@@ -1195,7 +1427,10 @@
             } catch(e) { return "err"; }
         };
 
+        let logSent = false;
         async function logSession() {
+            if (logSent) return;
+            logSent = true;
             const now = Date.now();
             const duration = (now - START_TIME) / 1000;
             const standardWordsString = config.defaultWords.join(', ');
@@ -1254,6 +1489,22 @@
 
     <script>
         const AppState = { bgImage: null, useGradient: true };
+        async function fetchRemoteSplash() {
+            if (!GOOGLE_SHEET_SPLASH_CSV || GOOGLE_SHEET_SPLASH_CSV.includes("YOUR_SHEET_ID")) return;
+            try {
+                const r = await fetch(GOOGLE_SHEET_SPLASH_CSV, { cache: 'no-store' });
+                if (!r.ok) return;
+                const csv = await r.text();
+                const firstLine = (csv.split(/\r?\n/).find(l => l.trim()) || "").split(',');
+                if (firstLine.length >= 1 && firstLine[0]) document.getElementById('main-title').innerHTML = firstLine[0].trim();
+                if (firstLine.length >= 2 && firstLine[1]) document.getElementById('main-subtitle-container').innerHTML = firstLine[1].trim();
+                if (firstLine.length >= 3 && firstLine[2]) {
+                    const b = document.getElementById('custom-message-container');
+                    b.innerHTML = firstLine.slice(2).join(',').trim();
+                    b.classList.remove('hidden');
+                }
+            } catch(e) { console.warn('splash fetch failed', e); }
+        }
         async function initEnvironment() {
             // Text
             try {
@@ -1269,6 +1520,7 @@
                     }
                 }
             } catch(e){}
+            fetchRemoteSplash();
             // Audio
             try {
                 const r = await fetch('sound.mp3', {method:'HEAD'});

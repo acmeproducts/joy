@@ -125,6 +125,13 @@
                     <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. you-garden">
                     <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
                 </div>
+                <div class="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                    <div class="flex-1">
+                        <p class="font-semibold text-slate-700">Shareable Link</p>
+                        <p id="collab-share-url" class="truncate text-slate-500">Not connected</p>
+                    </div>
+                    <button id="collab-copy-url" class="px-2 py-1 text-[10px] bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition">Copy</button>
+                </div>
                 <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Solo (not connected)</p>
                 <div class="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2" id="collab-peers">
                     <p class="font-semibold text-slate-700 text-xs">Room Participants</p>
@@ -407,6 +414,8 @@
         const sessionLogFeed = document.getElementById('session-log-feed');
         const pipelineStatusEl = document.getElementById('pipeline-status');
         const collabPeersEl = document.getElementById('collab-peers');
+        const collabShareUrlEl = document.getElementById('collab-share-url');
+        const collabCopyUrlBtn = document.getElementById('collab-copy-url');
         const collabPeers = {};
         let pipelineSendCount = 0;
 
@@ -1100,6 +1109,8 @@
         let collabIsMaster = false;
         let collabHeartbeat = null;
         const collabRoleIndicator = document.getElementById('collab-role-indicator');
+        const collabRoomInput = document.getElementById('collab-room');
+        const collabConnectBtn = document.getElementById('collab-connect');
 
         touchPeer('local', 'You', { master: false, alias: 'You' });
 
@@ -1114,6 +1125,38 @@
                 collabPeers.local.master = intent === 'master';
                 updatePeerList();
             }
+        }
+
+        function buildCollabUrl(roomCode) {
+            const url = new URL(window.location.href);
+            if (roomCode) url.searchParams.set('room', roomCode);
+            else url.searchParams.delete('room');
+            return url.toString();
+        }
+
+        function updateShareLink(roomCode) {
+            if (!collabShareUrlEl) return;
+            if (!roomCode) {
+                collabShareUrlEl.textContent = 'Not connected';
+                collabShareUrlEl.dataset.url = '';
+                return;
+            }
+            const shareUrl = buildCollabUrl(roomCode);
+            collabShareUrlEl.textContent = shareUrl;
+            collabShareUrlEl.dataset.url = shareUrl;
+        }
+
+        function setCollabUrl(roomCode) {
+            history.replaceState(null, '', buildCollabUrl(roomCode));
+        }
+
+        function markCollabConnected(roomCode) {
+            if (collabConnectBtn) {
+                collabConnectBtn.innerText = 'Connected';
+                collabConnectBtn.classList.add('bg-emerald-100');
+            }
+            updateShareLink(roomCode);
+            setCollabUrl(roomCode);
         }
 
         function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
@@ -1268,6 +1311,7 @@
         function connectCollab(roomCode) {
             if (!roomCode) return;
             collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'you-garden';
+            if (collabRoomInput) collabRoomInput.value = collabRoomCode;
             collabTopic = `garden-${collabRoomCode}`;
             collabActive = true;
             collabIsMaster = false;
@@ -1281,6 +1325,7 @@
             updateCollabRoleLabel(`Role: Negotiating... (room: ${collabRoomCode})`);
             touchPeer('local', 'You', { master: false });
             appendSessionLog('collab', `Connecting to room ${collabRoomCode}...`);
+            markCollabConnected(collabRoomCode);
             refreshMasterFromManifest('connect');
             if (collabHeartbeat) clearInterval(collabHeartbeat);
             collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
@@ -1585,12 +1630,28 @@
         const cBox=document.getElementById('custom-words');
         cBox.value=localStorage.getItem('garden_words')||"";
         cBox.onblur=e=>{localStorage.setItem('garden_words',e.target.value);if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];else config.customWords=e.target.value.split(',').filter(s=>s.trim());};
-        document.getElementById('collab-connect').onclick=()=>{
-            const room = document.getElementById('collab-room').value.trim();
-            connectCollab(room);
-            document.getElementById('collab-connect').innerText = "Connected";
-            document.getElementById('collab-connect').classList.add('bg-emerald-100');
-        };
+        updateShareLink('');
+        if (collabCopyUrlBtn) {
+            collabCopyUrlBtn.onclick = () => {
+                const shareUrl = collabShareUrlEl?.dataset.url;
+                if (!shareUrl) { alert("Connect to a room to generate a shareable URL."); return; }
+                navigator.clipboard.writeText(shareUrl).then(() => appendSessionLog('collab', 'Share link copied.'));
+            };
+        }
+        if (collabConnectBtn) {
+            collabConnectBtn.onclick = ()=>{
+                const room = collabRoomInput ? collabRoomInput.value.trim() : '';
+                connectCollab(room);
+            };
+        }
+        (function autoConnectFromUrl(){
+            const params = new URLSearchParams(window.location.search);
+            const urlRoom = (params.get('room') || params.get('r') || '').trim();
+            if (urlRoom) {
+                if (collabRoomInput) collabRoomInput.value = urlRoom;
+                connectCollab(urlRoom);
+            }
+        })();
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),

@@ -832,31 +832,86 @@
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
         const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
         let collabActive = false, collabTopic = null, collabSource = null;
         let collabRoomCode = '';
+        let collabSeq = 0;
+        let collabReady = false;
+        let collabReconnectTimer = null;
+        let collabBackoffMs = 1000;
+        const collabQueue = [];
+        const lastSeqBySender = {};
+
+        function flushCollabQueue() {
+            if (!collabReady || !collabQueue.length || !collabTopic) return;
+            const evt = collabQueue.shift();
+            const body = JSON.stringify(evt);
+            fetch(`https://ntfy.sh/${collabTopic}`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Title': 'garden-collab' } })
+                .then(() => { if (collabQueue.length) setTimeout(flushCollabQueue, 20); })
+                .catch(() => { collabQueue.unshift(evt); collabReady = false; scheduleCollabReconnect(); });
+        }
+
         function emitCollabEvent(kind, payload={}) {
             if (!collabActive || !collabTopic || payload.silentCollab) return;
-            const body = JSON.stringify({ kind, ...payload, sender: collabClientId, ts: Date.now() });
-            fetch(`https://ntfy.sh/${collabTopic}`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Title': 'garden-collab' } }).catch(()=>{});
+            const event = { kind, ...payload, sender: collabClientId, session: collabSessionId, room: collabRoomCode, seq: ++collabSeq, ts: Date.now() };
+            collabQueue.push(event);
+            flushCollabQueue();
         }
-        function connectCollab(roomCode) {
-            if (!roomCode) return;
-            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'joy-garden';
-            collabTopic = `garden-${collabRoomCode}`;
+
+        function scheduleCollabReconnect() {
+            if (collabReconnectTimer || !collabActive) return;
+            collabReconnectTimer = setTimeout(() => {
+                collabReconnectTimer = null;
+                collabBackoffMs = Math.min(collabBackoffMs * 1.6, 15000);
+                openCollabStream();
+            }, collabBackoffMs);
+        }
+
+        function openCollabStream() {
+            if (!collabTopic) return;
             if (collabSource) collabSource.close();
-            collabActive = true;
+            collabReady = false;
             collabSource = new EventSource(`https://ntfy.sh/${collabTopic}/sse`);
+            collabSource.onopen = () => {
+                collabReady = true;
+                collabBackoffMs = 1000;
+                flushCollabQueue(); // resync any buffered actions
+            };
+            collabSource.onerror = () => {
+                collabReady = false;
+                scheduleCollabReconnect();
+            };
             collabSource.onmessage = evt => {
                 try {
                     const data = JSON.parse(evt.data || '{}');
                     if (!data.message) return;
                     const msg = JSON.parse(data.message);
-                    if (msg.sender === collabClientId) return;
+                    if (msg.sender === collabClientId || msg.session === collabSessionId) return;
+                    if (msg.room && msg.room !== collabRoomCode) return;
                     applyRemoteEvent(msg);
                 } catch(e) { console.warn('collab parse error', e); }
             };
         }
+
+        function connectCollab(roomCode) {
+            if (!roomCode) return;
+            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'joy-garden';
+            collabTopic = `garden-${collabRoomCode}`;
+            collabActive = true;
+            collabSeq = 0;
+            collabQueue.length = 0;
+            Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
+            collabBackoffMs = 1000;
+            openCollabStream();
+        }
+
         function applyRemoteEvent(msg) {
+            const seqKey = msg.session || msg.sender;
+            if (msg.seq) {
+                const lastSeq = lastSeqBySender[seqKey] || 0;
+                if (msg.seq <= lastSeq) return;
+                lastSeqBySender[seqKey] = msg.seq;
+            }
             if (msg.kind === 'tap') simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double });
             if (msg.kind === 'drag') simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true });
         }

@@ -125,6 +125,7 @@
                     <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. joy-garden">
                     <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
                 </div>
+                <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Solo (not connected)</p>
                 <p class="text-[11px] text-gray-500 leading-snug">When connected, taps and drags are shared live via a lightweight relay.</p>
             </div>
 
@@ -375,6 +376,7 @@
             "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
         ];
         
+        let currentBgData = localStorage.getItem('garden_bg') || null;
         let visualEntities = [];
         let wordEntities = [];
         let particles = []; 
@@ -841,6 +843,98 @@
         let collabBackoffMs = 1000;
         const collabQueue = [];
         const lastSeqBySender = {};
+        let collabMasterId = null;
+        let collabMasterTs = null;
+        let collabMasterClaimTimer = null;
+        let collabJoinTs = 0;
+        let collabIsMaster = false;
+        const collabRoleIndicator = document.getElementById('collab-role-indicator');
+
+        function updateCollabRoleLabel(text, intent = 'neutral') {
+            if (!collabRoleIndicator) return;
+            collabRoleIndicator.textContent = text;
+            collabRoleIndicator.classList.remove('text-emerald-700', 'text-amber-700', 'text-gray-500');
+            if (intent === 'master') collabRoleIndicator.classList.add('text-emerald-700');
+            else if (intent === 'sub') collabRoleIndicator.classList.add('text-amber-700');
+            else collabRoleIndicator.classList.add('text-gray-500');
+        }
+
+        function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
+            if (!dataUrl) return false;
+            let persisted = true;
+            currentBgData = dataUrl;
+            if (persist) {
+                try { localStorage.setItem('garden_bg', dataUrl); }
+                catch (err) {
+                    persisted = false;
+                    if (notifyOnFail) alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
+                    console.warn("Image too large to persist; will reset on reload.", err);
+                }
+            }
+            const img = new Image();
+            img.onload = ()=>{config.backgroundImage=img;config.useGradient=false;};
+            img.src = dataUrl;
+            return persisted;
+        }
+
+        function resetBackgroundToGradient({ persist = true } = {}) {
+            if (persist) localStorage.removeItem('garden_bg');
+            currentBgData = null;
+            config.useGradient = true;
+            config.backgroundImage = null;
+        }
+
+        function getBackgroundStatePayload() {
+            return {
+                useGradient: config.useGradient,
+                imageData: config.useGradient ? null : currentBgData,
+                masterId: collabMasterId || collabClientId,
+                ts: Date.now()
+            };
+        }
+
+        function applyBackgroundStateFromMaster(payload) {
+            if (!payload) return;
+            if (payload.useGradient || !payload.imageData) resetBackgroundToGradient();
+            else setBackgroundImageFromData(payload.imageData);
+        }
+
+        function broadcastBackgroundUpdate() {
+            if (!collabActive || !collabIsMaster) return;
+            emitCollabEvent('bg-update', getBackgroundStatePayload());
+        }
+
+        function claimMasterRole() {
+            collabIsMaster = true;
+            collabMasterId = collabClientId;
+            collabMasterTs = collabJoinTs || Date.now();
+            updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+            emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
+        }
+
+        function adoptMaster(masterId, ts, background) {
+            const incomingTs = ts || Date.now();
+            if (collabMasterId && collabMasterTs && incomingTs > collabMasterTs && collabMasterId !== masterId) return;
+            if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
+            collabMasterId = masterId;
+            collabMasterTs = incomingTs;
+            collabIsMaster = masterId === collabClientId;
+            if (collabIsMaster) updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+            else updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
+            if (!collabIsMaster && background) applyBackgroundStateFromMaster(background);
+        }
+
+        function scheduleMasterClaim() {
+            if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
+            collabMasterClaimTimer = setTimeout(() => {
+                if (!collabMasterId) claimMasterRole();
+            }, 1200);
+        }
+
+        function requestBackgroundFromMaster() {
+            if (!collabActive || collabIsMaster || !collabMasterId) return;
+            emitCollabEvent('bg-request', { target: collabMasterId, requester: collabClientId });
+        }
 
         function flushCollabQueue() {
             if (!collabReady || !collabQueue.length || !collabTopic) return;
@@ -875,6 +969,9 @@
             collabSource.onopen = () => {
                 collabReady = true;
                 collabBackoffMs = 1000;
+                updateCollabRoleLabel(`Role: Syncing... (room: ${collabRoomCode || '—'})`);
+                emitCollabEvent('master-ping', { ts: collabJoinTs });
+                scheduleMasterClaim();
                 flushCollabQueue(); // resync any buffered actions
             };
             collabSource.onerror = () => {
@@ -898,10 +995,15 @@
             collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'joy-garden';
             collabTopic = `garden-${collabRoomCode}`;
             collabActive = true;
+            collabIsMaster = false;
+            collabMasterId = null;
+            collabMasterTs = null;
+            collabJoinTs = Date.now();
             collabSeq = 0;
             collabQueue.length = 0;
             Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
             collabBackoffMs = 1000;
+            updateCollabRoleLabel(`Role: Negotiating... (room: ${collabRoomCode})`);
             openCollabStream();
         }
 
@@ -913,7 +1015,26 @@
                 lastSeqBySender[seqKey] = msg.seq;
             }
             if (msg.kind === 'tap') simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double });
-            if (msg.kind === 'drag') simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true });
+            else if (msg.kind === 'drag') simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true });
+            else if (msg.kind === 'master-announce') {
+                adoptMaster(msg.masterId || msg.sender, msg.ts, msg.background);
+                if (!msg.background) requestBackgroundFromMaster();
+            }
+            else if (msg.kind === 'master-ping') {
+                if (collabIsMaster) emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
+            }
+            else if (msg.kind === 'bg-request') {
+                if (collabIsMaster && (!msg.target || msg.target === collabMasterId)) broadcastBackgroundUpdate();
+            }
+            else if (msg.kind === 'bg-update') {
+                const senderMaster = msg.masterId || msg.sender;
+                if (!collabMasterId) adoptMaster(senderMaster, msg.ts, msg);
+                else if (senderMaster !== collabMasterId) {
+                    if (!collabMasterTs || (msg.ts && msg.ts < collabMasterTs)) adoptMaster(senderMaster, msg.ts, msg);
+                    else return;
+                }
+                applyBackgroundStateFromMaster(msg);
+            }
         }
 
         // Immediate Audio Wake Up
@@ -1121,25 +1242,22 @@
         const bgInput=document.getElementById('bg-upload-input');
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
+            if (collabActive && !collabIsMaster) { alert("Background is controlled by the room master. Ask them to update it."); return; }
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
             const r=new FileReader(); 
             r.onload=e=>{ 
-                try {
-                    localStorage.setItem('garden_bg',e.target.result); 
-                } catch (err) {
-                    console.warn("Image too large to save to local storage. It will reset on reload.");
-                    alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
-                }
-                
-                const i=new Image(); 
-                i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; 
-                i.src=e.target.result; 
+                setBackgroundImageFromData(e.target.result, { notifyOnFail: true });
+                broadcastBackgroundUpdate();
             }; 
             r.readAsDataURL(f);
         });
         
-        document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ localStorage.removeItem('garden_bg'); config.useGradient=true; config.backgroundImage=null; });
-        if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
+        document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
+            if (collabActive && !collabIsMaster) { alert("Only the room master can reset the background."); return; }
+            resetBackgroundToGradient();
+            broadcastBackgroundUpdate();
+        });
+        if(currentBgData){ setBackgroundImageFromData(currentBgData, { persist: false }); }
 
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');

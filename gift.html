@@ -398,6 +398,12 @@
         
         const sessionLog = [];
         const SESSION_LOG_LIMIT = 200;
+        const sessionLifecycle = {
+            id: Date.now().toString(36),
+            startedAt: Date.now(),
+            endedAt: null,
+            endReason: null
+        };
         const sessionLogFeed = document.getElementById('session-log-feed');
         const pipelineStatusEl = document.getElementById('pipeline-status');
         const collabPeersEl = document.getElementById('collab-peers');
@@ -450,6 +456,40 @@
                 row.textContent = `[${fmtTime(item.ts)}] ${item.type}: ${item.detail}`;
                 sessionLogFeed.appendChild(row);
             });
+        }
+
+        const SESSION_CLOSE_GRACE_MS = 30000;
+        let sessionFlushTimer = null;
+
+        function requestSessionEnd(reason = 'pagehide', immediate = false) {
+            if (logSent) return;
+            if (immediate) {
+                completeSession(reason);
+                return;
+            }
+            clearTimeout(sessionFlushTimer);
+            sessionFlushTimer = setTimeout(() => completeSession(reason), SESSION_CLOSE_GRACE_MS);
+            appendSessionLog('session-lifecycle', `Pending end (${reason}) in ${Math.round(SESSION_CLOSE_GRACE_MS/1000)}s.`);
+        }
+
+        function cancelSessionEnd(reason = 'resume') {
+            if (!sessionFlushTimer) return;
+            clearTimeout(sessionFlushTimer);
+            sessionFlushTimer = null;
+            appendSessionLog('session-lifecycle', `End cancelled (${reason}).`);
+        }
+
+        function completeSession(reason = 'pagehide') {
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (!sessionLifecycle.endedAt) {
+                sessionLifecycle.endedAt = Date.now();
+                sessionLifecycle.endReason = reason;
+                appendSessionLog('session-end', `Ended (${reason}).`);
+            }
+            logSession(reason);
         }
 
         function touchPeer(id, alias, meta = {}) {
@@ -582,7 +622,7 @@
 
         renderSessionLog();
         setInterval(prunePeers, 10000);
-        appendSessionLog('session-start', 'Experience loaded.');
+        appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
         setPipelineStatus('Idle');
 
         let currentBgData = localStorage.getItem('garden_bg') || null;
@@ -1941,10 +1981,6 @@
             ,"entry.527394232": "@session_log"
         };
 
-        const START_TIME = Date.now();
-        // C19: Local Time (Los Angeles)
-        const c19_session_start_la = new Date(START_TIME).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
-
         window.telemetryStats = { taps: 0, drags: 0, secrets: 0, mouseDist: 0 };
         let cachedIP = "pending";
 
@@ -2000,25 +2036,32 @@
             }
         }
 
-        async function logSession() {
+        async function logSession(reason = 'unspecified') {
             if (logSent) return;
             logSent = true;
             pipelineSendCount += 1;
             setPipelineStatus('Sending...', 'warn');
-            const now = Date.now();
-            const duration = (now - START_TIME) / 1000;
+
+            if (!sessionLifecycle.endedAt) sessionLifecycle.endedAt = Date.now();
+            if (!sessionLifecycle.endReason) sessionLifecycle.endReason = reason;
+
+            const duration = (sessionLifecycle.endedAt - sessionLifecycle.startedAt) / 1000;
+            const startIso = new Date(sessionLifecycle.startedAt).toISOString();
+            const endIso = new Date(sessionLifecycle.endedAt).toISOString();
+            const c19_session_start_la = new Date(sessionLifecycle.startedAt).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
+
             const standardWordsString = config.defaultWords.join(', ');
             const customWordsRaw = (config.customWords && config.customWords.length)
                 ? config.customWords
                 : (typeof cBox !== 'undefined' ? cBox.value.split(',').map(s=>s.trim()).filter(Boolean) : []);
             const customWordsString = customWordsRaw.filter(Boolean).join(', ');
             const dataLayer = {
-                "@session_start_iso": new Date(START_TIME).toISOString(),
+                "@session_start_iso": startIso,
                 "@start_time_la": c19_session_start_la, // C19 Data
-                "@session_end_iso": new Date(now).toISOString(),
+                "@session_end_iso": endIso,
                 "@duration_formatted": `${Math.floor(duration/60)}m ${Math.floor(duration%60)}s`,
                 "@ip_address": cachedIP,
-                "@session_id": START_TIME.toString(36),
+                "@session_id": sessionLifecycle.id,
                 "@theme_code": "DEFAULT",
                 "@user_agent": navigator.userAgent,
                 "@screen_resolution": `${window.screen.width}x${window.screen.height}`,
@@ -2059,9 +2102,20 @@
             }
         }
 
-        window.addEventListener('beforeunload', logSession);
-        window.addEventListener('pagehide', logSession);
-        window.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') logSession(); });
+        window.addEventListener('beforeunload', () => requestSessionEnd('beforeunload', true));
+        window.addEventListener('pagehide', () => requestSessionEnd('pagehide', true));
+        window.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                requestSessionEnd('visibility-hidden', false);
+            } else {
+                cancelSessionEnd('visible');
+                appendSessionLog('session-lifecycle', 'Resumed (visible).');
+            }
+        });
+
+        ['pointerdown','touchstart','keydown','mousemove'].forEach(evt => {
+            window.addEventListener(evt, () => cancelSessionEnd('activity'));
+        });
     </script>
 
     <script>

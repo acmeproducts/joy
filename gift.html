@@ -404,6 +404,13 @@
         const collabPeers = {};
         let pipelineSendCount = 0;
 
+        const COLLAB_MANIFEST_CSV = ""; // Optional: published CSV with columns room, master, ts
+        const COLLAB_MANIFEST_FORM_URL = ""; // Optional: Google Form URL for manifest writes
+        const COLLAB_MANIFEST_FORM_FIELDS = { room: "entry.room", master: "entry.master", ts: "entry.ts", status: "entry.status" };
+        const MASTER_NEGOTIATION_MS = 2600;
+        const MASTER_LEASE_MS = 45000;
+        const MASTER_STALE_GRACE_MS = 8000;
+
         function fmtTime(ts) {
             return new Date(ts).toLocaleTimeString([], { hour12: false });
         }
@@ -447,7 +454,15 @@
 
         function touchPeer(id, alias, meta = {}) {
             if (!id) return;
-            collabPeers[id] = { alias: alias || id.slice(0, 6), lastSeen: Date.now(), ...meta };
+            const existing = collabPeers[id] || {};
+            const firstSeen = existing.firstSeen || meta.firstSeen || meta.ts || Date.now();
+            collabPeers[id] = {
+                ...existing,
+                ...meta,
+                alias: alias || existing.alias || id.slice(0, 6),
+                lastSeen: Date.now(),
+                firstSeen
+            };
             updatePeerList();
         }
 
@@ -461,6 +476,88 @@
                 }
             });
             if (changed) updatePeerList();
+        }
+
+        function isManifestFresh(entry) {
+            if (!entry || !entry.ts) return false;
+            const ts = Number(entry.ts);
+            if (Number.isNaN(ts)) return false;
+            return Date.now() - ts < (MASTER_LEASE_MS + MASTER_STALE_GRACE_MS);
+        }
+
+        async function fetchManifestState(room) {
+            if (!COLLAB_MANIFEST_CSV || !room) return null;
+            try {
+                const r = await fetch(COLLAB_MANIFEST_CSV, { cache: 'no-store' });
+                if (!r.ok) return null;
+                const csv = (await r.text()).trim();
+                if (!csv) return null;
+                const lines = csv.split(/\r?\n/).filter(Boolean);
+                if (!lines.length) return null;
+                const headers = lines.shift().split(',').map(h => h.trim().toLowerCase());
+                const idxRoom = headers.indexOf('room');
+                const idxMaster = headers.indexOf('master');
+                const idxTs = headers.indexOf('ts');
+                const idxStatus = headers.indexOf('status');
+                if (idxRoom === -1 || idxMaster === -1 || idxTs === -1) return null;
+                let latest = null;
+                lines.forEach(line => {
+                    const parts = line.split(',');
+                    const lineRoom = (parts[idxRoom] || '').trim().toLowerCase();
+                    if (!lineRoom || lineRoom !== room.toLowerCase()) return;
+                    const candidate = {
+                        room: lineRoom,
+                        master: (parts[idxMaster] || '').trim(),
+                        ts: Number(parts[idxTs]),
+                        status: idxStatus >= 0 ? (parts[idxStatus] || '').trim() : 'unknown'
+                    };
+                    if (!candidate.master || Number.isNaN(candidate.ts)) return;
+                    if (!latest || candidate.ts > latest.ts) latest = candidate;
+                });
+                return latest;
+            } catch (e) {
+                console.warn('manifest fetch failed', e);
+                return null;
+            }
+        }
+
+        async function publishManifest(masterId, status = 'active') {
+            if (!COLLAB_MANIFEST_FORM_URL) return;
+            try {
+                const fd = new FormData();
+                const roomField = COLLAB_MANIFEST_FORM_FIELDS.room;
+                const masterField = COLLAB_MANIFEST_FORM_FIELDS.master;
+                const tsField = COLLAB_MANIFEST_FORM_FIELDS.ts;
+                const statusField = COLLAB_MANIFEST_FORM_FIELDS.status;
+                if (roomField) fd.append(roomField, collabRoomCode || 'you-garden');
+                if (masterField) fd.append(masterField, masterId || '');
+                if (tsField) fd.append(tsField, Date.now());
+                if (statusField) fd.append(statusField, status);
+                await fetch(COLLAB_MANIFEST_FORM_URL, { method: 'POST', mode: 'no-cors', body: fd, keepalive: true });
+                appendSessionLog('manifest', `Manifest updated (${status}).`, { skipLog: !collabActive });
+            } catch (e) {
+                console.warn('manifest publish failed', e);
+            }
+        }
+
+        async function refreshMasterFromManifest(reason = 'manual') {
+            if (!collabActive || !collabRoomCode) return false;
+            const entry = await fetchManifestState(collabRoomCode);
+            if (entry && entry.master && isManifestFresh(entry)) {
+                adoptMaster(entry.master, entry.ts);
+                appendSessionLog('collab', `Adopted manifest master (${reason}).`, { skipLog: !collabActive });
+                return true;
+            }
+            return false;
+        }
+
+        async function resolveMasterClaim(reason = 'timer') {
+            if (collabMasterId) return;
+            const adopted = await refreshMasterFromManifest(reason);
+            if (!adopted && !collabMasterId) {
+                claimMasterRole();
+                publishManifest(collabMasterId, 'active');
+            }
         }
 
         function updatePeerList() {
@@ -1033,6 +1130,7 @@
             touchPeer('local', 'You', { master: true });
             appendSessionLog('collab', `Assumed master role for room ${collabRoomCode || '—'}.`);
             emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
+            publishManifest(collabMasterId, 'active');
         }
 
         function adoptMaster(masterId, ts, background) {
@@ -1045,6 +1143,7 @@
             if (collabIsMaster) {
                 updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
                 touchPeer('local', 'You', { master: true });
+                publishManifest(collabMasterId, 'active');
             } else {
                 updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
                 touchPeer('local', 'You', { master: false });
@@ -1056,8 +1155,8 @@
         function scheduleMasterClaim() {
             if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
             collabMasterClaimTimer = setTimeout(() => {
-                if (!collabMasterId) claimMasterRole();
-            }, 1200);
+                resolveMasterClaim('negotiation');
+            }, MASTER_NEGOTIATION_MS);
         }
 
         function requestBackgroundFromMaster() {
@@ -1106,6 +1205,7 @@
                 emitCollabEvent('master-ping', { ts: collabJoinTs });
                 announcePresence('join');
                 emitCollabEvent('bg-request', { requester: collabClientId });
+                refreshMasterFromManifest('stream-open');
                 scheduleMasterClaim();
                 flushCollabQueue(); // resync any buffered actions
             };
@@ -1141,6 +1241,7 @@
             updateCollabRoleLabel(`Role: Negotiating... (room: ${collabRoomCode})`);
             touchPeer('local', 'You', { master: false });
             appendSessionLog('collab', `Connecting to room ${collabRoomCode}...`);
+            refreshMasterFromManifest('connect');
             if (collabHeartbeat) clearInterval(collabHeartbeat);
             collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
             openCollabStream();

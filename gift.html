@@ -281,7 +281,7 @@
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <p class="text-sm text-gray-600">Dial in hands-free play, save your presets locally, and export/import setups to share.</p>
+            <p class="text-sm text-gray-600">Dial in hands-free play, save your presets locally, and load them by prefix without touching JSON.</p>
             <div class="grid md:grid-cols-2 gap-4">
                 <div class="space-y-4">
                     <div>
@@ -314,27 +314,34 @@
                         <button id="auto-save-preset" class="px-3 py-2 bg-indigo-50 text-indigo-700 rounded text-xs font-bold border border-indigo-200 hover:bg-indigo-100">Save</button>
                     </div>
                     <div class="flex gap-2">
-                        <button id="auto-start" class="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                            <span class="material-symbols-outlined text-sm">play_arrow</span> Start
-                        </button>
-                        <button id="auto-stop" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200 transition flex items-center justify-center gap-2">
-                            <span class="material-symbols-outlined text-sm">stop_circle</span> Stop
+                        <button id="auto-toggle" class="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                            <span class="material-symbols-outlined text-sm" id="auto-toggle-icon">play_arrow</span>
+                            <span id="auto-toggle-label">Start</span>
                         </button>
                     </div>
                     <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2 text-xs text-gray-700">
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-gray-600">Export / Import</span>
-                            <div class="flex gap-2">
-                                <button id="auto-export" class="px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-100 font-semibold">Export</button>
-                                <button id="auto-import" class="px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-100 font-semibold">Import</button>
-                            </div>
+                        <div class="flex items-center gap-2">
+                            <label class="font-bold text-gray-600 text-[11px] uppercase">Prefix</label>
+                            <input id="auto-file-prefix" class="flex-1 border border-gray-200 rounded px-2 py-1 text-xs" value="joy-" placeholder="prefix-">
                         </div>
-                        <textarea id="auto-json" class="w-full h-24 text-[11px] font-mono border border-gray-200 rounded p-2" placeholder="Paste settings JSON here..."></textarea>
+                        <div class="flex items-center gap-2">
+                            <input id="auto-file-name" class="flex-1 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="gentle-drift">
+                            <button id="auto-save-file" class="px-3 py-2 bg-white border border-gray-200 rounded font-semibold hover:bg-gray-100 text-[11px]">Save</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <select id="auto-file-chooser" class="flex-1 border border-gray-200 rounded px-2 py-2 text-xs bg-white"></select>
+                            <button id="auto-load-file" class="px-3 py-2 bg-indigo-50 text-indigo-700 rounded font-bold border border-indigo-200 hover:bg-indigo-100 text-[11px]">Load</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500">Saved files are filtered by prefix above and sorted automatically.</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <button id="auto-run-icon" class="fixed bottom-20 right-5 w-12 h-12 bg-indigo-500/80 text-white rounded-full shadow-xl flex items-center justify-center z-40 backdrop-blur hover:scale-105 active:scale-95 transition-all border border-white/30">
+        <span class="material-symbols-outlined">autoplay</span>
+    </button>
 
     <script>
         /**
@@ -1381,15 +1388,27 @@
 
         // --- Auto-Play Studio ---
         const AUTO_STORAGE_KEY = 'garden_autoplay_settings';
+        const AUTO_LIBRARY_KEY = 'garden_autoplay_files';
         const autoInputs = {
             rate: document.getElementById('auto-rate'),
             random: document.getElementById('auto-random'),
             chord: document.getElementById('auto-chord'),
             drags: document.getElementById('auto-drags'),
             soundscape: document.getElementById('auto-soundscape'),
-            preset: document.getElementById('auto-preset'),
-            json: document.getElementById('auto-json')
+            preset: document.getElementById('auto-preset')
         };
+        const autoFileInputs = {
+            prefix: document.getElementById('auto-file-prefix'),
+            name: document.getElementById('auto-file-name'),
+            chooser: document.getElementById('auto-file-chooser'),
+            save: document.getElementById('auto-save-file'),
+            load: document.getElementById('auto-load-file')
+        };
+        const autoToggleButton = document.getElementById('auto-toggle');
+        const autoToggleLabel = document.getElementById('auto-toggle-label');
+        const autoToggleIcon = document.getElementById('auto-toggle-icon');
+        const autoRunIcon = document.getElementById('auto-run-icon');
+        const autoplayBtn = document.getElementById('autoplay-btn');
         const autoLabels = {
             rate: document.getElementById('auto-rate-label'),
             random: document.getElementById('auto-random-label'),
@@ -1404,6 +1423,8 @@
             preset: 'balanced'
         };
         let autoTimer = null;
+        let autoLibrary = [];
+        let autoIconClickTimeout = null;
 
         function saveAutoConfig() { localStorage.setItem(AUTO_STORAGE_KEY, JSON.stringify(autoConfig)); }
         function loadAutoConfig() {
@@ -1424,11 +1445,56 @@
             autoLabels.random.innerText = `${autoConfig.random}%`;
             autoLabels.chord.innerText = `${autoConfig.chord}%`;
         }
+        function loadAutoLibrary() {
+            try {
+                autoLibrary = JSON.parse(localStorage.getItem(AUTO_LIBRARY_KEY) || '[]');
+                if (!Array.isArray(autoLibrary)) autoLibrary = [];
+            } catch(e){ autoLibrary = []; }
+            refreshAutoFileChooser();
+        }
+        function saveAutoLibrary() {
+            localStorage.setItem(AUTO_LIBRARY_KEY, JSON.stringify(autoLibrary));
+        }
+        function refreshAutoFileChooser() {
+            const prefix = (autoFileInputs.prefix.value || '').trim();
+            const filtered = autoLibrary
+                .filter(f => !prefix || f.name.startsWith(prefix))
+                .sort((a,b)=>a.name.localeCompare(b.name));
+            autoFileInputs.chooser.innerHTML = '';
+            if (!filtered.length) {
+                const opt = document.createElement('option');
+                opt.textContent = 'No saved files for this prefix';
+                opt.value = '';
+                autoFileInputs.chooser.appendChild(opt);
+                return;
+            }
+            filtered.forEach(file => {
+                const opt = document.createElement('option');
+                opt.value = file.name;
+                opt.textContent = file.name;
+                autoFileInputs.chooser.appendChild(opt);
+            });
+        }
         function setAutoPreset(name) {
             if (name === 'calm') autoConfig = { ...autoConfig, rate: 30, random: 20, chord: 10, drags: false, soundscape: true, preset: 'calm' };
             if (name === 'balanced') autoConfig = { ...autoConfig, rate: 60, random: 40, chord: 20, drags: false, soundscape: false, preset: 'balanced' };
             if (name === 'intense') autoConfig = { ...autoConfig, rate: 120, random: 60, chord: 35, drags: true, soundscape: true, preset: 'intense' };
             syncAutoUI(); saveAutoConfig();
+        }
+        function updateAutoRunUI() {
+            const running = !!autoTimer;
+            autoToggleLabel.innerText = running ? 'Stop' : 'Start';
+            autoToggleIcon.innerText = running ? 'stop_circle' : 'play_arrow';
+            autoToggleButton.classList.toggle('bg-indigo-600', !running);
+            autoToggleButton.classList.toggle('bg-emerald-600', running);
+            autoToggleButton.classList.toggle('hover:bg-indigo-700', !running);
+            autoToggleButton.classList.toggle('hover:bg-emerald-700', running);
+            autoRunIcon.classList.toggle('ring-4', running);
+            autoRunIcon.classList.toggle('ring-emerald-300/60', running);
+            autoRunIcon.classList.toggle('bg-emerald-500/80', running);
+            autoRunIcon.classList.toggle('bg-indigo-500/80', !running);
+            autoplayBtn.classList.toggle('bg-emerald-50', running);
+            autoplayBtn.classList.toggle('text-emerald-700', running);
         }
         function autoLoop() {
             const interval = Math.max(200, 60000 / Math.max(1, autoConfig.rate));
@@ -1450,6 +1516,16 @@
                     ZenAudio.playDiscovery();
                 }
             }, interval);
+            updateAutoRunUI();
+        }
+        function stopAutoLoop() {
+            if (autoTimer) clearInterval(autoTimer);
+            autoTimer = null;
+            updateAutoRunUI();
+        }
+        function toggleAutoLoop() {
+            if (autoTimer) stopAutoLoop();
+            else autoLoop();
         }
         document.getElementById('auto-rate').oninput = e => { autoConfig.rate = parseInt(e.target.value); autoLabels.rate.innerText = autoConfig.rate; saveAutoConfig(); if(autoTimer) autoLoop(); };
         document.getElementById('auto-random').oninput = e => { autoConfig.random = parseInt(e.target.value); autoLabels.random.innerText = `${autoConfig.random}%`; saveAutoConfig(); if(autoTimer) autoLoop(); };
@@ -1458,11 +1534,45 @@
         document.getElementById('auto-soundscape').onchange = e => { autoConfig.soundscape = e.target.checked; saveAutoConfig(); if(autoTimer) autoLoop(); };
         document.getElementById('auto-preset').onchange = e => setAutoPreset(e.target.value);
         document.getElementById('auto-save-preset').onclick = () => { autoConfig.preset = autoInputs.preset.value; saveAutoConfig(); };
-        document.getElementById('auto-start').onclick = () => { autoLoop(); };
-        document.getElementById('auto-stop').onclick = () => { clearInterval(autoTimer); };
-        document.getElementById('auto-export').onclick = () => { autoInputs.json.value = JSON.stringify(autoConfig, null, 2); };
-        document.getElementById('auto-import').onclick = () => { try { const cfg = JSON.parse(autoInputs.json.value || '{}'); autoConfig = { ...autoConfig, ...cfg }; syncAutoUI(); saveAutoConfig(); } catch(e){ alert('Invalid JSON'); } };
+        autoToggleButton.onclick = () => { toggleAutoLoop(); };
+        autoRunIcon.addEventListener('click', () => {
+            if (autoIconClickTimeout) return;
+            autoIconClickTimeout = setTimeout(() => {
+                toggleAutoLoop();
+                autoIconClickTimeout = null;
+            }, 200);
+        });
+        autoRunIcon.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            if (autoIconClickTimeout) { clearTimeout(autoIconClickTimeout); autoIconClickTimeout = null; }
+            toggleModal('autoplay', true);
+        });
+        autoFileInputs.prefix.addEventListener('input', refreshAutoFileChooser);
+        autoFileInputs.save.addEventListener('click', () => {
+            const prefix = (autoFileInputs.prefix.value || '').trim();
+            const name = (autoFileInputs.name.value || '').trim();
+            if (!name) { alert('Please name your file before saving.'); return; }
+            const fileName = `${prefix}${name}`;
+            const existingIndex = autoLibrary.findIndex(f => f.name === fileName);
+            const payload = { name: fileName, config: { ...autoConfig } };
+            if (existingIndex >= 0) autoLibrary[existingIndex] = payload;
+            else autoLibrary.push(payload);
+            saveAutoLibrary();
+            refreshAutoFileChooser();
+            autoFileInputs.chooser.value = fileName;
+        });
+        autoFileInputs.load.addEventListener('click', () => {
+            const selected = autoFileInputs.chooser.value;
+            if (!selected) return;
+            const file = autoLibrary.find(f => f.name === selected);
+            if (!file) return;
+            autoConfig = { ...autoConfig, ...file.config };
+            syncAutoUI(); saveAutoConfig();
+            if (autoTimer) autoLoop();
+        });
         loadAutoConfig();
+        loadAutoLibrary();
+        updateAutoRunUI();
 
         // Recording
         let mediaRecorder, recordedChunks = [], isRecording = false;

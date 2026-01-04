@@ -126,6 +126,19 @@
                     <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
                 </div>
                 <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Solo (not connected)</p>
+                <div class="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2" id="collab-peers">
+                    <p class="font-semibold text-slate-700 text-xs">Room Participants</p>
+                    <p class="text-slate-400">Not connected</p>
+                </div>
+                <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <p class="font-semibold text-slate-700 text-xs">Session Log</p>
+                        <span id="pipeline-status" class="text-[10px] px-2 py-1 rounded-full bg-slate-200 text-slate-600">Idle</span>
+                    </div>
+                    <div id="session-log-feed" class="max-h-28 overflow-y-auto space-y-1 text-[10px] leading-snug">
+                        <p class="text-slate-400">No activity yet.</p>
+                    </div>
+                </div>
                 <p class="text-[11px] text-gray-500 leading-snug">When connected, taps and drags are shared live via a lightweight relay.</p>
             </div>
 
@@ -383,6 +396,98 @@
             "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
         ];
         
+        const sessionLog = [];
+        const SESSION_LOG_LIMIT = 200;
+        const sessionLogFeed = document.getElementById('session-log-feed');
+        const pipelineStatusEl = document.getElementById('pipeline-status');
+        const collabPeersEl = document.getElementById('collab-peers');
+        const collabPeers = {};
+        let pipelineSendCount = 0;
+
+        function fmtTime(ts) {
+            return new Date(ts).toLocaleTimeString([], { hour12: false });
+        }
+
+        function setPipelineStatus(label, tone = 'muted') {
+            if (!pipelineStatusEl) return;
+            pipelineStatusEl.textContent = label;
+            pipelineStatusEl.className = 'text-[10px] px-2 py-1 rounded-full';
+            if (tone === 'success') pipelineStatusEl.classList.add('bg-emerald-100','text-emerald-700','border','border-emerald-200');
+            else if (tone === 'warn') pipelineStatusEl.classList.add('bg-amber-100','text-amber-700','border','border-amber-200');
+            else if (tone === 'error') pipelineStatusEl.classList.add('bg-red-100','text-red-700','border','border-red-200');
+            else pipelineStatusEl.classList.add('bg-slate-200','text-slate-600');
+        }
+
+        function appendSessionLog(type, detail, options = {}) {
+            if (options.skipLog) return;
+            const entry = { ts: Date.now(), type, detail: (detail ?? '').toString() };
+            sessionLog.push(entry);
+            if (sessionLog.length > SESSION_LOG_LIMIT) sessionLog.shift();
+            renderSessionLog();
+        }
+
+        function renderSessionLog() {
+            if (!sessionLogFeed) return;
+            sessionLogFeed.innerHTML = '';
+            const recent = sessionLog.slice(-30);
+            if (!recent.length) {
+                const p = document.createElement('p');
+                p.className = 'text-slate-400';
+                p.textContent = 'No activity yet.';
+                sessionLogFeed.appendChild(p);
+                return;
+            }
+            recent.forEach(item => {
+                const row = document.createElement('p');
+                row.className = 'text-slate-600';
+                row.textContent = `[${fmtTime(item.ts)}] ${item.type}: ${item.detail}`;
+                sessionLogFeed.appendChild(row);
+            });
+        }
+
+        function touchPeer(id, alias, meta = {}) {
+            if (!id) return;
+            collabPeers[id] = { alias: alias || id.slice(0, 6), lastSeen: Date.now(), ...meta };
+            updatePeerList();
+        }
+
+        function prunePeers() {
+            const now = Date.now();
+            let changed = false;
+            Object.entries(collabPeers).forEach(([id, peer]) => {
+                if (now - peer.lastSeen > 45000 && id !== 'local') {
+                    delete collabPeers[id];
+                    changed = true;
+                }
+            });
+            if (changed) updatePeerList();
+        }
+
+        function updatePeerList() {
+            if (!collabPeersEl) return;
+            collabPeersEl.innerHTML = `<p class="font-semibold text-slate-700 text-xs">Room Participants</p>`;
+            const peers = Object.entries(collabPeers).sort((a,b) => (a[1].alias || a[0]).localeCompare(b[1].alias || b[0]));
+            if (!peers.length) {
+                const p = document.createElement('p');
+                p.className = 'text-slate-400';
+                p.textContent = 'Not connected';
+                collabPeersEl.appendChild(p);
+                return;
+            }
+            peers.forEach(([id, peer]) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between text-[10px] text-slate-600';
+                const badge = peer.master ? 'Master' : 'Guest';
+                row.innerHTML = `<span class="font-semibold ${id==='local'?'text-emerald-700':''}">${peer.alias || id.slice(0,6)}</span><span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">${badge}</span>`;
+                collabPeersEl.appendChild(row);
+            });
+        }
+
+        renderSessionLog();
+        setInterval(prunePeers, 10000);
+        appendSessionLog('session-start', 'Experience loaded.');
+        setPipelineStatus('Idle');
+
         let currentBgData = localStorage.getItem('garden_bg') || null;
         let visualEntities = [];
         let wordEntities = [];
@@ -841,6 +946,7 @@
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
         const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        const collabAlias = `joy-${collabClientId.slice(0,6)}`;
         const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
         let collabActive = false, collabTopic = null, collabSource = null;
         let collabRoomCode = '';
@@ -855,7 +961,10 @@
         let collabMasterClaimTimer = null;
         let collabJoinTs = 0;
         let collabIsMaster = false;
+        let collabHeartbeat = null;
         const collabRoleIndicator = document.getElementById('collab-role-indicator');
+
+        touchPeer('local', 'You', { master: false, alias: 'You' });
 
         function updateCollabRoleLabel(text, intent = 'neutral') {
             if (!collabRoleIndicator) return;
@@ -864,6 +973,10 @@
             if (intent === 'master') collabRoleIndicator.classList.add('text-emerald-700');
             else if (intent === 'sub') collabRoleIndicator.classList.add('text-amber-700');
             else collabRoleIndicator.classList.add('text-gray-500');
+            if (collabPeers.local) {
+                collabPeers.local.master = intent === 'master';
+                updatePeerList();
+            }
         }
 
         function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
@@ -904,11 +1017,12 @@
             if (!payload) return;
             if (payload.useGradient || !payload.imageData) resetBackgroundToGradient();
             else setBackgroundImageFromData(payload.imageData);
+            appendSessionLog('background', payload.useGradient ? 'Gradient restored from master.' : 'Background synced from master.');
         }
 
-        function broadcastBackgroundUpdate() {
+        function broadcastBackgroundUpdate(targetId = null) {
             if (!collabActive || !collabIsMaster) return;
-            emitCollabEvent('bg-update', getBackgroundStatePayload());
+            emitCollabEvent('bg-update', { ...getBackgroundStatePayload(), target: targetId });
         }
 
         function claimMasterRole() {
@@ -916,6 +1030,8 @@
             collabMasterId = collabClientId;
             collabMasterTs = collabJoinTs || Date.now();
             updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+            touchPeer('local', 'You', { master: true });
+            appendSessionLog('collab', `Assumed master role for room ${collabRoomCode || '—'}.`);
             emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
         }
 
@@ -926,8 +1042,14 @@
             collabMasterId = masterId;
             collabMasterTs = incomingTs;
             collabIsMaster = masterId === collabClientId;
-            if (collabIsMaster) updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
-            else updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
+            if (collabIsMaster) {
+                updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+                touchPeer('local', 'You', { master: true });
+            } else {
+                updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
+                touchPeer('local', 'You', { master: false });
+            }
+            appendSessionLog('collab', `Master set to ${masterId.slice(0,6)} for room ${collabRoomCode || '—'}.`, { skipLog: !collabActive });
             if (!collabIsMaster && background) applyBackgroundStateFromMaster(background);
         }
 
@@ -954,7 +1076,7 @@
 
         function emitCollabEvent(kind, payload={}) {
             if (!collabActive || !collabTopic || payload.silentCollab) return;
-            const event = { kind, ...payload, sender: collabClientId, session: collabSessionId, room: collabRoomCode, seq: ++collabSeq, ts: Date.now() };
+            const event = { kind, ...payload, sender: collabClientId, alias: payload.alias || collabAlias, session: collabSessionId, room: collabRoomCode, seq: ++collabSeq, ts: Date.now() };
             collabQueue.push(event);
             flushCollabQueue();
         }
@@ -968,6 +1090,10 @@
             }, collabBackoffMs);
         }
 
+        function announcePresence(status = 'join', extra = {}) {
+            emitCollabEvent('presence', { status, alias: collabAlias, masterId: collabMasterId, ...extra });
+        }
+
         function openCollabStream() {
             if (!collabTopic) return;
             if (collabSource) collabSource.close();
@@ -978,6 +1104,8 @@
                 collabBackoffMs = 1000;
                 updateCollabRoleLabel(`Role: Syncing... (room: ${collabRoomCode || '—'})`);
                 emitCollabEvent('master-ping', { ts: collabJoinTs });
+                announcePresence('join');
+                emitCollabEvent('bg-request', { requester: collabClientId });
                 scheduleMasterClaim();
                 flushCollabQueue(); // resync any buffered actions
             };
@@ -1011,18 +1139,41 @@
             Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
             collabBackoffMs = 1000;
             updateCollabRoleLabel(`Role: Negotiating... (room: ${collabRoomCode})`);
+            touchPeer('local', 'You', { master: false });
+            appendSessionLog('collab', `Connecting to room ${collabRoomCode}...`);
+            if (collabHeartbeat) clearInterval(collabHeartbeat);
+            collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
             openCollabStream();
         }
 
         function applyRemoteEvent(msg) {
+            if (msg.target && msg.target !== collabClientId) return;
             const seqKey = msg.session || msg.sender;
             if (msg.seq) {
                 const lastSeq = lastSeqBySender[seqKey] || 0;
                 if (msg.seq <= lastSeq) return;
                 lastSeqBySender[seqKey] = msg.seq;
             }
-            if (msg.kind === 'tap') simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double });
-            else if (msg.kind === 'drag') simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true });
+            const alias = msg.alias || (msg.sender ? msg.sender.slice(0,6) : 'peer');
+            touchPeer(msg.sender, alias, { master: msg.masterId ? msg.sender === msg.masterId : msg.sender === collabMasterId });
+            if (msg.kind === 'tap') {
+                appendSessionLog('collab-tap', `${alias} tapped`, { skipLog: false });
+                simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double, sharedWord: msg.word, sharedVisual: msg.visual, skipTelemetry: true });
+            }
+            else if (msg.kind === 'drag') {
+                appendSessionLog('collab-drag', `${alias} dragged`, { skipLog: false });
+                simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true, sharedTrail: msg.trail, skipTelemetry: true });
+            }
+            else if (msg.kind === 'presence') {
+                if (msg.background) applyBackgroundStateFromMaster(msg.background);
+                if (collabIsMaster) {
+                    emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload(), target: msg.sender });
+                    broadcastBackgroundUpdate(msg.sender);
+                } else if (!collabMasterId && msg.masterId) {
+                    adoptMaster(msg.masterId, msg.ts, msg.background);
+                }
+                if (msg.status === 'join') appendSessionLog('collab', `${alias} joined room ${collabRoomCode || '—'}.`);
+            }
             else if (msg.kind === 'master-announce') {
                 adoptMaster(msg.masterId || msg.sender, msg.ts, msg.background);
                 if (!msg.background) requestBackgroundFromMaster();
@@ -1034,6 +1185,7 @@
                 if (collabIsMaster && (!msg.target || msg.target === collabMasterId)) broadcastBackgroundUpdate();
             }
             else if (msg.kind === 'bg-update') {
+                if (msg.target && msg.target !== collabClientId) return;
                 const senderMaster = msg.masterId || msg.sender;
                 if (!collabMasterId) adoptMaster(senderMaster, msg.ts, msg);
                 else if (senderMaster !== collabMasterId) {
@@ -1067,7 +1219,7 @@
                 isDragging=true;
                 
                 // Trail Logic: Switch randomly every 10s
-                if(Date.now() - config.lastTrailSwitch > 10000) {
+                if(!options.sharedTrail && Date.now() - config.lastTrailSwitch > 10000) {
                     const options = ['♥', 'Comet', '☁️', '⭐'];
                     if (config.currentTrail !== '♥' && Math.random() > 0.4) {
                         config.currentTrail = '♥';
@@ -1077,7 +1229,8 @@
                     config.lastTrailSwitch = Date.now();
                 }
 
-                visualEntities.push(new TrailBase(x, y, config.currentTrail));
+                const trailType = options.sharedTrail || config.currentTrail;
+                visualEntities.push(new TrailBase(x, y, trailType));
                 
                 // Fluid Strumming on Drag
                 if(Date.now()-lastDragSound > 60) { 
@@ -1086,7 +1239,7 @@
                     lastDragSound=Date.now(); 
                 }
                 if (!options.silentCollab && Date.now() - lastCollabDragEmit > 120) {
-                    emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, silentCollab: options.silentCollab });
+                    emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, alias: collabAlias, silentCollab: options.silentCollab });
                     lastCollabDragEmit = Date.now();
                 }
             }
@@ -1095,40 +1248,48 @@
         function handleInputEnd(x,y, options = {}) {
             const now = Date.now();
             if(isDragging) { 
-                registerInput('S'); 
+                if (!options.skipTelemetry) registerInput('S'); 
                 checkDragUnlock(now-dragStart); 
-                emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, silentCollab: options.silentCollab });
+                const trailType = options.sharedTrail || config.currentTrail;
+                if (!options.skipTelemetry) appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${trailType})`, options);
+                emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, alias: collabAlias, silentCollab: options.silentCollab });
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const freq = ZenAudio.scale[idx];
-                
-                let ent;
-                const rnd = Math.random();
-                if(foundEggs.includes(3) && rnd > 0.7) ent = new GrowingHeart(x,y);
-                else if(foundEggs.includes(3) && rnd > 0.5) ent = new HeartBloom(x,y);
-                else ent = new Bloom(x,y);
+                const visualKind = options.sharedVisual || (() => {
+                    const rnd = Math.random();
+                    if(foundEggs.includes(3) && rnd > 0.7) return 'growing-heart';
+                    if(foundEggs.includes(3) && rnd > 0.5) return 'heart-bloom';
+                    return 'bloom';
+                })();
+                const wordChoice = options.sharedWord || getRandomWord();
+
+                const ent = visualKind === 'growing-heart' ? new GrowingHeart(x,y)
+                            : visualKind === 'heart-bloom' ? new HeartBloom(x,y)
+                            : new Bloom(x,y);
 
                 visualEntities.push(ent);
-                wordEntities.push(new Word(x,y-30));
+                wordEntities.push(new Word(x,y-30, wordChoice));
                 
                 ZenAudio.playPluck(freq, 0.3);
                 
-                // TELEMETRY TAP
-                window.telemetryStats.taps++;
-
-                registerInput('T');
+                if (!options.skipTelemetry) {
+                    window.telemetryStats.taps++;
+                    registerInput('T');
+                }
 
                 const isNearLastTap = lastTapX !== null && lastTapY !== null && Math.hypot(x - lastTapX, y - lastTapY) <= DOUBLE_TAP_DISTANCE;
-                const isDoubleTap = (now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap;
+                const isDoubleTap = options.forceDouble || ((now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap);
 
                 if(isDoubleTap) {
                     visualEntities.push(new HeartCloud(x,y));
                     ZenAudio.playChord(idx);
-                    // TELEMETRY DRAG (Chord)
-                    window.telemetryStats.drags++;
-                    emitCollabEvent('tap', { x, y, double: true, silentCollab: options.silentCollab });
+                    if (!options.skipTelemetry) window.telemetryStats.drags++;
+                    appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} [double]`, options);
+                    emitCollabEvent('tap', { x, y, word: wordChoice, visual: visualKind, double: true, alias: collabAlias, silentCollab: options.silentCollab });
                 } else {
-                    emitCollabEvent('tap', { x, y, double: false, silentCollab: options.silentCollab });
+                    appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} (${visualKind})`, options);
+                    emitCollabEvent('tap', { x, y, word: wordChoice, visual: visualKind, double: false, alias: collabAlias, silentCollab: options.silentCollab });
                 }
                 lastTap = now;
                 lastTapX = x;
@@ -1147,12 +1308,6 @@
         function simulateTap(x, y, options = {}) {
             handleInputStart(x, y, options);
             setTimeout(() => handleInputEnd(x, y, options), 30);
-            if (options.forceDouble) {
-                setTimeout(() => {
-                    handleInputStart(x + 5, y + 5, options);
-                    handleInputEnd(x + 5, y + 5, options);
-                }, 80);
-            }
         }
 
         function simulateDrag(x1, y1, x2, y2, options = {}) {
@@ -1254,6 +1409,7 @@
             const r=new FileReader(); 
             r.onload=e=>{ 
                 setBackgroundImageFromData(e.target.result, { notifyOnFail: true });
+                appendSessionLog('background', 'Applied custom background.');
                 broadcastBackgroundUpdate();
             }; 
             r.readAsDataURL(f);
@@ -1262,6 +1418,7 @@
         document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
             if (collabActive && !collabIsMaster) { alert("Only the room master can reset the background."); return; }
             resetBackgroundToGradient();
+            appendSessionLog('background', 'Background reset to gradient.');
             broadcastBackgroundUpdate();
         });
         if(currentBgData){ setBackgroundImageFromData(currentBgData, { persist: false }); }
@@ -1503,14 +1660,15 @@
                 const jitter = autoConfig.random / 100;
                 const x = random(40, width-40);
                 const y = random(60, height-60);
+                const silentOptions = { silentCollab: true, skipTelemetry: true, skipLog: true };
                 const shouldDrag = autoConfig.drags && Math.random() < (0.1 + jitter*0.3);
                 const shouldChord = Math.random() < (autoConfig.chord/100);
                 if (shouldDrag) {
                     const x2 = x + random(-100, 100) * Math.max(0.5, jitter);
                     const y2 = y + random(-80, 120) * Math.max(0.5, jitter);
-                    simulateDrag(x, y, Math.max(20, Math.min(width-20, x2)), Math.max(20, Math.min(height-20, y2)), {});
+                    simulateDrag(x, y, Math.max(20, Math.min(width-20, x2)), Math.max(20, Math.min(height-20, y2)), silentOptions);
                 } else {
-                    simulateTap(x, y, { forceDouble: shouldChord && Math.random() < (0.5 + jitter/2) });
+                    simulateTap(x, y, { ...silentOptions, forceDouble: shouldChord && Math.random() < (0.5 + jitter/2) });
                 }
                 if (autoConfig.soundscape && Math.random() < 0.25) {
                     ZenAudio.playDiscovery();
@@ -1679,6 +1837,7 @@
             "entry.1036649804": "@session_start_iso",
             "entry.1683490369": "@standard_words",
             "entry.1722638233": "@custom_words"
+            ,"entry.527394232": "@session_log"
         };
 
         const START_TIME = Date.now();
@@ -1711,9 +1870,40 @@
         };
 
         let logSent = false;
+        const SESSION_LOG_CHAR_LIMIT = 1800;
+
+        function buildSessionLogString() {
+            return sessionLog
+                .map(item => `[${new Date(item.ts).toISOString()}] ${item.type}: ${item.detail}`)
+                .join(' | ')
+                .slice(-SESSION_LOG_CHAR_LIMIT);
+        }
+
+        async function sendToPipeline(formData) {
+            const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`;
+            try {
+                if (navigator.sendBeacon) {
+                    const params = new URLSearchParams();
+                    formData.forEach((v,k)=>params.append(k,v));
+                    if (navigator.sendBeacon(url, params)) return true;
+                }
+            } catch(e) {
+                console.warn('Beacon send failed, falling back to fetch', e);
+            }
+            try {
+                await fetch(url, { method: 'POST', mode: 'no-cors', body: formData, keepalive: true });
+                return true;
+            } catch(e) {
+                console.warn('Pipeline fetch failed', e);
+                return false;
+            }
+        }
+
         async function logSession() {
             if (logSent) return;
             logSent = true;
+            pipelineSendCount += 1;
+            setPipelineStatus('Sending...', 'warn');
             const now = Date.now();
             const duration = (now - START_TIME) / 1000;
             const standardWordsString = config.defaultWords.join(', ');
@@ -1749,6 +1939,7 @@
                 "@secrets_found_count": window.telemetryStats.secrets,
                 "@standard_words": standardWordsString,
                 "@custom_words": customWordsString
+                ,"@session_log": buildSessionLogString()
             };
 
             const formData = new FormData();
@@ -1757,12 +1948,14 @@
                 formData.append(entryId, val);
             }
 
-            try {
-                // Using keepalive to ensure delivery on close
-                await fetch(`https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`, {
-                    method: 'POST', mode: 'no-cors', body: formData, keepalive: true
-                });
-            } catch(e) {}
+            const ok = await sendToPipeline(formData);
+            if (ok) {
+                setPipelineStatus(`Sent (${pipelineSendCount})`, 'success');
+                appendSessionLog('pipeline', 'Session log submitted.');
+            } else {
+                setPipelineStatus('Send failed', 'error');
+                appendSessionLog('pipeline', 'Session log failed to submit.', { skipLog: false });
+            }
         }
 
         window.addEventListener('beforeunload', logSession);
@@ -1772,6 +1965,15 @@
 
     <script>
         const AppState = { bgImage: null, useGradient: true };
+        function sanitizeSplashText(value) {
+            if (!value) return '';
+            const lowered = value.toLowerCase();
+            const forbidden = ['minimum-scale', 'maximum-scale', 'width=device-width'];
+            if (forbidden.some(token => lowered.includes(token))) return '';
+            const div = document.createElement('div');
+            div.textContent = value;
+            return div.textContent;
+        }
         async function fetchRemoteSplash() {
             if (!GOOGLE_SHEET_SPLASH_CSV || GOOGLE_SHEET_SPLASH_CSV.includes("YOUR_SHEET_ID")) return;
             try {
@@ -1779,11 +1981,11 @@
                 if (!r.ok) return;
                 const csv = await r.text();
                 const firstLine = (csv.split(/\r?\n/).find(l => l.trim()) || "").split(',');
-                if (firstLine.length >= 1 && firstLine[0]) document.getElementById('main-title').innerHTML = firstLine[0].trim();
-                if (firstLine.length >= 2 && firstLine[1]) document.getElementById('main-subtitle-container').innerHTML = firstLine[1].trim();
+                if (firstLine.length >= 1 && firstLine[0]) document.getElementById('main-title').textContent = sanitizeSplashText(firstLine[0].trim());
+                if (firstLine.length >= 2 && firstLine[1]) document.getElementById('main-subtitle-container').textContent = sanitizeSplashText(firstLine[1].trim());
                 if (firstLine.length >= 3 && firstLine[2]) {
                     const b = document.getElementById('custom-message-container');
-                    b.innerHTML = firstLine.slice(2).join(',').trim();
+                    b.textContent = sanitizeSplashText(firstLine.slice(2).join(',').trim());
                     b.classList.remove('hidden');
                 }
             } catch(e) { console.warn('splash fetch failed', e); }
@@ -1795,11 +1997,11 @@
                 if (r.ok) {
                     const text = await r.text();
                     const parts = text.split('|');
-                    if(parts[0]) document.getElementById('main-title').innerHTML = parts[0].trim();
-                    if(parts[1]) document.getElementById('main-subtitle-container').innerHTML = parts[1].trim();
+                    if(parts[0]) document.getElementById('main-title').textContent = sanitizeSplashText(parts[0].trim());
+                    if(parts[1]) document.getElementById('main-subtitle-container').textContent = sanitizeSplashText(parts[1].trim());
                     if(parts[2]) {
                         const b = document.getElementById('custom-message-container');
-                        b.innerHTML = parts[2].trim(); b.classList.remove('hidden');
+                        b.textContent = sanitizeSplashText(parts[2].trim()); b.classList.remove('hidden');
                     }
                 }
             } catch(e){}

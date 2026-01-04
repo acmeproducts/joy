@@ -1,10 +1,10 @@
-<!-- A Gift for Joy - v13.1 - 2025-12-12 10:00 PM -->
+<!-- A Gift for You - v13.1 - 2025-12-12 10:00 PM -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-    <title>A Gift for Joy</title>
+    <title>A Gift for You</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
     <style>
@@ -53,7 +53,7 @@
     <canvas class="block absolute top-0 left-0 w-full h-full z-0" id="gameCanvas"></canvas>
 
     <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 transition-opacity duration-1000 opacity-100 text-white/90 text-center drop-shadow-md" id="overlay">
-        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">A Gift for Joy</h1>
+        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">A Gift for You</h1>
         <div id="main-subtitle-container">
             <p class="text-lg md:text-xl font-light leading-relaxed">
                 Tap to Bloom<br>
@@ -69,8 +69,8 @@
         REC
     </div>
 
-    <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
-      • A Gift for Joy • Penang 2025 • v13.1 <span id="clock">--:--</span>
+    <div class="fixed bottom-3 inset-x-0 text-center text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
+      • A Gift for You • Penang 2026 • <span id="clock">--:--</span>
     </div>
 
     <button class="fixed top-5 right-5 w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/30 active:scale-95 transition-all shadow-lg z-50" id="settings-trigger">
@@ -113,7 +113,7 @@
 
             <div class="space-y-2">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Custom Words</span>
-                <textarea class="w-full p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300 resize-none h-24" id="custom-words" placeholder="e.g. Joy, Peace, Kindness..."></textarea>
+                <textarea class="w-full p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300 resize-none h-24" id="custom-words" placeholder="e.g. You, Peace, Kindness..."></textarea>
             </div>
 
             <div class="space-y-2">
@@ -122,7 +122,7 @@
                     <span class="text-[10px] text-gray-400">Share code with a friend</span>
                 </div>
                 <div class="flex gap-2">
-                    <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. joy-garden">
+                    <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. you-garden">
                     <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
                 </div>
                 <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Solo (not connected)</p>
@@ -335,7 +335,7 @@
                     <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2 text-xs text-gray-700">
                         <div class="flex items-center gap-2">
                             <label class="font-bold text-gray-600 text-[11px] uppercase">Prefix</label>
-                            <input id="auto-file-prefix" class="flex-1 border border-gray-200 rounded px-2 py-1 text-xs" value="joy-" placeholder="prefix-">
+                            <input id="auto-file-prefix" class="flex-1 border border-gray-200 rounded px-2 py-1 text-xs" value="you-" placeholder="prefix-">
                         </div>
                         <div class="flex items-center gap-2">
                             <input id="auto-file-name" class="flex-1 border border-gray-200 rounded px-2 py-1 text-xs" placeholder="gentle-drift">
@@ -358,7 +358,7 @@
 
     <script>
         /**
-         * A Gift for Joy - Penang 2025 (Baseline + Injection)
+         * A Gift for You - Penang 2026 (Baseline + Injection)
          */
 
         // --- 1. Core Config & State ---
@@ -369,7 +369,7 @@
                 "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
                 "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "❤️❤️❤️", "🪷🪷🪷", "Balance", "Harmony",
                 "Inner Peace", "Radiate", "Stillness", "Presence", "Gratitude", "Acceptance", "Flow", "Healing", "Strength",
-                "Wisdom", "Patience", "Courage", "Hi Joy  :)", "Clarity", "Unity", "Wholeness","จอยประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","Joy 🪷เกี่ยวดองกัน","Joy 🏵️ ","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม"
+                "Wisdom", "Patience", "Courage", "Hi You  :)", "Clarity", "Unity", "Wholeness","Youประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","You 🪷เกี่ยวดองกัน","You 🏵️ ","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม"
             ],
             customWords: [],
             speedMultiplier: 1.0,
@@ -946,7 +946,7 @@
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
         const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
-        const collabAlias = `joy-${collabClientId.slice(0,6)}`;
+        const collabAlias = `you-${collabClientId.slice(0,6)}`;
         const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
         let collabActive = false, collabTopic = null, collabSource = null;
         let collabRoomCode = '';
@@ -1127,7 +1127,7 @@
 
         function connectCollab(roomCode) {
             if (!roomCode) return;
-            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'joy-garden';
+            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'you-garden';
             collabTopic = `garden-${collabRoomCode}`;
             collabActive = true;
             collabIsMaster = false;
@@ -1327,7 +1327,7 @@
             { code: "TST", id: 3, desc: "Tap Swipe Tap", title: "Amour Bloom & Heart 3D" }, 
             { code: "SST", id: 4, desc: "Swipe Swipe Tap", title: "Dimension Heart" }, 
             { code: "TTTT", id: 5, desc: "Tap Tap Tap Tap", title: "Stardust Legacy" }, 
-            { code: "SS", id: 6, desc: "Swipe Swipe", title: "Removed (Joy)" },
+            { code: "SS", id: 6, desc: "Swipe Swipe", title: "Removed (You)" },
             { code: "TSTS", id: 7, desc: "Tap Swipe Tap Swipe", title: "Secret 7" }, 
             { code: "STST", id: 8, desc: "Swipe Tap Swipe Tap", title: "Secret 8" }, 
             { code: "TSS", id: 9, desc: "Tap Swipe Swipe", title: "Secret 9" }, 
@@ -1967,11 +1967,18 @@
         const AppState = { bgImage: null, useGradient: true };
         function sanitizeSplashText(value) {
             if (!value) return '';
-            const lowered = value.toLowerCase();
-            const forbidden = ['minimum-scale', 'maximum-scale', 'width=device-width'];
-            if (forbidden.some(token => lowered.includes(token))) return '';
+            const trimmed = value.toString().trim();
+            if (!trimmed) return '';
+            const lowered = trimmed.toLowerCase();
+            const forbiddenTokens = [
+                'doctype', '<html', '</html', '<meta', '</meta', '<head', '</head', '<body', '</body',
+                'minimum-scale', 'maximum-scale', 'width=device-width'
+            ];
+            if (forbiddenTokens.some(token => lowered.includes(token))) return '';
+            if (trimmed.length > 240) return '';
+            if (/[<>]/.test(trimmed)) return '';
             const div = document.createElement('div');
-            div.textContent = value;
+            div.textContent = trimmed;
             return div.textContent;
         }
         async function fetchRemoteSplash() {
@@ -1981,11 +1988,14 @@
                 if (!r.ok) return;
                 const csv = await r.text();
                 const firstLine = (csv.split(/\r?\n/).find(l => l.trim()) || "").split(',');
-                if (firstLine.length >= 1 && firstLine[0]) document.getElementById('main-title').textContent = sanitizeSplashText(firstLine[0].trim());
-                if (firstLine.length >= 2 && firstLine[1]) document.getElementById('main-subtitle-container').textContent = sanitizeSplashText(firstLine[1].trim());
-                if (firstLine.length >= 3 && firstLine[2]) {
+                const title = sanitizeSplashText(firstLine[0]);
+                if (title) document.getElementById('main-title').textContent = title;
+                const subtitle = sanitizeSplashText(firstLine[1]);
+                if (subtitle) document.getElementById('main-subtitle-container').textContent = subtitle;
+                const message = sanitizeSplashText(firstLine.slice(2).join(','));
+                if (message) {
                     const b = document.getElementById('custom-message-container');
-                    b.textContent = sanitizeSplashText(firstLine.slice(2).join(',').trim());
+                    b.textContent = message;
                     b.classList.remove('hidden');
                 }
             } catch(e) { console.warn('splash fetch failed', e); }
@@ -1997,11 +2007,14 @@
                 if (r.ok) {
                     const text = await r.text();
                     const parts = text.split('|');
-                    if(parts[0]) document.getElementById('main-title').textContent = sanitizeSplashText(parts[0].trim());
-                    if(parts[1]) document.getElementById('main-subtitle-container').textContent = sanitizeSplashText(parts[1].trim());
-                    if(parts[2]) {
+                    const title = sanitizeSplashText(parts[0]);
+                    if(title) document.getElementById('main-title').textContent = title;
+                    const subtitle = sanitizeSplashText(parts[1]);
+                    if(subtitle) document.getElementById('main-subtitle-container').textContent = subtitle;
+                    const message = sanitizeSplashText(parts[2]);
+                    if(message) {
                         const b = document.getElementById('custom-message-container');
-                        b.textContent = sanitizeSplashText(parts[2].trim()); b.classList.remove('hidden');
+                        b.textContent = message; b.classList.remove('hidden');
                     }
                 }
             } catch(e){}

@@ -482,23 +482,63 @@
         }
 
         const SESSION_CLOSE_GRACE_MS = 30000;
+        const COLLAB_HEARTBEAT_STALE_MS = 20000;
         let sessionFlushTimer = null;
+        let sessionEndHoldTimer = null;
+        let pendingSessionEndReason = null;
 
-        function requestSessionEnd(reason = 'pagehide', immediate = false) {
-            if (logSent) return;
-            if (immediate) {
-                completeSession(reason);
-                return;
-            }
+        function collabHasFreshPeer() {
+            const now = Date.now();
+            const hasPeer = Object.entries(collabPeers).some(([id, peer]) => id !== 'local' && (now - (peer.lastSeen || 0) < MASTER_LEASE_MS));
+            const heartbeatFresh = collabLastHeartbeat && (now - collabLastHeartbeat < COLLAB_HEARTBEAT_STALE_MS);
+            return collabActive && hasPeer && heartbeatFresh;
+        }
+
+        function scheduleSessionFlush(reason) {
             clearTimeout(sessionFlushTimer);
             sessionFlushTimer = setTimeout(() => completeSession(reason), SESSION_CLOSE_GRACE_MS);
             appendSessionLog('session-lifecycle', `Pending end (${reason}) in ${Math.round(SESSION_CLOSE_GRACE_MS/1000)}s.`);
         }
 
+        function requestSessionEnd(reason = 'pagehide', immediate = false) {
+            if (logSent) return;
+            if (immediate) {
+                if (sessionEndHoldTimer) {
+                    clearInterval(sessionEndHoldTimer);
+                    sessionEndHoldTimer = null;
+                }
+                completeSession(reason);
+                return;
+            }
+            pendingSessionEndReason = reason;
+            if (collabHasFreshPeer()) {
+                appendSessionLog('session-lifecycle', `End deferred (${reason}) while peers active.`);
+                if (!sessionEndHoldTimer) {
+                    sessionEndHoldTimer = setInterval(() => {
+                        if (!collabHasFreshPeer()) {
+                            clearInterval(sessionEndHoldTimer);
+                            sessionEndHoldTimer = null;
+                            const pending = pendingSessionEndReason || reason;
+                            pendingSessionEndReason = null;
+                            requestSessionEnd(pending, false);
+                        }
+                    }, 3000);
+                }
+                return;
+            }
+            scheduleSessionFlush(reason);
+        }
+
         function cancelSessionEnd(reason = 'resume') {
-            if (!sessionFlushTimer) return;
-            clearTimeout(sessionFlushTimer);
-            sessionFlushTimer = null;
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
+            }
+            pendingSessionEndReason = null;
             appendSessionLog('session-lifecycle', `End cancelled (${reason}).`);
         }
 
@@ -506,6 +546,10 @@
             if (sessionFlushTimer) {
                 clearTimeout(sessionFlushTimer);
                 sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
             }
             if (!sessionLifecycle.endedAt) {
                 sessionLifecycle.endedAt = Date.now();
@@ -1113,6 +1157,7 @@
         const SESSION_EXPIRY_MS = 45 * 60 * 1000;
         const SESSION_INACTIVITY_MS = 30 * 60 * 1000;
         let collabActive = false, collabTopic = null, collabSource = null;
+        let collabLastHeartbeat = 0;
         let collabSessionKey = '';
         let collabSeq = 0;
         let collabReady = false;
@@ -1139,6 +1184,14 @@
         const collabTestOutput = document.getElementById('collab-test-output');
 
         touchPeer('local', 'You', { master: false, alias: 'You' });
+
+        function resetCollabRetryState() {
+            collabBackoffMs = 1000;
+            if (collabReconnectTimer) {
+                clearTimeout(collabReconnectTimer);
+                collabReconnectTimer = null;
+            }
+        }
 
         function updateCollabRoleLabel(text, intent = 'neutral') {
             if (!collabRoleIndicator) return;
@@ -1429,6 +1482,8 @@
             collabSessionToken = '';
             collabHostBroadcastToken = '';
             collabHostNonce = '';
+            collabLastHeartbeat = 0;
+            resetCollabRetryState();
             if (collabSource) { collabSource.close(); collabSource = null; }
             updateCollabRoleLabel('Role: Key expired — request a new link', 'neutral');
             updateCollabStateBanner('Key expired — request a new session link.', 'warn');
@@ -1441,8 +1496,26 @@
             }, 800);
         }
 
+        function handleCollabRejection(reason = 'session-rejected') {
+            updateCollabStateBanner('Session expired—start new link', 'error');
+            appendSessionLog('collab', `Session rejected (${reason}).`);
+            resetCollabRetryState();
+            collabActive = false;
+            if (collabSource) { collabSource.close(); collabSource = null; }
+            collabReady = false;
+            collabLastHeartbeat = 0;
+            const urlKey = parseSessionKeyFromLocation();
+            if (collabIsMaster || !urlKey) {
+                startHostSession('sse-rejected');
+            } else {
+                joinSessionFromLink(urlKey);
+            }
+        }
+
         async function startHostSession(reason = 'manual') {
             if (!requireSecureTransport()) return;
+            resetCollabRetryState();
+            collabLastHeartbeat = 0;
             collabSessionKey = generateSessionKey();
             collabHostNonce = randomNonce(10);
             collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
@@ -1464,6 +1537,8 @@
                 return;
             }
             if (!requireSecureTransport()) return;
+            resetCollabRetryState();
+            collabLastHeartbeat = 0;
             collabSessionKey = sessionKey;
             collabIsMaster = false;
             collabMasterId = null;
@@ -1483,6 +1558,8 @@
             collabSource = new EventSource(`https://ntfy.sh/${collabTopic}/sse`);
             collabSource.onopen = () => {
                 collabReady = true;
+                resetCollabRetryState();
+                collabLastHeartbeat = Date.now();
                 collabBackoffMs = 1000;
                 updateCollabStateBanner(collabIsMaster ? 'Waiting for connections (link active)' : 'Negotiating secure handshake...', collabIsMaster ? 'warn' : 'muted');
                 if (collabIsMaster) {
@@ -1501,7 +1578,22 @@
             };
             collabSource.onmessage = evt => {
                 try {
+                    collabLastHeartbeat = Date.now();
                     const data = JSON.parse(evt.data || '{}');
+                    const rejection = (() => {
+                        if (!data) return false;
+                        const eventType = (data.event || '').toString().toLowerCase();
+                        const code = Number(data.code);
+                        const textFields = [data.message, data.error, data.info, data.title].filter(Boolean).map(v => v.toString().toLowerCase()).join(' ');
+                        const rejectionTokens = ['unauthorized', 'forbidden', 'denied', 'expired', 'invalid token', 'bad token', 'invalid session'];
+                        if (eventType === 'error' || eventType === 'reject' || eventType === 'close') return true;
+                        if (!Number.isNaN(code) && (code === 401 || code === 403)) return true;
+                        return rejectionTokens.some(token => textFields.includes(token));
+                    })();
+                    if (rejection) {
+                        handleCollabRejection(data.message || data.error || data.event || 'sse-rejected');
+                        return;
+                    }
                     if (!data.message) return;
                     const msg = JSON.parse(data.message);
                     if (msg.sender === collabClientId || msg.session === collabSessionId) return;
@@ -1517,6 +1609,8 @@
                 updateCollabStateBanner('Missing session key. Request a new link.', 'error');
                 return;
             }
+            resetCollabRetryState();
+            collabLastHeartbeat = 0;
             if (collabSource) { collabSource.close(); collabSource = null; }
             collabSessionKey = key;
             collabTopic = `garden-${collabSessionKey}`;

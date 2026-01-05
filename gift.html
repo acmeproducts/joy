@@ -1127,21 +1127,49 @@
             }
         }
 
+        function normalizeRoomCode(roomCode) {
+            const clean = ((roomCode || '') + '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+            return clean || '';
+        }
+
+        function extractRoomCodeFromLocation(loc = window.location) {
+            try {
+                const search = loc?.search || '';
+                const hash = (loc?.hash || '').replace(/^#/, '');
+                const params = new URLSearchParams(search);
+                let room = params.get('room') || params.get('r') || '';
+                if (!room) {
+                    if (hash.includes('=')) {
+                        const hashParams = new URLSearchParams(hash);
+                        room = hashParams.get('room') || hashParams.get('r') || '';
+                    } else if (hash) {
+                        room = hash;
+                    }
+                }
+                return normalizeRoomCode(room);
+            } catch (e) {
+                return normalizeRoomCode(loc?.room || '');
+            }
+        }
+
         function buildCollabUrl(roomCode) {
             const url = new URL(window.location.href);
-            if (roomCode) url.searchParams.set('room', roomCode);
-            else url.searchParams.delete('room');
+            url.searchParams.delete('room');
+            url.searchParams.delete('r');
+            const cleanRoom = normalizeRoomCode(roomCode);
+            if (cleanRoom) url.searchParams.set('room', cleanRoom);
             return url.toString();
         }
 
         function updateShareLink(roomCode) {
             if (!collabShareUrlEl) return;
-            if (!roomCode) {
+            const cleanRoom = normalizeRoomCode(roomCode);
+            if (!cleanRoom) {
                 collabShareUrlEl.textContent = 'Not connected';
                 collabShareUrlEl.dataset.url = '';
                 return;
             }
-            const shareUrl = buildCollabUrl(roomCode);
+            const shareUrl = buildCollabUrl(cleanRoom);
             collabShareUrlEl.textContent = shareUrl;
             collabShareUrlEl.dataset.url = shareUrl;
         }
@@ -1309,8 +1337,9 @@
         }
 
         function connectCollab(roomCode) {
-            if (!roomCode) return;
-            collabRoomCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'you-garden';
+            const cleanRoom = normalizeRoomCode(roomCode);
+            if (!cleanRoom) return;
+            collabRoomCode = cleanRoom;
             if (collabRoomInput) collabRoomInput.value = collabRoomCode;
             collabTopic = `garden-${collabRoomCode}`;
             collabActive = true;
@@ -1644,14 +1673,14 @@
                 connectCollab(room);
             };
         }
-        (function autoConnectFromUrl(){
-            const params = new URLSearchParams(window.location.search);
-            const urlRoom = (params.get('room') || params.get('r') || '').trim();
-            if (urlRoom) {
-                if (collabRoomInput) collabRoomInput.value = urlRoom;
-                connectCollab(urlRoom);
-            }
-        })();
+        const urlRoom = extractRoomCodeFromLocation();
+        if (collabRoomInput) collabRoomInput.value = urlRoom;
+        if (urlRoom) connectCollab(urlRoom);
+
+        window.addEventListener('popstate', () => {
+            const nextRoom = extractRoomCodeFromLocation();
+            if (nextRoom !== collabRoomCode) connectCollab(nextRoom);
+        });
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),

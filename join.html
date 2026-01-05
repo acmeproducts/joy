@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join Session</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at 20% 20%, #e0f2fe, #f8fafc 45%), radial-gradient(circle at 80% 0, #ede9fe, #f8fafc 35%), #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: #0f172a;
+    }
+    .card {
+      width: min(760px, 100%);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(6px);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+    p.lede {
+      margin: 0 0 16px;
+      color: #475569;
+      line-height: 1.55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+    label {
+      font-weight: 600;
+      font-size: 13px;
+      color: #0f172a;
+      display: block;
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+    input, select, button {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #cbd5e1;
+      padding: 12px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+      background: #fff;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.18);
+    }
+    input[readonly] { background: #f8fafc; cursor: default; }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .row .grow { flex: 1 1 180px; }
+    button {
+      cursor: pointer;
+      background: linear-gradient(120deg, #38bdf8, #6366f1);
+      color: #fff;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      border: none;
+    }
+    button.secondary {
+      background: #f1f5f9;
+      color: #0f172a;
+      border: 1px solid #e2e8f0;
+    }
+    button:active { transform: translateY(1px) scale(0.995); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 600;
+      font-size: 13px;
+      margin-right: 8px;
+    }
+    .status {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #475569;
+      min-height: 18px;
+    }
+    .status.ok { color: #15803d; }
+    .status.warn { color: #b45309; }
+    .status.error { color: #b91c1c; }
+    .footer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #0f172a;
+      text-decoration: none;
+    }
+    .muted {
+      color: #475569;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .tag {
+      padding: 4px 8px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      font-size: 11px;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+    }
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .card { padding: 20px; }
+      .row { flex-direction: column; }
+      button, input, select { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <div>
+        <h1>Join a Live Session</h1>
+        <p class="lede">Drop in with the host using a session key. Works with the latest experiences (Gift, Relax, Happy, Test) and passes the key via <code>?sessionKey=</code>.</p>
+      </div>
+      <span class="tag" aria-label="connection state">Ready</span>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label for="sessionKey">Session Key</label>
+        <input id="sessionKey" name="sessionKey" autocomplete="one-time-code" inputmode="latin" pattern="[A-Za-z0-9]{6,32}" placeholder="e.g. Ab3Cd9X" aria-describedby="keyStatus">
+        <div id="keyStatus" class="status">Keys are 7 random letters/numbers by default.</div>
+      </div>
+      <div>
+        <label for="experience">Experience</label>
+        <select id="experience" name="experience" aria-describedby="experienceHint">
+          <option value="gift.html">A Gift for You</option>
+          <option value="relax.html">A Time to Relax</option>
+          <option value="happy.html">A Time to Relax (Beta)</option>
+          <option value="test.html">Test Sandbox</option>
+        </select>
+        <div id="experienceHint" class="status muted">Choose where to open the session.</div>
+      </div>
+    </div>
+
+    <div class="grid" style="align-items: end;">
+      <div>
+        <label for="shareLink">Shareable Link</label>
+        <input id="shareLink" name="shareLink" readonly aria-describedby="linkStatus" placeholder="Generate or paste a key to build a link">
+        <div class="row" style="margin-top: 10px;">
+          <button id="copyLink" class="grow secondary" type="button">Copy Link</button>
+          <button id="generateKey" class="grow secondary" type="button">Generate Key</button>
+        </div>
+        <div id="linkStatus" class="status muted">Links include your chosen experience and key.</div>
+      </div>
+      <div>
+        <label>Actions</label>
+        <div class="row">
+          <button id="joinBtn" class="grow" type="button">Join Session</button>
+          <button id="openHost" class="grow secondary" type="button">Start Fresh Host</button>
+        </div>
+        <div class="status" id="actionStatus"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="muted">Tip: share the link. Guests land directly in your experience with the session key attached.</span>
+      <a class="link" href="https://ntfy.sh" target="_blank" rel="noreferrer">Secure relay powered by ntfy</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const MIN_KEY_LEN = 6;
+      const MAX_KEY_LEN = 32;
+      const DEFAULT_LEN = 7;
+      const keyInput = document.getElementById('sessionKey');
+      const keyStatus = document.getElementById('keyStatus');
+      const experienceSelect = document.getElementById('experience');
+      const linkInput = document.getElementById('shareLink');
+      const linkStatus = document.getElementById('linkStatus');
+      const joinBtn = document.getElementById('joinBtn');
+      const copyBtn = document.getElementById('copyLink');
+      const generateBtn = document.getElementById('generateKey');
+      const hostBtn = document.getElementById('openHost');
+      const actionStatus = document.getElementById('actionStatus');
+
+      const randomKey = (length = DEFAULT_LEN) => {
+        const out = [];
+        crypto.getRandomValues(new Uint32Array(length)).forEach(v => out.push(alphabet[v % alphabet.length]));
+        return out.join('');
+      };
+
+      const persist = (key, experience) => {
+        try {
+          if (key) localStorage.setItem('join_last_key', key);
+          localStorage.setItem('join_last_experience', experience);
+        } catch (_) {}
+      };
+
+      const restore = () => {
+        const params = new URLSearchParams(location.search);
+        const fromUrlKey = params.get('sessionKey') || '';
+        const fromUrlExp = params.get('app') || params.get('experience') || '';
+        const storedKey = localStorage.getItem('join_last_key') || '';
+        const storedExp = localStorage.getItem('join_last_experience') || '';
+
+        if (fromUrlKey) keyInput.value = fromUrlKey.trim();
+        else if (storedKey) keyInput.value = storedKey;
+
+        if (fromUrlExp) experienceSelect.value = decodeExperience(fromUrlExp) || experienceSelect.value;
+        else if (storedExp) experienceSelect.value = storedExp;
+      };
+
+      const decodeExperience = (slug) => {
+        const normalized = slug.trim().toLowerCase();
+        if (normalized.includes('gift')) return 'gift.html';
+        if (normalized.includes('relax')) return 'relax.html';
+        if (normalized.includes('happy')) return 'happy.html';
+        if (normalized.includes('test')) return 'test.html';
+        if (normalized.endsWith('.html')) return slug;
+        return '';
+      };
+
+      const validKey = (value) => {
+        if (!value) return false;
+        const trimmed = value.trim();
+        if (trimmed.length < MIN_KEY_LEN || trimmed.length > MAX_KEY_LEN) return false;
+        return /^[A-Za-z0-9]+$/.test(trimmed);
+      };
+
+      const buildLink = (key, experience) => {
+        const url = new URL(experience, window.location.href);
+        url.searchParams.set('sessionKey', key);
+        return url.toString();
+      };
+
+      const updateLink = () => {
+        const key = keyInput.value.trim();
+        const experience = experienceSelect.value;
+        if (validKey(key)) {
+          const link = buildLink(key, experience);
+          linkInput.value = link;
+          linkStatus.textContent = 'Link ready to copy or share.';
+          linkStatus.className = 'status ok';
+          persist(key, experience);
+        } else {
+          linkInput.value = '';
+          linkStatus.textContent = 'Enter a valid key to build a link.';
+          linkStatus.className = 'status warn';
+        }
+      };
+
+      const updateKeyStatus = () => {
+        const value = keyInput.value.trim();
+        if (!value) {
+          keyStatus.textContent = 'Keys are 7 random letters/numbers by default.';
+          keyStatus.className = 'status muted';
+          return;
+        }
+        if (!validKey(value)) {
+          keyStatus.textContent = 'Use letters/numbers only, 6-32 characters.';
+          keyStatus.className = 'status error';
+        } else {
+          keyStatus.textContent = 'Key looks valid.';
+          keyStatus.className = 'status ok';
+        }
+      };
+
+      const copyLink = async () => {
+        if (!linkInput.value) {
+          actionStatus.textContent = 'No link to copy yet.';
+          actionStatus.className = 'status warn';
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(linkInput.value);
+          actionStatus.textContent = 'Link copied to clipboard.';
+          actionStatus.className = 'status ok';
+        } catch (e) {
+          actionStatus.textContent = 'Clipboard unavailable. Select and copy manually.';
+          actionStatus.className = 'status warn';
+          linkInput.select();
+        }
+      };
+
+      const navigateTo = (asHost = false) => {
+        const key = keyInput.value.trim();
+        const experience = experienceSelect.value;
+        if (!validKey(key)) {
+          actionStatus.textContent = 'Please enter a valid key first.';
+          actionStatus.className = 'status error';
+          return;
+        }
+        const url = new URL(experience, window.location.href);
+        url.searchParams.set('sessionKey', key);
+        if (asHost) url.searchParams.set('host', '1');
+        persist(key, experience);
+        window.location.href = url.toString();
+      };
+
+      const generateNewKey = () => {
+        keyInput.value = randomKey(DEFAULT_LEN);
+        updateKeyStatus();
+        updateLink();
+        actionStatus.textContent = 'New key generated. Share the link or join now.';
+        actionStatus.className = 'status ok';
+      };
+
+      keyInput.addEventListener('input', () => { updateKeyStatus(); updateLink(); });
+      experienceSelect.addEventListener('change', updateLink);
+      copyBtn.addEventListener('click', copyLink);
+      joinBtn.addEventListener('click', () => navigateTo(false));
+      hostBtn.addEventListener('click', () => navigateTo(true));
+      generateBtn.addEventListener('click', generateNewKey);
+
+      restore();
+      updateKeyStatus();
+      updateLink();
+      if (!keyInput.value) generateNewKey();
+    })();
+  </script>
+</body>
+</html>

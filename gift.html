@@ -1981,6 +1981,7 @@
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} (${visualKind})`, options);
                     emitCollabEvent('tap', { x, y, word: wordChoice, visual: visualKind, double: false, alias: collabAlias, silentCollab: options.silentCollab });
                 }
+                if (window.gardenRelaySend) window.gardenRelaySend('tap', { x: Math.round(x), y: Math.round(y), double: isDoubleTap, word: wordChoice });
                 lastTap = now;
                 lastTapX = x;
                 lastTapY = y;
@@ -2791,6 +2792,123 @@
             }
         }
         initEnvironment();
+    </script>
+
+    <script>
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            const relaySession = (params.get('session') || '').trim();
+            if (!relaySession) return;
+
+            const relayTopic = `garden-demo-${relaySession}`;
+            let relaySource = null;
+            let relayTimer = null;
+            let relayBackoff = 1000;
+            let relayLastTs = 0;
+
+            const badge = document.createElement('div');
+            badge.id = 'relay-status';
+            badge.textContent = 'Relay: connecting…';
+            Object.assign(badge.style, {
+                position: 'fixed',
+                left: '12px',
+                bottom: '18px',
+                zIndex: '60',
+                padding: '8px 12px',
+                borderRadius: '999px',
+                background: 'rgba(15,23,42,0.75)',
+                color: '#e2e8f0',
+                border: '1px solid rgba(148,163,184,0.25)',
+                fontSize: '12px',
+                letterSpacing: '0.04em',
+                backdropFilter: 'blur(6px)'
+            });
+            document.body.appendChild(badge);
+
+            function setBadge(text, tone = 'muted') {
+                badge.textContent = text;
+                badge.style.borderColor = tone === 'error' ? 'rgba(248,113,113,0.6)'
+                    : tone === 'ok' ? 'rgba(74,222,128,0.7)'
+                    : 'rgba(148,163,184,0.35)';
+            }
+
+            function playRelayBeep() {
+                try {
+                    ZenAudio.warmUp();
+                    ZenAudio.playDiscovery();
+                } catch (e) {
+                    console.warn('relay beep failed', e);
+                }
+            }
+
+            function relayPulse() {
+                const x = width / 2 + (Math.random() - 0.5) * width * 0.25;
+                const y = height / 2 + (Math.random() - 0.5) * height * 0.25;
+                simulateTap(x, y, { skipTelemetry: true, silentCollab: true, sharedVisual: 'bloom' });
+            }
+
+            function applyRelayColor(value) {
+                if (!value) return;
+                const color = value.toString();
+                const currentTheme = themes[config.currentThemeIndex] || { bg: [color, color], text: '#111' };
+                themes[config.currentThemeIndex] = { ...currentTheme, bg: [color, color] };
+                config.useGradient = true;
+                document.body.style.backgroundColor = color;
+            }
+
+            function applyRelayText(value) {
+                if (!value) return;
+                const safe = value.toString();
+                const title = document.getElementById('main-title');
+                if (title) title.textContent = safe;
+            }
+
+            function handleRelayMessage(msg) {
+                if (!msg || msg.session !== relaySession || !msg.ts) return;
+                if (msg.ts <= relayLastTs) return;
+                relayLastTs = msg.ts;
+                if (msg.type === 'color') applyRelayColor(msg.value);
+                else if (msg.type === 'text') applyRelayText(msg.value);
+                else if (msg.type === 'beep') playRelayBeep();
+                else if (msg.type === 'tap') { playRelayBeep(); relayPulse(); }
+            }
+
+            function connectRelay() {
+                if (relaySource) { relaySource.close(); relaySource = null; }
+                clearTimeout(relayTimer);
+                setBadge('Relay: connecting…');
+                relaySource = new EventSource(`https://ntfy.sh/${relayTopic}/sse`);
+                relaySource.onopen = () => { setBadge('Relay: live', 'ok'); relayBackoff = 1000; };
+                relaySource.onerror = () => {
+                    setBadge('Relay: retrying…');
+                    if (relaySource) { relaySource.close(); relaySource = null; }
+                    relayTimer = setTimeout(connectRelay, relayBackoff);
+                    relayBackoff = Math.min(relayBackoff * 1.6, 8000);
+                };
+                relaySource.onmessage = evt => {
+                    try {
+                        const data = JSON.parse(evt.data);
+                        handleRelayMessage(data);
+                    } catch (e) {
+                        console.warn('relay parse error', e);
+                    }
+                };
+            }
+
+            function sendRelay(type, value) {
+                const ts = Date.now();
+                const payload = { session: relaySession, type, value, ts };
+                relayLastTs = Math.max(relayLastTs, ts);
+                fetch(`https://ntfy.sh/${relayTopic}`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'application/json' }
+                }).catch(() => setBadge('Relay: send failed', 'error'));
+            }
+
+            window.gardenRelaySend = sendRelay;
+            connectRelay();
+        })();
     </script>
 </body>
 </html>

@@ -487,6 +487,26 @@
         let sessionEndHoldTimer = null;
         let pendingSessionEndReason = null;
 
+        function getAlivePeerIds() {
+            const now = Date.now();
+            if (collabActive) collabLocalLastSeen = now;
+            const alive = Object.entries(collabPeers)
+                .filter(([id, peer]) => id && (now - (peer.lastSeen || 0) < MASTER_LEASE_MS))
+                .map(([id]) => id);
+            if ((now - collabLocalLastSeen) < MASTER_LEASE_MS && !alive.includes(collabClientId)) {
+                alive.push(collabClientId);
+            }
+            return alive;
+        }
+
+        function electMaster(preferredId = null) {
+            const aliveIds = getAlivePeerIds();
+            if (!aliveIds.length) return null;
+            if (collabPreferredMasterId && aliveIds.includes(collabPreferredMasterId)) return collabPreferredMasterId;
+            if (preferredId && aliveIds.includes(preferredId)) return preferredId;
+            return [...aliveIds].sort()[0];
+        }
+
         function collabHasFreshPeer() {
             const now = Date.now();
             const hasPeer = Object.entries(collabPeers).some(([id, peer]) => id !== 'local' && (now - (peer.lastSeen || 0) < MASTER_LEASE_MS));
@@ -570,6 +590,7 @@
                 lastSeen: Date.now(),
                 firstSeen
             };
+            if (id === 'local' || id === collabClientId) collabLocalLastSeen = Date.now();
             updatePeerList();
         }
 
@@ -661,7 +682,14 @@
         async function resolveMasterClaim(reason = 'timer') {
             if (collabMasterId) return;
             const adopted = await refreshMasterFromManifest(reason);
-            if (!adopted && !collabMasterId) {
+            if (adopted) return;
+            const elected = electMaster(collabPreferredMasterId || collabClientId);
+            if (elected && elected !== collabMasterId) {
+                adoptMaster(elected, Date.now(), null, reason);
+                if (collabIsMaster) emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
+                return;
+            }
+            if (!collabMasterId) {
                 claimMasterRole();
                 publishManifest(collabMasterId, 'active');
             }
@@ -1149,7 +1177,32 @@
         let lastCollabDragEmit = 0;
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
-        const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        const PERSISTED_SESSION_KEY = 'garden_session_key';
+        const PERSISTED_MASTER_ID_KEY = 'garden_master_id';
+        const PERSISTED_CLIENT_ID_KEY = 'garden_client_id';
+        const PERSISTED_SESSION_TS_KEY = 'garden_session_ts';
+        function loadPersistedSessionState() {
+            try {
+                const key = localStorage.getItem(PERSISTED_SESSION_KEY) || '';
+                const masterId = localStorage.getItem(PERSISTED_MASTER_ID_KEY) || '';
+                const clientId = localStorage.getItem(PERSISTED_CLIENT_ID_KEY) || '';
+                const tsRaw = localStorage.getItem(PERSISTED_SESSION_TS_KEY);
+                const ts = tsRaw ? Number(tsRaw) : 0;
+                return { key, masterId, clientId, ts };
+            } catch (e) {
+                return { key: '', masterId: '', clientId: '', ts: 0 };
+            }
+        }
+        let persistedSessionState = loadPersistedSessionState();
+        const collabClientId = persistedSessionState.clientId || (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        function persistClientId(id) {
+            try {
+                localStorage.setItem(PERSISTED_CLIENT_ID_KEY, id);
+                if (!persistedSessionState) persistedSessionState = {};
+                persistedSessionState.clientId = id;
+            } catch (e) {}
+        }
+        persistClientId(collabClientId);
         const collabAlias = `you-${collabClientId.slice(0,6)}`;
         const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
         const SESSION_KEY_PARAM = 'sessionKey';
@@ -1165,9 +1218,12 @@
         let collabBackoffMs = 1000;
         const collabQueue = [];
         const lastSeqBySender = {};
+        let collabLocalLastSeen = Date.now();
         let collabMasterId = null;
         let collabMasterTs = null;
         let collabMasterClaimTimer = null;
+        let collabPreferredMasterId = persistedSessionState?.masterId || null;
+        let collabRoleSanityTimer = null;
         let collabJoinTs = 0;
         let collabIsMaster = false;
         let collabHeartbeat = null;
@@ -1245,6 +1301,38 @@
             url.searchParams.delete('r');
             url.searchParams.set(SESSION_KEY_PARAM, sessionKey);
             return url.toString();
+        }
+
+        function persistSessionStateSnapshot({ key = collabSessionKey, masterId = collabMasterId } = {}) {
+            try {
+                if (key) localStorage.setItem(PERSISTED_SESSION_KEY, key);
+                if (masterId) localStorage.setItem(PERSISTED_MASTER_ID_KEY, masterId);
+                else localStorage.removeItem(PERSISTED_MASTER_ID_KEY);
+                localStorage.setItem(PERSISTED_SESSION_TS_KEY, Date.now().toString());
+                persistClientId(collabClientId);
+                persistedSessionState = {
+                    key: key || '',
+                    masterId: masterId || '',
+                    clientId: collabClientId,
+                    ts: Date.now()
+                };
+            } catch (e) {
+                console.warn('persist session state failed', e);
+            }
+        }
+
+        function clearPersistedSessionState() {
+            try {
+                localStorage.removeItem(PERSISTED_SESSION_KEY);
+                localStorage.removeItem(PERSISTED_MASTER_ID_KEY);
+                localStorage.removeItem(PERSISTED_SESSION_TS_KEY);
+                persistedSessionState = { key: '', masterId: '', clientId: collabClientId, ts: 0 };
+            } catch (e) {}
+        }
+
+        function isPersistedSessionFresh(state = persistedSessionState) {
+            if (!state || !state.key || !state.ts) return false;
+            return (Date.now() - state.ts) < SESSION_EXPIRY_MS;
         }
 
         function updateShareLink(sessionKey) {
@@ -1378,8 +1466,14 @@
         }
 
         function claimMasterRole() {
+            const elected = electMaster(collabClientId);
+            if (elected && elected !== collabClientId) {
+                adoptMaster(elected, Date.now(), null, 'election-defers-claim');
+                return;
+            }
             collabIsMaster = true;
             collabMasterId = collabClientId;
+            collabPreferredMasterId = collabClientId;
             collabMasterTs = collabJoinTs || Date.now();
             updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
             collabHostNonce = collabHostNonce || randomNonce(12);
@@ -1387,28 +1481,27 @@
             ensureHostSessionRecord(collabSessionKey);
             touchPeer('local', 'You', { master: true });
             reconcilePeerMasterFlags();
+            persistSessionStateSnapshot({ masterId: collabMasterId });
             appendSessionLog('collab', `Assumed host role for session ${maskKey(collabSessionKey) || '—'}.`);
             emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
             publishManifest(collabMasterId, 'active');
         }
 
-        function shouldAdoptMaster(masterId, ts) {
-            if (!masterId) return false;
+        function adoptMaster(masterId, ts, background, reason = 'announce') {
             const incomingTs = ts || Date.now();
-            if (!collabMasterId) return true;
-            const currentTs = collabMasterTs || Infinity;
-            if (masterId === collabMasterId) return incomingTs < currentTs;
-            if (incomingTs === currentTs) return masterId < collabMasterId;
-            return incomingTs < currentTs;
-        }
-
-        function adoptMaster(masterId, ts, background) {
-            const incomingTs = ts || Date.now();
-            if (!shouldAdoptMaster(masterId, incomingTs)) return;
+            if (masterId && !collabPeers[masterId]) {
+                touchPeer(masterId, masterId.slice(0,6), { master: true, ts: incomingTs, firstSeen: incomingTs });
+            }
+            const elected = electMaster(masterId);
+            if (!elected) return;
+            const previousMaster = collabMasterId;
+            const demoting = collabIsMaster && elected !== collabClientId;
             if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
-            collabMasterId = masterId;
+            if (collabRoleSanityTimer) clearTimeout(collabRoleSanityTimer);
+            collabMasterId = elected;
+            collabPreferredMasterId = elected;
             collabMasterTs = incomingTs;
-            collabIsMaster = masterId === collabClientId;
+            collabIsMaster = elected === collabClientId;
             if (collabIsMaster) {
                 updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
                 collabHostNonce = collabHostNonce || randomNonce(12);
@@ -1421,7 +1514,11 @@
                 touchPeer('local', 'You', { master: false });
             }
             reconcilePeerMasterFlags();
-            appendSessionLog('collab', `Master set to ${masterId.slice(0,6)} for session ${maskKey(collabSessionKey) || '—'}.`, { skipLog: !collabActive });
+            if (demoting && previousMaster && previousMaster !== collabMasterId) {
+                appendSessionLog('collab', `Detected lower master ${collabMasterId.slice(0,6)}; demoting to guest.`, { skipLog: !collabActive });
+            }
+            appendSessionLog('collab', `Master set to ${collabMasterId.slice(0,6)} for session ${maskKey(collabSessionKey) || '—'} (${reason}).`, { skipLog: !collabActive });
+            persistSessionStateSnapshot({ masterId: collabMasterId });
             if (!collabIsMaster) {
                 if (background) {
                     applyBackgroundStateFromMaster(background);
@@ -1435,7 +1532,26 @@
             if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
             collabMasterClaimTimer = setTimeout(() => {
                 resolveMasterClaim('negotiation');
+                runRoleSanityCheck('sanity-claim');
             }, MASTER_NEGOTIATION_MS);
+        }
+
+        function startRoleSanityWatchdog(reason = 'connect') {
+            if (collabRoleSanityTimer) clearTimeout(collabRoleSanityTimer);
+            collabRoleSanityTimer = setTimeout(() => runRoleSanityCheck(reason), 1800);
+        }
+
+        function runRoleSanityCheck(reason = 'sanity') {
+            if (!collabActive) return;
+            const elected = electMaster(collabMasterId || collabPreferredMasterId || collabClientId);
+            if (!collabMasterId) {
+                adoptMaster(elected || collabClientId, Date.now(), null, reason);
+                emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
+                return;
+            }
+            if (elected && elected !== collabMasterId) {
+                adoptMaster(elected, Date.now(), null, reason);
+            }
         }
 
         function requestBackgroundFromMaster() {
@@ -1490,6 +1606,7 @@
             appendSessionLog('collab', `Session expired (${reason}). Key masked: ${maskKey(collabSessionKey)}`);
             if (collabRequestBtn) collabRequestBtn.disabled = false;
             collabSessionKey = '';
+            clearPersistedSessionState();
             updateShareLink('');
             setTimeout(() => {
                 if (collabRequestBtn) collabRequestBtn.click();
@@ -1505,10 +1622,17 @@
             collabReady = false;
             collabLastHeartbeat = 0;
             const urlKey = parseSessionKeyFromLocation();
-            if (collabIsMaster || !urlKey) {
+            const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
+            const fallbackKey = urlKey || collabSessionKey || persistedKey;
+            if (/expired|invalid/i.test(reason)) {
+                clearPersistedSessionState();
                 startHostSession('sse-rejected');
+                return;
+            }
+            if (fallbackKey) {
+                joinSessionFromLink(fallbackKey);
             } else {
-                joinSessionFromLink(urlKey);
+                startHostSession('sse-rejected');
             }
         }
 
@@ -1522,11 +1646,13 @@
             collabIsMaster = true;
             collabMasterId = collabClientId;
             collabMasterTs = Date.now();
+            collabPreferredMasterId = collabMasterId;
             collabSessionToken = '';
             ensureHostSessionRecord(collabSessionKey);
             updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey)})`, 'master');
             updateCollabStateBanner('Waiting for connections. Share the link.', 'warn');
             markCollabConnected(collabSessionKey);
+            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
             connectCollab(collabSessionKey, { asHost: true, reason });
             startExpiryMonitor();
         }
@@ -1543,11 +1669,13 @@
             collabIsMaster = false;
             collabMasterId = null;
             collabMasterTs = null;
+            collabPreferredMasterId = persistedSessionState?.masterId || null;
             collabHostNonce = '';
             collabSessionToken = '';
             updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey)})`, 'sub');
             updateCollabStateBanner('Joining session...', 'warn');
             markCollabConnected(collabSessionKey);
+            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
             connectCollab(collabSessionKey, { asHost: false, reason: 'guest-link' });
         }
 
@@ -1570,6 +1698,7 @@
                     collabClientNonce = randomNonce(10);
                     emitCollabEvent('handshake-request', { key: collabSessionKey, clientNonce: collabClientNonce });
                 }
+                startRoleSanityWatchdog('sse-open');
                 flushCollabQueue(); // resync any buffered actions
             };
             collabSource.onerror = () => {
@@ -1618,6 +1747,7 @@
             collabIsMaster = asHost;
             collabMasterId = asHost ? collabClientId : null;
             collabMasterTs = asHost ? Date.now() : null;
+            collabPreferredMasterId = collabMasterId || collabPreferredMasterId;
             collabJoinTs = Date.now();
             collabSeq = 0;
             collabQueue.length = 0;
@@ -1627,6 +1757,7 @@
             updateCollabRoleLabel(asHost ? `Role: Host (key ${maskKey(collabSessionKey)})` : `Role: Guest (key ${maskKey(collabSessionKey)})`, asHost ? 'master' : 'sub');
             appendSessionLog('collab', `${asHost ? 'Hosting' : 'Joining'} session ${maskKey(collabSessionKey)} (${reason}).`);
             if (asHost) ensureHostSessionRecord(collabSessionKey);
+            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
             startExpiryMonitor();
             if (collabHeartbeat) clearInterval(collabHeartbeat);
             collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
@@ -1687,11 +1818,12 @@
             }
             if (msg.kind === 'handshake-ack') {
                 collabHostNonce = msg.hostNonce || collabHostNonce;
-                collabMasterId = msg.masterId || msg.sender || collabMasterId;
+                const announcedMaster = msg.masterId || msg.sender || collabMasterId;
                 collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce || '');
                 deriveSessionToken(collabSessionKey, collabHostNonce || '', collabClientNonce || '')
                     .then(token => {
                         collabSessionToken = token;
+                        adoptMaster(announcedMaster, msg.ts || Date.now(), msg.background, 'handshake');
                         updateCollabStateBanner('Client connected. Session locked.', 'success');
                         announcePresence('join', { hostNonce: collabHostNonce });
                     })
@@ -2025,16 +2157,22 @@
             };
         }
         const urlSessionKey = parseSessionKeyFromLocation();
+        const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
         if (urlSessionKey) {
             joinSessionFromLink(urlSessionKey);
+        } else if (persistedKey) {
+            appendSessionLog('collab', `Rejoining stored session ${maskKey(persistedKey)}.`, { skipLog: false });
+            joinSessionFromLink(persistedKey);
         } else {
             startHostSession('page-load');
         }
 
         window.addEventListener('popstate', () => {
             const nextKey = parseSessionKeyFromLocation();
+            const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
             if (nextKey && nextKey !== collabSessionKey) joinSessionFromLink(nextKey);
-            if (!nextKey) startHostSession('history-reset');
+            if (!nextKey && persistedKey) joinSessionFromLink(persistedKey);
+            if (!nextKey && !persistedKey) startHostSession('history-reset');
         });
 
         const modals = {

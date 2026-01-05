@@ -256,6 +256,7 @@
       let source = null;
       let reconnectTimer = null;
       let lastSeenTs = 0;
+      let lastSeenId = null;
       let audioCtx = null;
 
       function setStatus(text, state = 'retry') {
@@ -328,7 +329,6 @@
         if (!session || !topic) return;
         const ts = Date.now();
         const payload = { session, type, value, ts };
-        lastSeenTs = Math.max(lastSeenTs, ts);
         fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -336,14 +336,19 @@
         }).catch(() => setStatus('Send failed', 'error'));
       }
 
-      function handleMessage(msg) {
-        if (!msg || msg.session !== session || !msg.ts) return;
-        if (msg.ts <= lastSeenTs) return;
-        lastSeenTs = msg.ts;
-        if (msg.type === 'color') applyColor(msg.value);
-        else if (msg.type === 'text') applyText(msg.value);
-        else if (msg.type === 'beep') { beep(); }
-        else if (msg.type === 'tap') { beep(); pulse(); }
+      function handleMessage(envelope) {
+        if (!envelope || !envelope.payload) return;
+        const { payload, id, time } = envelope;
+        if (payload.session !== session) return;
+        if (id && id === lastSeenId) return;
+        const ts = time ? time * 1000 : payload.ts || Date.now();
+        if (!id && ts <= lastSeenTs) return;
+        lastSeenId = id || lastSeenId;
+        lastSeenTs = Math.max(lastSeenTs, ts);
+        if (payload.type === 'color') applyColor(payload.value);
+        else if (payload.type === 'text') applyText(payload.value);
+        else if (payload.type === 'beep') { beep(); }
+        else if (payload.type === 'tap') { beep(); pulse(); }
       }
 
       function connect() {
@@ -360,8 +365,13 @@
         };
         source.onmessage = evt => {
           try {
-            const data = JSON.parse(evt.data);
-            handleMessage(data);
+            const envelope = JSON.parse(evt.data);
+            const payload = typeof envelope.message === 'string' ? JSON.parse(envelope.message) : envelope;
+            handleMessage({
+              payload,
+              id: envelope.id,
+              time: envelope.time
+            });
           } catch (e) {
             console.warn('parse error', e);
           }

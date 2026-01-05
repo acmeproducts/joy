@@ -125,11 +125,13 @@
     let ws;
     let bc;
     let reconnectTimer;
+    let heartbeatTimer;
     let applyingRemote = false;
     let lastBeepTs = 0;
     let lastColorTs = 0;
     let lastTextTs = 0;
     const pending = [];
+    const MAX_PENDING = 50;
 
     const setStatus = (text, tone = 'success') => {
       statusEl.textContent = text;
@@ -174,16 +176,14 @@
         ws.send(JSON.stringify(msg));
       } else {
         pending.push(msg);
-        setStatus('Buffering until connected…', 'error');
+        if (pending.length > MAX_PENDING) pending.shift(); // drop oldest to avoid unbounded growth
+        setStatus(`Buffering ${pending.length} change(s) until connected…`, 'error');
       }
     };
 
     const flushQueue = () => {
       if (!ws || ws.readyState !== 1 || !pending.length) return;
-      while (pending.length) {
-        const msg = pending.shift();
-        ws.send(JSON.stringify(msg));
-      }
+      while (pending.length) ws.send(JSON.stringify(pending.shift()));
     };
 
     const sendState = () => {
@@ -239,6 +239,11 @@
         setStatus(`Connected to session ${sessionId}`);
         sendState();
         flushQueue();
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = setInterval(() => {
+          if (!ws || ws.readyState !== 1) return;
+          ws.send(JSON.stringify({ type: 'ping', session: sessionId, ts: Date.now() }));
+        }, 8000);
       });
       ws.addEventListener('close', () => {
         setStatus('Disconnected — retrying…', 'error');
@@ -307,7 +312,9 @@
     applyColor(colorInput.value);
     connect();
     // If WS handshake lags (e.g., captive network), keep UI honest about buffering.
-    setTimeout(() => { if (!ws || ws.readyState !== 1) setStatus('Waiting for WebSocket — local tabs still syncing'); }, 1500);
+    setTimeout(() => {
+      if (!ws || ws.readyState !== 1) setStatus('Waiting for WebSocket — local tabs still syncing');
+    }, 1500);
   </script>
 </body>
 </html>

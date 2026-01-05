@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Peer-to-Peer Sync (WebSocket, shareable URL)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 20px; transition: background 0.3s ease; }
+  .row { margin: 10px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, button { font-size: 16px; padding: 8px; }
+  #log { font: 13px/1.45 monospace; white-space: pre-wrap; background:#0b0b0b; color:#00e676; padding:10px; height:200px; overflow:auto; border-radius:8px; }
+  .pill { padding: 4px 10px; border-radius: 999px; background: #eee; color: #111; font-size: 13px; }
+  .panel { border: 1px solid #ddd; border-radius: 10px; padding: 12px; background: #fafafa; }
+</style>
+
+<div class="panel">
+  <div class="row">
+    <label>Room ID <input id="room" size="20" /></label>
+    <button id="regen">New Room</button>
+    <span id="status" class="pill">disconnected</span>
+  </div>
+  <div class="row">
+    <span>Shareable Link:</span>
+    <input id="link" size="48" readonly />
+    <button id="copy">Copy Link</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <label>Shared Text <input id="text" value="Hello world" size="30" /></label>
+    <button id="sendText">Send</button>
+  </div>
+  <div class="row">
+    <label>Background <input id="color" type="color" value="#87cefa" /></label>
+    <button id="sendColor">Send</button>
+  </div>
+</div>
+
+<div class="row">You: <span id="me" class="pill">—</span></div>
+<div id="log"></div>
+
+<script>
+(() => {
+  const roomEl = document.getElementById('room');
+  const linkEl = document.getElementById('link');
+  const statusEl = document.getElementById('status');
+  const copyBtn = document.getElementById('copy');
+  const regenBtn = document.getElementById('regen');
+  const textEl = document.getElementById('text');
+  const colorEl = document.getElementById('color');
+  const sendTextBtn = document.getElementById('sendText');
+  const sendColorBtn = document.getElementById('sendColor');
+  const logEl = document.getElementById('log');
+  const meEl = document.getElementById('me');
+
+  const clientId = (crypto.randomUUID && crypto.randomUUID()) || ('c-' + Math.random().toString(16).slice(2));
+  meEl.textContent = clientId.slice(0, 8);
+
+  let room = '';
+  let ws = null;
+  let retryMs = 1000;
+  const MAX_BACKOFF = 10000;
+  const lastTs = { text: 0, color: 0 };
+
+  const log = (m) => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+  const setStatus = (s) => { statusEl.textContent = s; };
+
+  const randomRoom = (len = 10) => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return Array.from(crypto.getRandomValues(new Uint32Array(len))).map(n => chars[n % chars.length]).join('');
+  };
+
+  const parseRoomFromUrl = () => {
+    const params = new URLSearchParams(location.search);
+    return (params.get('room') || '').trim();
+  };
+
+  const buildLink = (r) => {
+    const url = new URL(location.href);
+    url.searchParams.set('room', r);
+    return url.toString();
+  };
+
+  const updateLink = (r) => {
+    const link = buildLink(r);
+    linkEl.value = link;
+    history.replaceState(null, '', link);
+  };
+
+  const initRoom = () => {
+    const fromUrl = parseRoomFromUrl();
+    const cached = localStorage.getItem('p2p_room');
+    room = fromUrl || cached || randomRoom();
+    roomEl.value = room;
+    localStorage.setItem('p2p_room', room);
+    updateLink(room);
+  };
+
+  const wsUrl = () => `wss://ws.piesocket.com/v3/1?api_key=DEMOKEY&notify_self=1&channel=${encodeURIComponent(room)}`;
+
+  const connectWs = () => {
+    if (ws) {
+      ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null;
+      ws.close();
+      ws = null;
+    }
+    setStatus('connecting');
+    ws = new WebSocket(wsUrl());
+
+    ws.onopen = () => {
+      retryMs = 1000;
+      setStatus('connected');
+      log('ws open');
+      sendRaw({ type: 'state', text: textEl.value, color: colorEl.value, tsText: lastTs.text, tsColor: lastTs.color, sender: clientId }, true);
+    };
+
+    ws.onclose = () => { setStatus('disconnected'); log('ws closed'); scheduleReconnect(); };
+    ws.onerror = () => { setStatus('error'); log('ws error'); scheduleReconnect(); };
+    ws.onmessage = (evt) => {
+      let msg; try { msg = JSON.parse(evt.data); } catch { return; }
+      if (!msg || msg.room !== room || msg.sender === clientId) return;
+      applyIncoming(msg);
+      if (msg.type === 'state') applyIncomingState(msg);
+    };
+  };
+
+  const scheduleReconnect = () => {
+    setTimeout(connectWs, retryMs);
+    retryMs = Math.min(retryMs * 1.6, MAX_BACKOFF);
+  };
+
+  const sendRaw = (payload, silent) => {
+    if (!ws || ws.readyState !== 1) return alert('Not connected');
+    ws.send(JSON.stringify({ ...payload, room, ts: payload.ts || Date.now() }));
+    if (!silent) log(`ws ${payload.type} -> ${payload.value ?? ''}`);
+  };
+
+  const send = (type, value) => {
+    const now = Date.now();
+    if (type === 'text') lastTs.text = now;
+    if (type === 'color') { lastTs.color = now; document.body.style.background = value; }
+    sendRaw({ type, value, ts: now, sender: clientId });
+  };
+
+  const applyIncoming = (data) => {
+    if (!data || data.sender === clientId) return;
+    if (data.type === 'text') {
+      if (data.ts > lastTs.text || (data.ts === lastTs.text && data.sender > clientId)) {
+        lastTs.text = data.ts;
+        textEl.value = data.value;
+        log('text <- ' + data.sender.slice(0,8) + ': ' + data.value);
+      }
+    } else if (data.type === 'color') {
+      if (data.ts > lastTs.color || (data.ts === lastTs.color && data.sender > clientId)) {
+        lastTs.color = data.ts;
+        colorEl.value = data.value;
+        document.body.style.background = data.value;
+        log('color <- ' + data.sender.slice(0,8) + ': ' + data.value);
+      }
+    }
+  };
+
+  const applyIncomingState = (state) => {
+    if (!state || state.sender === clientId) return;
+    applyIncoming({ type: 'text', value: state.text, ts: state.tsText, sender: state.sender });
+    applyIncoming({ type: 'color', value: state.color, ts: state.tsColor, sender: state.sender });
+  };
+
+  copyBtn.onclick = async () => { try { await navigator.clipboard.writeText(linkEl.value); } catch (e) { log('copy failed'); } };
+  regenBtn.onclick = () => { room = randomRoom(); roomEl.value = room; localStorage.setItem('p2p_room', room); updateLink(room); connectWs(); };
+  sendTextBtn.onclick = () => send('text', textEl.value);
+  sendColorBtn.onclick = () => send('color', colorEl.value);
+  textEl.addEventListener('keyup', (e) => { if (e.key === 'Enter') sendTextBtn.click(); });
+  roomEl.addEventListener('change', () => { room = roomEl.value.trim(); updateLink(room); localStorage.setItem('p2p_room', room); connectWs(); });
+
+  initRoom();
+  connectWs();
+})();
+</script>
+</html>

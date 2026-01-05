@@ -337,9 +337,10 @@
       }
 
       function handleMessage(msg) {
-        if (!msg || msg.session !== session || !msg.ts) return;
-        if (msg.ts <= lastSeenTs) return;
-        lastSeenTs = msg.ts;
+        if (!msg || msg.session !== session) return;
+        const ts = msg.ts || Date.now();
+        if (ts <= lastSeenTs) return;
+        lastSeenTs = ts;
         if (msg.type === 'color') applyColor(msg.value);
         else if (msg.type === 'text') applyText(msg.value);
         else if (msg.type === 'beep') { beep(); }
@@ -360,8 +361,9 @@
         };
         source.onmessage = evt => {
           try {
-            const data = JSON.parse(evt.data);
-            handleMessage(data);
+            const envelope = JSON.parse(evt.data);
+            const payload = typeof envelope.message === 'string' ? JSON.parse(envelope.message) : envelope;
+            handleMessage(payload);
           } catch (e) {
             console.warn('parse error', e);
           }

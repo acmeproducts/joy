@@ -418,6 +418,12 @@
         const collabCopyUrlBtn = document.getElementById('collab-copy-url');
         const collabPeers = {};
         let pipelineSendCount = 0;
+        function reconcilePeerMasterFlags() {
+            Object.entries(collabPeers).forEach(([id, peer]) => {
+                peer.master = collabMasterId ? id === collabMasterId : false;
+            });
+            updatePeerList();
+        }
 
         const COLLAB_MANIFEST_CSV = ""; // Optional: published CSV with columns room, master, ts
         const COLLAB_MANIFEST_FORM_URL = ""; // Optional: Google Form URL for manifest writes
@@ -425,6 +431,11 @@
         const MASTER_NEGOTIATION_MS = 2600;
         const MASTER_LEASE_MS = 45000;
         const MASTER_STALE_GRACE_MS = 8000;
+
+        function isMasterStale(ts) {
+            const base = ts || 0;
+            return (Date.now() - base) > (MASTER_LEASE_MS + MASTER_STALE_GRACE_MS);
+        }
 
         function fmtTime(ts) {
             return new Date(ts).toLocaleTimeString([], { hour12: false });
@@ -1239,14 +1250,27 @@
             collabMasterTs = collabJoinTs || Date.now();
             updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
             touchPeer('local', 'You', { master: true });
+            reconcilePeerMasterFlags();
             appendSessionLog('collab', `Assumed master role for room ${collabRoomCode || '—'}.`);
             emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
             publishManifest(collabMasterId, 'active');
         }
 
+        function shouldAdoptMaster(masterId, ts) {
+            if (!masterId) return false;
+            const incomingTs = ts || Date.now();
+            if (!collabMasterId) return true;
+            const currentTs = collabMasterTs || 0;
+            if (masterId === collabMasterId) return incomingTs >= currentTs;
+            if (isMasterStale(currentTs)) return true;
+            if (isMasterStale(incomingTs)) return false;
+            if (incomingTs === currentTs) return masterId < collabMasterId;
+            return incomingTs < currentTs;
+        }
+
         function adoptMaster(masterId, ts, background) {
             const incomingTs = ts || Date.now();
-            if (collabMasterId && collabMasterTs && incomingTs > collabMasterTs && collabMasterId !== masterId) return;
+            if (!shouldAdoptMaster(masterId, incomingTs)) return;
             if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
             collabMasterId = masterId;
             collabMasterTs = incomingTs;
@@ -1259,8 +1283,15 @@
                 updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
                 touchPeer('local', 'You', { master: false });
             }
+            reconcilePeerMasterFlags();
             appendSessionLog('collab', `Master set to ${masterId.slice(0,6)} for room ${collabRoomCode || '—'}.`, { skipLog: !collabActive });
-            if (!collabIsMaster && background) applyBackgroundStateFromMaster(background);
+            if (!collabIsMaster) {
+                if (background) {
+                    applyBackgroundStateFromMaster(background);
+                } else {
+                    requestBackgroundFromMaster();
+                }
+            }
         }
 
         function scheduleMasterClaim() {

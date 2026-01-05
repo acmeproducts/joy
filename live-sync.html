@@ -129,6 +129,7 @@
     let lastBeepTs = 0;
     let lastColorTs = 0;
     let lastTextTs = 0;
+    const pending = [];
 
     const setStatus = (text, tone = 'success') => {
       statusEl.textContent = text;
@@ -170,6 +171,17 @@
       const msg = { ...payload, ts: payload.ts || Date.now(), session: sessionId };
       if (bc) bc.postMessage(msg);
       if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify(msg));
+      } else {
+        pending.push(msg);
+        setStatus('Buffering until connected…', 'error');
+      }
+    };
+
+    const flushQueue = () => {
+      if (!ws || ws.readyState !== 1 || !pending.length) return;
+      while (pending.length) {
+        const msg = pending.shift();
         ws.send(JSON.stringify(msg));
       }
     };
@@ -226,6 +238,7 @@
       ws.addEventListener('open', () => {
         setStatus(`Connected to session ${sessionId}`);
         sendState();
+        flushQueue();
       });
       ws.addEventListener('close', () => {
         setStatus('Disconnected — retrying…', 'error');
@@ -245,7 +258,7 @@
       });
     };
 
-    // BroadcastChannel fallback (same-origin tabs)
+    // BroadcastChannel mirrors state instantly for same-device tabs (runs alongside WS)
     if ('BroadcastChannel' in window) {
       bc = new BroadcastChannel(`live-sync-${sessionId}`);
       bc.onmessage = (evt) => {
@@ -293,8 +306,8 @@
     window.addEventListener('pointerdown', () => getAudioCtx(), { once: true });
     applyColor(colorInput.value);
     connect();
-    // If WS handshake fails (e.g., offline), at least make BroadcastChannel work immediately.
-    setTimeout(() => { if (!ws || ws.readyState !== 1) setStatus('Using local BroadcastChannel only'); }, 1500);
+    // If WS handshake lags (e.g., captive network), keep UI honest about buffering.
+    setTimeout(() => { if (!ws || ws.readyState !== 1) setStatus('Waiting for WebSocket — local tabs still syncing'); }, 1500);
   </script>
 </body>
 </html>

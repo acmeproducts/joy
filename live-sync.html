@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Session Sync (WS)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      transition: background-color 0.3s ease;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 15px 45px rgba(17, 24, 39, 0.12);
+      width: min(720px, 92vw);
+      padding: 28px;
+    }
+    h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: -0.01em; }
+    p.lead { margin: 0 0 24px; color: #4b5563; font-size: 14px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; color: #6b7280; font-weight: 700; }
+    input[type="text"], input[type="url"] {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #e5e7eb;
+      font-size: 15px; outline: none; transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input[type="text"]:focus, input[type="url"]:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+    input[type="color"] { width: 100%; height: 46px; border-radius: 12px; border: 1px solid #e5e7eb; padding: 4px; background: #fff; cursor: pointer; }
+    button {
+      appearance: none; border: none; padding: 12px 16px; border-radius: 12px; font-weight: 700;
+      letter-spacing: 0.01em; cursor: pointer; transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+    button:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; box-shadow: 0 10px 30px rgba(37, 99, 235, 0.35); }
+    .btn-secondary { background: #e5e7eb; color: #111827; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .row button { flex: 1; min-width: 120px; }
+    .status {
+      margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: #ecfdf3; color: #166534;
+      border: 1px solid #bbf7d0; font-size: 14px;
+    }
+    .text-preview {
+      margin-top: 8px; padding: 12px; border-radius: 10px; background: #f9fafb; border: 1px dashed #e5e7eb;
+      font-size: 15px; color: #111827; min-height: 40px;
+    }
+    .share-row { display: grid; gap: 10px; grid-template-columns: 1fr auto; align-items: end; }
+    .muted { color: #6b7280; font-size: 13px; margin-top: 6px; }
+    @media (max-width: 520px) { h1 { font-size: 24px; } .row { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Live Session Sync</h1>
+    <p class="lead">Pick a color, add a note, and tap “Beep” — changes mirror across anyone sharing the same session link.</p>
+
+    <div class="grid">
+      <div class="stack">
+        <label for="color-input">Color</label>
+        <input type="color" id="color-input" value="#6ee7b7" aria-label="Pick a color">
+      </div>
+      <div class="stack">
+        <label for="text-input">Short Text</label>
+        <input type="text" id="text-input" maxlength="140" placeholder="Say hi" aria-label="Short text">
+      </div>
+      <div class="stack">
+        <label>&nbsp;</label>
+        <button id="beep-btn" class="btn-primary" type="button">Beep</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top: 12px;">
+      <div class="stack" style="flex: 2;">
+        <label>Share URL</label>
+        <div class="share-row">
+          <input type="url" id="share-url" readonly aria-label="Share URL">
+          <button id="copy-btn" class="btn-secondary" type="button">Copy</button>
+        </div>
+        <p class="muted">Anyone who opens this link joins the same session instantly.</p>
+      </div>
+    </div>
+
+    <div class="stack" style="margin-top: 12px;">
+      <label>Live Text</label>
+      <div class="text-preview" id="text-preview">Waiting for text…</div>
+    </div>
+
+    <div id="status" class="status">Connecting…</div>
+  </main>
+
+  <script>
+    // Bridge configuration — point BRIDGE_URL to a relay you control. Demo falls back to BroadcastChannel if WS fails.
+    const BRIDGE_URL = 'wss://ws.piesocket.com/v3/1?api_key=DEMOKEY&notify_self=1&channel=';
+
+    const colorInput = document.getElementById('color-input');
+    const textInput = document.getElementById('text-input');
+    const shareInput = document.getElementById('share-url');
+    const beepBtn = document.getElementById('beep-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const textPreview = document.getElementById('text-preview');
+    const statusEl = document.getElementById('status');
+
+    const params = new URLSearchParams(window.location.search);
+    let sessionId = params.get('session');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 12) : Math.random().toString(36).slice(2, 10);
+      params.set('session', sessionId);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+    const shareUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}`;
+    shareInput.value = shareUrl;
+
+    const wsUrl = () => `${BRIDGE_URL}${encodeURIComponent(sessionId)}`;
+    let ws;
+    let bc;
+    let reconnectTimer;
+    let applyingRemote = false;
+    let lastBeepTs = 0;
+    let lastColorTs = 0;
+    let lastTextTs = 0;
+
+    const setStatus = (text, tone = 'success') => {
+      statusEl.textContent = text;
+      if (tone === 'error') {
+        statusEl.style.background = '#fef2f2';
+        statusEl.style.color = '#b91c1c';
+        statusEl.style.borderColor = '#fecdd3';
+      } else {
+        statusEl.style.background = '#ecfdf3';
+        statusEl.style.color = '#166534';
+        statusEl.style.borderColor = '#bbf7d0';
+      }
+    };
+
+    let audioCtx;
+    const getAudioCtx = () => {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    };
+
+    const playBeep = () => {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.24);
+    };
+
+    const applyColor = (hex) => { document.body.style.backgroundColor = hex; };
+
+    const postMessage = (payload) => {
+      const msg = { ...payload, ts: payload.ts || Date.now(), session: sessionId };
+      if (bc) bc.postMessage(msg);
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify(msg));
+      }
+    };
+
+    const sendState = () => {
+      const now = Date.now();
+      if (!lastColorTs) lastColorTs = now;
+      if (!lastTextTs) lastTextTs = now;
+      postMessage({ type: 'state', color: colorInput.value, text: textInput.value, beepTs: lastBeepTs, tsColor: lastColorTs, tsText: lastTextTs });
+    };
+
+    const recordBeep = (ts) => {
+      lastBeepTs = ts;
+      document.body.dataset.beepTs = String(ts);
+    };
+
+    const applyRemote = (data) => {
+      applyingRemote = true;
+      if (data.type === 'state') {
+        if (data.tsColor && data.tsColor > lastColorTs) {
+          lastColorTs = data.tsColor;
+          colorInput.value = data.color;
+          applyColor(data.color);
+        }
+        if (typeof data.text === 'string' && data.tsText && data.tsText > lastTextTs) {
+          lastTextTs = data.tsText;
+          textInput.value = data.text;
+          textPreview.textContent = data.text || 'Waiting for text…';
+        }
+        if (data.beepTs && data.beepTs > lastBeepTs) {
+          recordBeep(data.beepTs);
+          playBeep();
+        }
+      } else if (data.type === 'color' && data.ts > lastColorTs) {
+        lastColorTs = data.ts;
+        colorInput.value = data.value;
+        applyColor(data.value);
+      } else if (data.type === 'text' && data.ts > lastTextTs) {
+        lastTextTs = data.ts;
+        textInput.value = data.value;
+        textPreview.textContent = data.value || 'Waiting for text…';
+      } else if (data.type === 'beep' && data.ts > lastBeepTs) {
+        recordBeep(data.ts);
+        playBeep();
+      }
+      applyingRemote = false;
+    };
+
+    const connect = () => {
+      if (ws) ws.close();
+      setStatus('Connecting…');
+      ws = new WebSocket(wsUrl());
+
+      ws.addEventListener('open', () => {
+        setStatus(`Connected to session ${sessionId}`);
+        sendState();
+      });
+      ws.addEventListener('close', () => {
+        setStatus('Disconnected — retrying…', 'error');
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 1200);
+      });
+      ws.addEventListener('error', () => {
+        setStatus('Connection error — retrying…', 'error');
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 1200);
+      });
+      ws.addEventListener('message', (evt) => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        if (!msg || msg.session !== sessionId) return;
+        applyRemote(msg);
+      });
+    };
+
+    // BroadcastChannel fallback (same-origin tabs)
+    if ('BroadcastChannel' in window) {
+      bc = new BroadcastChannel(`live-sync-${sessionId}`);
+      bc.onmessage = (evt) => {
+        const msg = evt.data;
+        if (!msg || msg.session !== sessionId) return;
+        applyRemote(msg);
+      };
+    }
+
+    colorInput.addEventListener('input', (e) => {
+      if (applyingRemote) return;
+      const value = e.target.value;
+      applyColor(value);
+      lastColorTs = Date.now();
+      postMessage({ type: 'color', value, ts: lastColorTs });
+    });
+
+    textInput.addEventListener('input', (e) => {
+      if (applyingRemote) return;
+      const value = e.target.value;
+      textPreview.textContent = value || 'Waiting for text…';
+      lastTextTs = Date.now();
+      postMessage({ type: 'text', value, ts: lastTextTs });
+    });
+
+    beepBtn.addEventListener('click', () => {
+      if (applyingRemote) return;
+      const ts = Date.now();
+      recordBeep(ts);
+      playBeep();
+      postMessage({ type: 'beep', value: ts, ts });
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(shareInput.value);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => (copyBtn.textContent = 'Copy'), 1200);
+      } catch (err) {
+        console.error(err);
+        setStatus('Clipboard unavailable — copy manually.', 'error');
+      }
+    });
+
+    window.addEventListener('pointerdown', () => getAudioCtx(), { once: true });
+    applyColor(colorInput.value);
+    connect();
+    // If WS handshake fails (e.g., offline), at least make BroadcastChannel work immediately.
+    setTimeout(() => { if (!ws || ws.readyState !== 1) setStatus('Using local BroadcastChannel only'); }, 1500);
+  </script>
+</body>
+</html>

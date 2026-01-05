@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Garden Sandbox Relay</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #0b132b;
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(960px, 100%);
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      padding: 20px 22px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+    }
+    p.sub {
+      margin: 0 0 16px;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="url"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+      background: #0f172a;
+      color: #f9fafb;
+      font-size: 14px;
+    }
+    input[type="color"] {
+      width: 100%;
+      height: 44px;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(37,99,235,0.35);
+      transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    button.secondary {
+      background: #0f172a;
+      color: #e5e7eb;
+      box-shadow: none;
+    }
+    button:active { transform: translateY(1px); opacity: 0.95; }
+    #status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #1f2937;
+      color: #e5e7eb;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    #status .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f59e0b;
+      box-shadow: 0 0 0 0 rgba(245,158,11,0.6);
+      animation: pulse 1.5s infinite;
+    }
+    #status.ok .dot { background: #34d399; }
+    #status.error .dot { background: #f87171; }
+    #status.retry .dot { background: #fbbf24; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.35); }
+      70% { box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+    .panel {
+      padding: 14px;
+      border: 1px dashed #1f2937;
+      border-radius: 12px;
+      background: #0b1223;
+    }
+    #tap-area {
+      position: relative;
+      min-height: 120px;
+      border: 1px solid #1f2937;
+      border-radius: 14px;
+      background: radial-gradient(circle at 30% 30%, rgba(96,165,250,0.15), transparent 45%), #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #cbd5e1;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      overflow: hidden;
+    }
+    #tap-area .pulse {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(125, 211, 252, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    #tap-area .pulse.active {
+      animation: tapPulse 0.6s ease-out;
+    }
+    @keyframes tapPulse {
+      0% { transform: scale(0.6); opacity: 0.9; }
+      60% { transform: scale(2.4); opacity: 0.45; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+    .text-preview {
+      padding: 12px;
+      border-radius: 12px;
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.04em;
+    }
+    .help {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .row { flex-direction: column; align-items: stretch; }
+      button { width: 100%; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Garden Sandbox Relay</h1>
+    <p class="sub">Share a session link, mirror color/text/beep/tap across devices via ntfy.sh.</p>
+
+    <div id="status"><span class="dot"></span><span class="label">Connecting…</span></div>
+
+    <div class="grid" style="margin-bottom: 14px;">
+      <div>
+        <label for="session-id">Session ID</label>
+        <div class="row">
+          <input id="session-id" type="text" readonly>
+          <button id="new-session" class="secondary" title="Generate a fresh session">New</button>
+        </div>
+      </div>
+      <div>
+        <label for="share-url">Shareable URL (?session=)</label>
+        <div class="row">
+          <input id="share-url" type="url" readonly>
+          <button id="copy-url" class="secondary">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-bottom: 14px;">
+      <div class="panel">
+        <label for="color-picker">Background</label>
+        <input type="color" id="color-picker" value="#0b132b">
+      </div>
+      <div class="panel">
+        <label for="text-input">Text</label>
+        <input type="text" id="text-input" placeholder="Type a shared message">
+        <div class="text-preview" id="text-preview">Waiting for text…</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <label>Audio</label>
+        <button id="beep-btn" style="width: 100%;">Beep</button>
+      </div>
+      <div class="panel">
+        <label>Tap</label>
+        <div id="tap-area">
+          Tap / click to pulse
+          <div class="pulse"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="help">
+      Status auto-retries when disconnected. Session events: { session, type: 'color' | 'text' | 'beep' | 'tap', value, ts }.
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const colorInput = document.getElementById('color-picker');
+      const textInput = document.getElementById('text-input');
+      const textPreview = document.getElementById('text-preview');
+      const beepBtn = document.getElementById('beep-btn');
+      const tapArea = document.getElementById('tap-area');
+      const tapPulse = tapArea.querySelector('.pulse');
+      const statusEl = document.getElementById('status');
+      const statusLabel = statusEl.querySelector('.label');
+      const sessionField = document.getElementById('session-id');
+      const shareUrlField = document.getElementById('share-url');
+      const newSessionBtn = document.getElementById('new-session');
+      const copyBtn = document.getElementById('copy-url');
+
+      let session = null;
+      let topic = null;
+      let source = null;
+      let reconnectTimer = null;
+      let lastSeenTs = 0;
+      let audioCtx = null;
+
+      function setStatus(text, state = 'retry') {
+        statusLabel.textContent = text;
+        statusEl.classList.remove('ok', 'error', 'retry');
+        statusEl.classList.add(state);
+      }
+
+      function randomSession() {
+        return `demo-${Math.random().toString(36).slice(2, 8)}`;
+      }
+
+      function resolveSession() {
+        const url = new URL(window.location.href);
+        const urlSession = url.searchParams.get('session');
+        const candidate = (urlSession || '').trim();
+        session = candidate || randomSession();
+        if (!candidate) {
+          url.searchParams.set('session', session);
+          history.replaceState(null, '', url.toString());
+        }
+        topic = `garden-demo-${session}`;
+        sessionField.value = session;
+        shareUrlField.value = new URL(`?session=${session}`, window.location.href).toString();
+      }
+
+      function copyShare() {
+        const value = shareUrlField.value;
+        if (!value) return;
+        navigator.clipboard?.writeText(value).then(() => setStatus('URL copied', 'ok')).catch(() => setStatus('Copy failed', 'error'));
+      }
+
+      function beep() {
+        try {
+          audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = 720;
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } catch (e) {
+          console.warn('beep failed', e);
+        }
+      }
+
+      function pulse() {
+        tapPulse.classList.remove('active');
+        tapPulse.offsetWidth;
+        tapPulse.classList.add('active');
+      }
+
+      function applyColor(value) {
+        if (!value) return;
+        document.body.style.background = value;
+        colorInput.value = value;
+      }
+
+      function applyText(value) {
+        const text = value || 'Waiting for text…';
+        textPreview.textContent = text;
+        textInput.value = value || '';
+      }
+
+      function send(type, value) {
+        if (!session || !topic) return;
+        const ts = Date.now();
+        const payload = { session, type, value, ts };
+        lastSeenTs = Math.max(lastSeenTs, ts);
+        fetch(`https://ntfy.sh/${topic}`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(() => setStatus('Send failed', 'error'));
+      }
+
+      function handleMessage(msg) {
+        if (!msg || msg.session !== session || !msg.ts) return;
+        if (msg.ts <= lastSeenTs) return;
+        lastSeenTs = msg.ts;
+        if (msg.type === 'color') applyColor(msg.value);
+        else if (msg.type === 'text') applyText(msg.value);
+        else if (msg.type === 'beep') { beep(); }
+        else if (msg.type === 'tap') { beep(); pulse(); }
+      }
+
+      function connect() {
+        if (!topic) return;
+        if (source) { source.close(); source = null; }
+        clearTimeout(reconnectTimer);
+        setStatus('Connecting…', 'retry');
+        source = new EventSource(`https://ntfy.sh/${topic}/sse`);
+        source.onopen = () => setStatus('Connected', 'ok');
+        source.onerror = () => {
+          setStatus('Retrying…', 'retry');
+          if (source) { source.close(); source = null; }
+          reconnectTimer = setTimeout(connect, 1200);
+        };
+        source.onmessage = evt => {
+          try {
+            const data = JSON.parse(evt.data);
+            handleMessage(data);
+          } catch (e) {
+            console.warn('parse error', e);
+          }
+        };
+      }
+
+      function resetSession() {
+        const url = new URL(window.location.href);
+        const fresh = randomSession();
+        url.searchParams.set('session', fresh);
+        history.replaceState(null, '', url.toString());
+        resolveSession();
+        lastSeenTs = 0;
+        connect();
+      }
+
+      colorInput.addEventListener('input', e => {
+        applyColor(e.target.value);
+        send('color', e.target.value);
+      });
+      textInput.addEventListener('input', e => {
+        applyText(e.target.value);
+        send('text', e.target.value);
+      });
+      beepBtn.addEventListener('click', () => { beep(); send('beep', true); });
+      tapArea.addEventListener('click', () => { pulse(); beep(); send('tap', true); });
+      newSessionBtn.addEventListener('click', resetSession);
+      copyBtn.addEventListener('click', copyShare);
+
+      resolveSession();
+      connect();
+    })();
+  </script>
+</body>
+</html>

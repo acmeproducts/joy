@@ -118,23 +118,24 @@
 
             <div class="space-y-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Collab Room</span>
-                    <span class="text-[10px] text-gray-400">Share code with a friend</span>
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Live Sync Session</span>
+                    <span class="text-[10px] text-gray-400">Auto key • Zero room codes</span>
                 </div>
-                <div class="flex gap-2">
-                    <input id="collab-room" class="flex-1 p-2 text-sm border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. you-garden">
-                    <button id="collab-connect" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition">Connect</button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="collab-start-session" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition col-span-2">Start Secure Session</button>
+                    <button id="collab-request-new" class="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-200 hover:bg-amber-100 transition col-span-2">Request New Session</button>
                 </div>
-                <div class="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mt-2">
+                <div class="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                     <div class="flex-1">
                         <p class="font-semibold text-slate-700">Shareable Link</p>
-                        <p id="collab-share-url" class="truncate text-slate-500">Not connected</p>
+                        <p id="collab-share-url" class="truncate text-slate-500">Waiting to generate...</p>
                     </div>
                     <button id="collab-copy-url" class="px-2 py-1 text-[10px] bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition">Copy</button>
                 </div>
-                <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Solo (not connected)</p>
+                <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Waiting to start</p>
+                <div id="collab-state-banner" class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Waiting for connections. Generate a link to host.</div>
                 <div class="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2" id="collab-peers">
-                    <p class="font-semibold text-slate-700 text-xs">Room Participants</p>
+                    <p class="font-semibold text-slate-700 text-xs">Session Participants</p>
                     <p class="text-slate-400">Not connected</p>
                 </div>
                 <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2">
@@ -145,8 +146,15 @@
                     <div id="session-log-feed" class="max-h-28 overflow-y-auto space-y-1 text-[10px] leading-snug">
                         <p class="text-slate-400">No activity yet.</p>
                     </div>
+                    <div class="pt-2 border-t border-slate-200 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <p class="font-semibold text-slate-700 text-xs">Automated Sync Checks</p>
+                            <button id="collab-run-tests" class="px-2 py-1 text-[10px] bg-indigo-50 text-indigo-700 rounded border border-indigo-200 hover:bg-indigo-100 transition">Run</button>
+                        </div>
+                        <pre id="collab-test-output" class="bg-slate-900 text-slate-100 rounded p-2 text-[10px] max-h-32 overflow-y-auto">Not run yet.</pre>
+                    </div>
                 </div>
-                <p class="text-[11px] text-gray-500 leading-snug">When connected, taps and drags are shared live via a lightweight relay.</p>
+                <p class="text-[11px] text-gray-500 leading-snug">Share the generated link. Guests join automatically; invalid or expired keys are redirected to request a new session.</p>
             </div>
 
             <div class="space-y-6">
@@ -584,7 +592,7 @@
                 const masterField = COLLAB_MANIFEST_FORM_FIELDS.master;
                 const tsField = COLLAB_MANIFEST_FORM_FIELDS.ts;
                 const statusField = COLLAB_MANIFEST_FORM_FIELDS.status;
-                if (roomField) fd.append(roomField, collabRoomCode || 'you-garden');
+                if (roomField) fd.append(roomField, collabSessionKey || 'garden');
                 if (masterField) fd.append(masterField, masterId || '');
                 if (tsField) fd.append(tsField, Date.now());
                 if (statusField) fd.append(statusField, status);
@@ -596,8 +604,8 @@
         }
 
         async function refreshMasterFromManifest(reason = 'manual') {
-            if (!collabActive || !collabRoomCode) return false;
-            const entry = await fetchManifestState(collabRoomCode);
+            if (!collabActive || !collabSessionKey) return false;
+            const entry = await fetchManifestState(collabSessionKey);
             if (entry && entry.master && isManifestFresh(entry)) {
                 adoptMaster(entry.master, entry.ts);
                 appendSessionLog('collab', `Adopted manifest master (${reason}).`, { skipLog: !collabActive });
@@ -1100,8 +1108,12 @@
         const collabClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
         const collabAlias = `you-${collabClientId.slice(0,6)}`;
         const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
+        const SESSION_KEY_PARAM = 'sessionKey';
+        const SESSION_KEY_LENGTH = 7;
+        const SESSION_EXPIRY_MS = 45 * 60 * 1000;
+        const SESSION_INACTIVITY_MS = 30 * 60 * 1000;
         let collabActive = false, collabTopic = null, collabSource = null;
-        let collabRoomCode = '';
+        let collabSessionKey = '';
         let collabSeq = 0;
         let collabReady = false;
         let collabReconnectTimer = null;
@@ -1114,9 +1126,17 @@
         let collabJoinTs = 0;
         let collabIsMaster = false;
         let collabHeartbeat = null;
+        let collabHostNonce = '';
+        let collabHostBroadcastToken = '';
+        let collabClientNonce = '';
+        let collabSessionToken = '';
+        const liveSessionRegistry = {};
         const collabRoleIndicator = document.getElementById('collab-role-indicator');
-        const collabRoomInput = document.getElementById('collab-room');
-        const collabConnectBtn = document.getElementById('collab-connect');
+        const collabStartBtn = document.getElementById('collab-start-session');
+        const collabRequestBtn = document.getElementById('collab-request-new');
+        const collabStateBanner = document.getElementById('collab-state-banner');
+        const collabRunTestsBtn = document.getElementById('collab-run-tests');
+        const collabTestOutput = document.getElementById('collab-test-output');
 
         touchPeer('local', 'You', { master: false, alias: 'You' });
 
@@ -1133,64 +1153,129 @@
             }
         }
 
-        function normalizeRoomCode(roomCode) {
-            const clean = ((roomCode || '') + '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
-            return clean || '';
+        function updateCollabStateBanner(text, tone = 'muted') {
+            if (!collabStateBanner) return;
+            collabStateBanner.textContent = text;
+            collabStateBanner.className = 'text-[11px] px-3 py-2 rounded-lg border';
+            if (tone === 'success') collabStateBanner.classList.add('text-emerald-700','bg-emerald-50','border-emerald-200');
+            else if (tone === 'warn') collabStateBanner.classList.add('text-amber-700','bg-amber-50','border-amber-200');
+            else if (tone === 'error') collabStateBanner.classList.add('text-red-700','bg-red-50','border-red-200');
+            else collabStateBanner.classList.add('text-slate-700','bg-slate-50','border-slate-200');
         }
 
-        function extractRoomCodeFromLocation(loc = window.location) {
+        function generateSessionKey(length = SESSION_KEY_LENGTH) {
+            const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let out = '';
+            crypto.getRandomValues(new Uint32Array(length)).forEach(v => out += alphabet[v % alphabet.length]);
+            return out;
+        }
+
+        function maskKey(key) {
+            if (!key) return '—';
+            if (key.length <= 4) return `${key[0]}***${key.slice(-1)}`;
+            return `${key.slice(0,2)}***${key.slice(-2)}`;
+        }
+
+        function parseSessionKeyFromLocation(loc = window.location) {
             try {
-                const search = loc?.search || '';
-                const hash = (loc?.hash || '').replace(/^#/, '');
-                const params = new URLSearchParams(search);
-                let room = params.get('room') || params.get('r') || '';
-                if (!room) {
-                    if (hash.includes('=')) {
-                        const hashParams = new URLSearchParams(hash);
-                        room = hashParams.get('room') || hashParams.get('r') || '';
-                    } else if (hash) {
-                        room = hash;
-                    }
-                }
-                return normalizeRoomCode(room);
+                const params = new URLSearchParams(loc.search || '');
+                const hashParams = new URLSearchParams((loc.hash || '').replace(/^#/, ''));
+                return (params.get(SESSION_KEY_PARAM) || hashParams.get(SESSION_KEY_PARAM) || '').trim();
             } catch (e) {
-                return normalizeRoomCode(loc?.room || '');
+                return '';
             }
         }
 
-        function buildCollabUrl(roomCode) {
+        function buildShareLink(sessionKey) {
             const url = new URL(window.location.href);
             url.searchParams.delete('room');
             url.searchParams.delete('r');
-            const cleanRoom = normalizeRoomCode(roomCode);
-            if (cleanRoom) url.searchParams.set('room', cleanRoom);
+            url.searchParams.set(SESSION_KEY_PARAM, sessionKey);
             return url.toString();
         }
 
-        function updateShareLink(roomCode) {
+        function updateShareLink(sessionKey) {
             if (!collabShareUrlEl) return;
-            const cleanRoom = normalizeRoomCode(roomCode);
-            if (!cleanRoom) {
-                collabShareUrlEl.textContent = 'Not connected';
+            if (!sessionKey) {
+                collabShareUrlEl.textContent = 'Waiting to generate...';
                 collabShareUrlEl.dataset.url = '';
                 return;
             }
-            const shareUrl = buildCollabUrl(cleanRoom);
+            const shareUrl = buildShareLink(sessionKey);
             collabShareUrlEl.textContent = shareUrl;
             collabShareUrlEl.dataset.url = shareUrl;
         }
 
-        function setCollabUrl(roomCode) {
-            history.replaceState(null, '', buildCollabUrl(roomCode));
+        function requireSecureTransport() {
+            const protocol = window.location.protocol;
+            const host = window.location.hostname;
+            const isSecure = protocol === 'https:' || host === 'localhost' || host === '127.0.0.1';
+            if (!isSecure) {
+                updateCollabStateBanner('Secure transport required. Reload over HTTPS to enable sync.', 'error');
+            }
+            return isSecure;
         }
 
-        function markCollabConnected(roomCode) {
-            if (collabConnectBtn) {
-                collabConnectBtn.innerText = 'Connected';
-                collabConnectBtn.classList.add('bg-emerald-100');
+        function randomNonce(len = 12) {
+            return generateSessionKey(len);
+        }
+
+        async function deriveSessionToken(key, hostNonce, clientNonce) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(`${key}:${hostNonce}:${clientNonce}`);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/=+$/g, '');
+        }
+
+        function buildHostBroadcastToken(key, hostNonce) {
+            return btoa(`${key}:${hostNonce}`).replace(/=+$/g, '');
+        }
+
+        function ensureHostSessionRecord(sessionKey) {
+            if (!sessionKey) return null;
+            if (!liveSessionRegistry[sessionKey]) {
+                liveSessionRegistry[sessionKey] = {
+                    key: sessionKey,
+                    hostNonce: collabHostNonce || randomNonce(10),
+                    createdAt: Date.now(),
+                    lastActivity: Date.now(),
+                    expiresAt: Date.now() + SESSION_EXPIRY_MS,
+                    clients: {}
+                };
             }
-            updateShareLink(roomCode);
-            setCollabUrl(roomCode);
+            return liveSessionRegistry[sessionKey];
+        }
+
+        function updateSessionActivity(sessionKey) {
+            const rec = liveSessionRegistry[sessionKey];
+            if (rec) rec.lastActivity = Date.now();
+        }
+
+        function sessionExpired(rec) {
+            if (!rec) return true;
+            const now = Date.now();
+            return now > rec.expiresAt || now - rec.lastActivity > SESSION_INACTIVITY_MS;
+        }
+
+        let collabExpiryMonitor = null;
+        function startExpiryMonitor() {
+            if (collabExpiryMonitor) clearInterval(collabExpiryMonitor);
+            collabExpiryMonitor = setInterval(() => {
+                const rec = liveSessionRegistry[collabSessionKey];
+                if (!rec) return;
+                if (sessionExpired(rec)) {
+                    handleSessionExpired('inactive/expired');
+                }
+            }, 5000);
+        }
+
+        function setCollabUrl(sessionKey) {
+            history.replaceState(null, '', buildShareLink(sessionKey));
+        }
+
+        function markCollabConnected(sessionKey) {
+            updateShareLink(sessionKey);
+            setCollabUrl(sessionKey);
         }
 
         function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
@@ -1243,10 +1328,13 @@
             collabIsMaster = true;
             collabMasterId = collabClientId;
             collabMasterTs = collabJoinTs || Date.now();
-            updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+            updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
+            collabHostNonce = collabHostNonce || randomNonce(12);
+            collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
+            ensureHostSessionRecord(collabSessionKey);
             touchPeer('local', 'You', { master: true });
             reconcilePeerMasterFlags();
-            appendSessionLog('collab', `Assumed master role for room ${collabRoomCode || '—'}.`);
+            appendSessionLog('collab', `Assumed host role for session ${maskKey(collabSessionKey) || '—'}.`);
             emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
             publishManifest(collabMasterId, 'active');
         }
@@ -1269,15 +1357,18 @@
             collabMasterTs = incomingTs;
             collabIsMaster = masterId === collabClientId;
             if (collabIsMaster) {
-                updateCollabRoleLabel(`Role: Master (room: ${collabRoomCode || '—'})`, 'master');
+                updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
+                collabHostNonce = collabHostNonce || randomNonce(12);
+                collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
+                ensureHostSessionRecord(collabSessionKey);
                 touchPeer('local', 'You', { master: true });
                 publishManifest(collabMasterId, 'active');
             } else {
-                updateCollabRoleLabel(`Role: Subordinate (room: ${collabRoomCode || '—'})`, 'sub');
+                updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey) || '—'})`, 'sub');
                 touchPeer('local', 'You', { master: false });
             }
             reconcilePeerMasterFlags();
-            appendSessionLog('collab', `Master set to ${masterId.slice(0,6)} for room ${collabRoomCode || '—'}.`, { skipLog: !collabActive });
+            appendSessionLog('collab', `Master set to ${masterId.slice(0,6)} for session ${maskKey(collabSessionKey) || '—'}.`, { skipLog: !collabActive });
             if (!collabIsMaster) {
                 if (background) {
                     applyBackgroundStateFromMaster(background);
@@ -1310,7 +1401,8 @@
 
         function emitCollabEvent(kind, payload={}) {
             if (!collabActive || !collabTopic || payload.silentCollab) return;
-            const event = { kind, ...payload, sender: collabClientId, alias: payload.alias || collabAlias, session: collabSessionId, room: collabRoomCode, seq: ++collabSeq, ts: Date.now() };
+            const event = { kind, ...payload, sender: collabClientId, alias: payload.alias || collabAlias, session: collabSessionId, room: collabSessionKey, seq: ++collabSeq, ts: Date.now(), token: collabIsMaster ? collabHostBroadcastToken : collabSessionToken };
+            if (collabIsMaster) updateSessionActivity(collabSessionKey);
             collabQueue.push(event);
             flushCollabQueue();
         }
@@ -1320,12 +1412,68 @@
             collabReconnectTimer = setTimeout(() => {
                 collabReconnectTimer = null;
                 collabBackoffMs = Math.min(collabBackoffMs * 1.6, 15000);
+                updateCollabStateBanner('Reconnecting to session...', 'warn');
                 openCollabStream();
             }, collabBackoffMs);
         }
 
         function announcePresence(status = 'join', extra = {}) {
             emitCollabEvent('presence', { status, alias: collabAlias, masterId: collabMasterId, ...extra });
+        }
+
+        function handleSessionExpired(reason = 'expired') {
+            if (!collabSessionKey) return;
+            collabActive = false;
+            collabReady = false;
+            collabIsMaster = false;
+            collabSessionToken = '';
+            collabHostBroadcastToken = '';
+            collabHostNonce = '';
+            if (collabSource) { collabSource.close(); collabSource = null; }
+            updateCollabRoleLabel('Role: Key expired — request a new link', 'neutral');
+            updateCollabStateBanner('Key expired — request a new session link.', 'warn');
+            appendSessionLog('collab', `Session expired (${reason}). Key masked: ${maskKey(collabSessionKey)}`);
+            if (collabRequestBtn) collabRequestBtn.disabled = false;
+            collabSessionKey = '';
+            updateShareLink('');
+            setTimeout(() => {
+                if (collabRequestBtn) collabRequestBtn.click();
+            }, 800);
+        }
+
+        async function startHostSession(reason = 'manual') {
+            if (!requireSecureTransport()) return;
+            collabSessionKey = generateSessionKey();
+            collabHostNonce = randomNonce(10);
+            collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
+            collabIsMaster = true;
+            collabMasterId = collabClientId;
+            collabMasterTs = Date.now();
+            collabSessionToken = '';
+            ensureHostSessionRecord(collabSessionKey);
+            updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey)})`, 'master');
+            updateCollabStateBanner('Waiting for connections. Share the link.', 'warn');
+            markCollabConnected(collabSessionKey);
+            connectCollab(collabSessionKey, { asHost: true, reason });
+            startExpiryMonitor();
+        }
+
+        async function joinSessionFromLink(sessionKey) {
+            if (!sessionKey) {
+                updateCollabStateBanner('Key missing. Request a new session.', 'error');
+                return;
+            }
+            if (!requireSecureTransport()) return;
+            collabSessionKey = sessionKey;
+            collabIsMaster = false;
+            collabMasterId = null;
+            collabMasterTs = null;
+            collabHostNonce = '';
+            collabSessionToken = '';
+            updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey)})`, 'sub');
+            updateCollabStateBanner('Joining session...', 'warn');
+            markCollabConnected(collabSessionKey);
+            connectCollab(collabSessionKey, { asHost: false, reason: 'guest-link' });
         }
 
         function openCollabStream() {
@@ -1336,12 +1484,15 @@
             collabSource.onopen = () => {
                 collabReady = true;
                 collabBackoffMs = 1000;
-                updateCollabRoleLabel(`Role: Syncing... (room: ${collabRoomCode || '—'})`);
-                emitCollabEvent('master-ping', { ts: collabJoinTs });
-                announcePresence('join');
-                emitCollabEvent('bg-request', { requester: collabClientId });
-                refreshMasterFromManifest('stream-open');
-                scheduleMasterClaim();
+                updateCollabStateBanner(collabIsMaster ? 'Waiting for connections (link active)' : 'Negotiating secure handshake...', collabIsMaster ? 'warn' : 'muted');
+                if (collabIsMaster) {
+                    collabSessionToken = collabHostBroadcastToken;
+                    announcePresence('join', { hostNonce: collabHostNonce });
+                    scheduleMasterClaim();
+                } else {
+                    collabClientNonce = randomNonce(10);
+                    emitCollabEvent('handshake-request', { key: collabSessionKey, clientNonce: collabClientNonce });
+                }
                 flushCollabQueue(); // resync any buffered actions
             };
             collabSource.onerror = () => {
@@ -1354,35 +1505,62 @@
                     if (!data.message) return;
                     const msg = JSON.parse(data.message);
                     if (msg.sender === collabClientId || msg.session === collabSessionId) return;
-                    if (msg.room && msg.room !== collabRoomCode) return;
+                    if (msg.room && msg.room !== collabSessionKey) return;
                     applyRemoteEvent(msg);
                 } catch(e) { console.warn('collab parse error', e); }
             };
         }
 
-        function connectCollab(roomCode) {
-            const cleanRoom = normalizeRoomCode(roomCode);
-            if (!cleanRoom) return;
-            collabRoomCode = cleanRoom;
-            if (collabRoomInput) collabRoomInput.value = collabRoomCode;
-            collabTopic = `garden-${collabRoomCode}`;
+        function connectCollab(sessionKey, { asHost = false, reason = 'manual' } = {}) {
+            const key = (sessionKey || '').trim();
+            if (!key) {
+                updateCollabStateBanner('Missing session key. Request a new link.', 'error');
+                return;
+            }
+            if (collabSource) { collabSource.close(); collabSource = null; }
+            collabSessionKey = key;
+            collabTopic = `garden-${collabSessionKey}`;
             collabActive = true;
-            collabIsMaster = false;
-            collabMasterId = null;
-            collabMasterTs = null;
+            collabIsMaster = asHost;
+            collabMasterId = asHost ? collabClientId : null;
+            collabMasterTs = asHost ? Date.now() : null;
             collabJoinTs = Date.now();
             collabSeq = 0;
             collabQueue.length = 0;
             Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
             collabBackoffMs = 1000;
-            updateCollabRoleLabel(`Role: Negotiating... (room: ${collabRoomCode})`);
-            touchPeer('local', 'You', { master: false });
-            appendSessionLog('collab', `Connecting to room ${collabRoomCode}...`);
-            markCollabConnected(collabRoomCode);
-            refreshMasterFromManifest('connect');
+            touchPeer('local', 'You', { master: asHost });
+            updateCollabRoleLabel(asHost ? `Role: Host (key ${maskKey(collabSessionKey)})` : `Role: Guest (key ${maskKey(collabSessionKey)})`, asHost ? 'master' : 'sub');
+            appendSessionLog('collab', `${asHost ? 'Hosting' : 'Joining'} session ${maskKey(collabSessionKey)} (${reason}).`);
+            if (asHost) ensureHostSessionRecord(collabSessionKey);
+            startExpiryMonitor();
             if (collabHeartbeat) clearInterval(collabHeartbeat);
             collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
             openCollabStream();
+        }
+
+        async function runSyncTests() {
+            const lines = [];
+            let duplicate = false;
+            const sampleKeys = new Set();
+            for (let i = 0; i < 300; i++) {
+                const k = generateSessionKey();
+                if (sampleKeys.has(k)) duplicate = true;
+                sampleKeys.add(k);
+            }
+            lines.push(`${duplicate ? '❌' : '✅'} Unique key generation (${sampleKeys.size} samples)`);
+            const inactiveRecord = { lastActivity: Date.now() - SESSION_INACTIVITY_MS - 2000, expiresAt: Date.now() + 1000 };
+            lines.push(`${sessionExpired(inactiveRecord) ? '✅' : '❌'} Expiration after inactivity window`);
+            const freshRecord = { lastActivity: Date.now(), expiresAt: Date.now() + SESSION_EXPIRY_MS };
+            lines.push(`${!sessionExpired(freshRecord) ? '✅' : '❌'} Valid session remains active`);
+            const key = 'TestKeyA';
+            const hostNonce = 'HostNonceX';
+            const clientNonce = 'ClientNonceY';
+            const goodToken = await deriveSessionToken(key, hostNonce, clientNonce);
+            const badToken = await deriveSessionToken(key + 'x', hostNonce, clientNonce);
+            lines.push(`${goodToken ? '✅' : '❌'} Handshake token derived`);
+            lines.push(`${goodToken !== badToken ? '✅' : '❌'} Handshake fails with wrong key`);
+            if (collabTestOutput) collabTestOutput.textContent = lines.join('\\n');
         }
 
         function applyRemoteEvent(msg) {
@@ -1395,6 +1573,53 @@
             }
             const alias = msg.alias || (msg.sender ? msg.sender.slice(0,6) : 'peer');
             touchPeer(msg.sender, alias, { master: msg.masterId ? msg.sender === msg.masterId : msg.sender === collabMasterId });
+            if (msg.kind === 'handshake-request') {
+                if (!collabIsMaster) return;
+                const rec = ensureHostSessionRecord(collabSessionKey);
+                if (!rec || sessionExpired(rec) || msg.key !== collabSessionKey) {
+                    emitCollabEvent('handshake-failed', { reason: 'invalid-or-expired', target: msg.sender });
+                    return;
+                }
+                updateSessionActivity(collabSessionKey);
+                deriveSessionToken(collabSessionKey, rec.hostNonce, msg.clientNonce || '')
+                    .then(token => {
+                        rec.clients[msg.sender] = { token, clientNonce: msg.clientNonce, ts: Date.now() };
+                        emitCollabEvent('handshake-ack', { hostNonce: rec.hostNonce, masterId: collabMasterId, expiresAt: rec.expiresAt, target: msg.sender });
+                        updateCollabStateBanner('Client connected. Secure channel established.', 'success');
+                        appendSessionLog('collab', `Handshake accepted for ${alias}.`);
+                    })
+                    .catch(() => emitCollabEvent('handshake-failed', { reason: 'token-error', target: msg.sender }));
+                return;
+            }
+            if (msg.kind === 'handshake-ack') {
+                collabHostNonce = msg.hostNonce || collabHostNonce;
+                collabMasterId = msg.masterId || msg.sender || collabMasterId;
+                collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce || '');
+                deriveSessionToken(collabSessionKey, collabHostNonce || '', collabClientNonce || '')
+                    .then(token => {
+                        collabSessionToken = token;
+                        updateCollabStateBanner('Client connected. Session locked.', 'success');
+                        announcePresence('join', { hostNonce: collabHostNonce });
+                    })
+                    .catch(() => updateCollabStateBanner('Handshake token failed. Request new session.', 'error'));
+                return;
+            }
+            if (msg.kind === 'handshake-failed') {
+                handleSessionExpired(msg.reason || 'handshake-failed');
+                return;
+            }
+            if (collabIsMaster) {
+                const rec = liveSessionRegistry[collabSessionKey];
+                const clientRec = rec?.clients?.[msg.sender];
+                if (!clientRec || msg.token !== clientRec.token) return;
+                updateSessionActivity(collabSessionKey);
+            } else {
+                const expectedHostToken = collabHostBroadcastToken;
+                const expectedSession = collabSessionToken;
+                if (expectedHostToken && msg.sender === collabMasterId && msg.token !== expectedHostToken && msg.token !== expectedSession) {
+                    return;
+                }
+            }
             if (msg.kind === 'tap') {
                 appendSessionLog('collab-tap', `${alias} tapped`, { skipLog: false });
                 simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double, sharedWord: msg.word, sharedVisual: msg.visual, skipTelemetry: true });
@@ -1411,7 +1636,7 @@
                 } else if (!collabMasterId && msg.masterId) {
                     adoptMaster(msg.masterId, msg.ts, msg.background);
                 }
-                if (msg.status === 'join') appendSessionLog('collab', `${alias} joined room ${collabRoomCode || '—'}.`);
+                if (msg.status === 'join') appendSessionLog('collab', `${alias} joined session ${maskKey(collabSessionKey) || '—'}.`);
             }
             else if (msg.kind === 'master-announce') {
                 adoptMaster(msg.masterId || msg.sender, msg.ts, msg.background);
@@ -1687,23 +1912,35 @@
         if (collabCopyUrlBtn) {
             collabCopyUrlBtn.onclick = () => {
                 const shareUrl = collabShareUrlEl?.dataset.url;
-                if (!shareUrl) { alert("Connect to a room to generate a shareable URL."); return; }
+                if (!shareUrl) { alert("Generate a session link first."); return; }
                 navigator.clipboard.writeText(shareUrl).then(() => appendSessionLog('collab', 'Share link copied.'));
             };
         }
-        if (collabConnectBtn) {
-            collabConnectBtn.onclick = ()=>{
-                const room = collabRoomInput ? collabRoomInput.value.trim() : '';
-                connectCollab(room);
+        if (collabRunTestsBtn) {
+            collabRunTestsBtn.onclick = () => runSyncTests();
+        }
+        if (collabStartBtn) {
+            collabStartBtn.onclick = () => startHostSession('manual-start');
+        }
+        if (collabRequestBtn) {
+            collabRequestBtn.onclick = () => {
+                const url = new URL(window.location.href);
+                url.searchParams.delete(SESSION_KEY_PARAM);
+                history.replaceState(null, '', url.toString());
+                startHostSession('request-new');
             };
         }
-        const urlRoom = extractRoomCodeFromLocation();
-        if (collabRoomInput) collabRoomInput.value = urlRoom;
-        if (urlRoom) connectCollab(urlRoom);
+        const urlSessionKey = parseSessionKeyFromLocation();
+        if (urlSessionKey) {
+            joinSessionFromLink(urlSessionKey);
+        } else {
+            startHostSession('page-load');
+        }
 
         window.addEventListener('popstate', () => {
-            const nextRoom = extractRoomCodeFromLocation();
-            if (nextRoom !== collabRoomCode) connectCollab(nextRoom);
+            const nextKey = parseSessionKeyFromLocation();
+            if (nextKey && nextKey !== collabSessionKey) joinSessionFromLink(nextKey);
+            if (!nextKey) startHostSession('history-reset');
         });
 
         const modals = {

@@ -286,7 +286,9 @@
       const clientId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10));
       let ws = null;
       let wsFailures = 0;
-      let preferSse = false;
+      let wsForceFallback = false;
+      let wsConnectTimer = null;
+      const WS_GRACE_MS = 1500;
 
       function setStatus(text, state = 'retry') {
         statusLabel.textContent = text;
@@ -418,7 +420,10 @@
         if (source) { source.close(); source = null; }
         setStatus('Connecting…', 'retry');
         source = new EventSource(`https://ntfy.sh/${topic}/sse`);
-        source.onopen = () => setStatus('Connected (SSE)', 'ok');
+        source.onopen = () => {
+          wsFailures = 0;
+          setStatus('Connected (SSE)', 'ok');
+        };
         source.onerror = () => {
           setStatus('Retrying…', 'retry');
           if (source) { source.close(); source = null; }
@@ -439,8 +444,14 @@
         if (ws) { ws.close(); ws = null; }
         setStatus('Connecting…', 'retry');
         ws = new WebSocket('wss://ntfy.sh/ws');
+        clearTimeout(wsConnectTimer);
+        wsConnectTimer = setTimeout(() => {
+          wsForceFallback = true;
+          try { ws?.close(); } catch (_) { /* ignore */ }
+        }, WS_GRACE_MS);
         ws.onopen = () => {
           wsFailures = 0;
+          clearTimeout(wsConnectTimer);
           setStatus('Connected (WS)', 'ok');
           ws.send(JSON.stringify({ action: 'subscribe', topics: [topic] }));
         };
@@ -452,27 +463,26 @@
             console.warn('ws parse error', e);
           }
         };
-        const handleWsFailure = () => {
+        ws.onerror = () => {
           wsFailures += 1;
-          setStatus(wsFailures >= 3 ? 'Switching to SSE…' : 'Retrying…', 'retry');
-          if (wsFailures >= 3) {
-            preferSse = true;
-          }
+          wsForceFallback = wsFailures >= 2;
+          clearTimeout(wsConnectTimer);
+          setStatus('WS failed, falling back…', 'retry');
         };
-
-        ws.onerror = handleWsFailure;
         ws.onclose = () => {
           ws = null;
-          reconnectTimer = setTimeout(connect, 1200);
-          handleWsFailure();
+          clearTimeout(wsConnectTimer);
+          reconnectTimer = setTimeout(connect, wsForceFallback ? 0 : 800);
         };
       }
 
       function connect() {
         clearTimeout(reconnectTimer);
-        const canUseWs = 'WebSocket' in window && !preferSse;
-        if (canUseWs) connectWebSocket();
-        else connectSse();
+        if ('WebSocket' in window && !wsForceFallback) {
+          connectWebSocket();
+        } else {
+          connectSse();
+        }
       }
 
       function resetSession() {

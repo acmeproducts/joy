@@ -121,6 +121,17 @@
                     <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Live Sync Session</span>
                     <span class="text-[10px] text-gray-400">Auto key • Zero room codes</span>
                 </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] text-gray-600 font-semibold uppercase tracking-wide flex items-center justify-between">
+                        Connection Name
+                        <span class="text-[10px] text-gray-400 font-normal">default: wired</span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input id="collab-name" class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-200" placeholder="wired">
+                        <button id="collab-name-share" class="px-3 py-2 text-[11px] bg-slate-50 text-slate-700 rounded border border-slate-200 hover:bg-slate-100 transition">Share name</button>
+                    </div>
+                    <p class="text-[10px] text-gray-500 leading-snug">Name is visible to peers and included in the share link.</p>
+                </div>
                 <div class="grid grid-cols-2 gap-2">
                     <button id="collab-start-session" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition col-span-2">Start Secure Session</button>
                     <button id="collab-request-new" class="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-200 hover:bg-amber-100 transition col-span-2">Request New Session</button>
@@ -1181,6 +1192,7 @@
         const PERSISTED_MASTER_ID_KEY = 'garden_master_id';
         const PERSISTED_CLIENT_ID_KEY = 'garden_client_id';
         const PERSISTED_SESSION_TS_KEY = 'garden_session_ts';
+        const PERSISTED_ALIAS_KEY = 'garden_alias';
         function loadPersistedSessionState() {
             try {
                 const key = localStorage.getItem(PERSISTED_SESSION_KEY) || '';
@@ -1203,7 +1215,25 @@
             } catch (e) {}
         }
         persistClientId(collabClientId);
-        const collabAlias = `you-${collabClientId.slice(0,6)}`;
+        function loadPersistedAlias() {
+            try {
+                return localStorage.getItem(PERSISTED_ALIAS_KEY) || '';
+            } catch (e) {
+                return '';
+            }
+        }
+        function persistAlias(alias) {
+            try {
+                localStorage.setItem(PERSISTED_ALIAS_KEY, alias);
+            } catch (e) {}
+        }
+        let collabAlias = 'wired';
+        const urlAlias = new URLSearchParams(window.location.search || '').get('name') || new URLSearchParams((window.location.hash || '').replace(/^#/, '')).get('name');
+        const storedAlias = loadPersistedAlias();
+        if (urlAlias && urlAlias.trim()) collabAlias = urlAlias.trim();
+        else if (storedAlias && storedAlias.trim()) collabAlias = storedAlias.trim();
+        else collabAlias = 'wired';
+        persistAlias(collabAlias);
         const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
         const SESSION_KEY_PARAM = 'sessionKey';
         const SESSION_KEY_LENGTH = 7;
@@ -1239,13 +1269,26 @@
         const collabRunTestsBtn = document.getElementById('collab-run-tests');
         const collabTestOutput = document.getElementById('collab-test-output');
 
-        touchPeer('local', 'You', { master: false, alias: 'You' });
+        touchPeer('local', collabAlias, { master: false, alias: collabAlias });
 
         function resetCollabRetryState() {
             collabBackoffMs = 1000;
             if (collabReconnectTimer) {
                 clearTimeout(collabReconnectTimer);
                 collabReconnectTimer = null;
+            }
+        }
+
+        function updateLocalAlias(nextAlias, options = { silent: false }) {
+            const trimmed = (nextAlias || '').trim() || 'wired';
+            collabAlias = trimmed;
+            persistAlias(collabAlias);
+            touchPeer('local', collabAlias, { alias: collabAlias, master: collabIsMaster });
+            if (!options.silent) {
+                appendSessionLog('collab', `Name set to ${collabAlias}.`);
+                announcePresence('alias', { alias: collabAlias });
+                updateShareLink(collabSessionKey);
+                if (collabSessionKey) setCollabUrl(collabSessionKey);
             }
         }
 
@@ -1295,11 +1338,13 @@
             }
         }
 
-        function buildShareLink(sessionKey) {
+        function buildShareLink(sessionKey, alias = collabAlias) {
             const url = new URL(window.location.href);
             url.searchParams.delete('room');
             url.searchParams.delete('r');
             url.searchParams.set(SESSION_KEY_PARAM, sessionKey);
+            if (alias) url.searchParams.set('name', alias);
+            else url.searchParams.delete('name');
             return url.toString();
         }
 
@@ -1335,14 +1380,14 @@
             return (Date.now() - state.ts) < SESSION_EXPIRY_MS;
         }
 
-        function updateShareLink(sessionKey) {
+        function updateShareLink(sessionKey, alias = collabAlias) {
             if (!collabShareUrlEl) return;
             if (!sessionKey) {
                 collabShareUrlEl.textContent = 'Waiting to generate...';
                 collabShareUrlEl.dataset.url = '';
                 return;
             }
-            const shareUrl = buildShareLink(sessionKey);
+            const shareUrl = buildShareLink(sessionKey, alias);
             collabShareUrlEl.textContent = shareUrl;
             collabShareUrlEl.dataset.url = shareUrl;
         }
@@ -1410,13 +1455,13 @@
             }, 5000);
         }
 
-        function setCollabUrl(sessionKey) {
-            history.replaceState(null, '', buildShareLink(sessionKey));
+        function setCollabUrl(sessionKey, alias = collabAlias) {
+            history.replaceState(null, '', buildShareLink(sessionKey, alias));
         }
 
-        function markCollabConnected(sessionKey) {
-            updateShareLink(sessionKey);
-            setCollabUrl(sessionKey);
+        function markCollabConnected(sessionKey, alias = collabAlias) {
+            updateShareLink(sessionKey, alias);
+            setCollabUrl(sessionKey, alias);
         }
 
         function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
@@ -1479,7 +1524,7 @@
             collabHostNonce = collabHostNonce || randomNonce(12);
             collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
             ensureHostSessionRecord(collabSessionKey);
-            touchPeer('local', 'You', { master: true });
+            touchPeer('local', collabAlias, { master: true, alias: collabAlias });
             reconcilePeerMasterFlags();
             persistSessionStateSnapshot({ masterId: collabMasterId });
             appendSessionLog('collab', `Assumed host role for session ${maskKey(collabSessionKey) || '—'}.`);
@@ -1507,11 +1552,11 @@
                 collabHostNonce = collabHostNonce || randomNonce(12);
                 collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
                 ensureHostSessionRecord(collabSessionKey);
-                touchPeer('local', 'You', { master: true });
+                touchPeer('local', collabAlias, { master: true, alias: collabAlias });
                 publishManifest(collabMasterId, 'active');
             } else {
                 updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey) || '—'})`, 'sub');
-                touchPeer('local', 'You', { master: false });
+                touchPeer('local', collabAlias, { master: false, alias: collabAlias });
             }
             reconcilePeerMasterFlags();
             if (demoting && previousMaster && previousMaster !== collabMasterId) {
@@ -1753,7 +1798,7 @@
             collabQueue.length = 0;
             Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
             collabBackoffMs = 1000;
-            touchPeer('local', 'You', { master: asHost });
+            touchPeer('local', collabAlias, { master: asHost, alias: collabAlias });
             updateCollabRoleLabel(asHost ? `Role: Host (key ${maskKey(collabSessionKey)})` : `Role: Guest (key ${maskKey(collabSessionKey)})`, asHost ? 'master' : 'sub');
             appendSessionLog('collab', `${asHost ? 'Hosting' : 'Joining'} session ${maskKey(collabSessionKey)} (${reason}).`);
             if (asHost) ensureHostSessionRecord(collabSessionKey);
@@ -1883,6 +1928,12 @@
                     else return;
                 }
                 applyBackgroundStateFromMaster(msg);
+            }
+            else if (msg.kind === 'audio-toggle') {
+                ZenAudio.enabled = !!msg.enabled;
+                const audioToggle = document.getElementById('audio-toggle');
+                if (audioToggle) audioToggle.checked = ZenAudio.enabled;
+                appendSessionLog('audio', `${alias} ${ZenAudio.enabled ? 'enabled' : 'muted'} audio.`, { skipLog: false });
             }
         }
 
@@ -2093,6 +2144,8 @@
 
         // --- 7. UI Logic ---
         const bgInput=document.getElementById('bg-upload-input');
+        const collabNameInput = document.getElementById('collab-name');
+        const collabNameShareBtn = document.getElementById('collab-name-share');
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
             if (collabActive && !collabIsMaster) { alert("Background is controlled by the room master. Ask them to update it."); return; }
@@ -2117,7 +2170,11 @@
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');
         document.getElementById('close-btn').onclick = ()=>panel.classList.add('translate-x-full');
-        document.getElementById('audio-toggle').onchange=e=>ZenAudio.enabled=e.target.checked;
+        document.getElementById('audio-toggle').onchange=e=>{
+            ZenAudio.enabled=e.target.checked;
+            appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
+            emitCollabEvent('audio-toggle', { enabled: ZenAudio.enabled, alias: collabAlias });
+        };
         
         document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
         document.getElementById('trail-slider').oninput=e=>{
@@ -2128,6 +2185,23 @@
             config.trailSpeed = speeds[val-1];
         };
         document.getElementById('speed-slider').oninput=e=>config.speedMultiplier=0.2+(e.target.value/100)*1.8;
+        if (collabNameInput) {
+            collabNameInput.value = collabAlias;
+            collabNameInput.addEventListener('change', (e) => updateLocalAlias(e.target.value || 'wired'));
+        }
+        if (collabNameShareBtn) {
+            collabNameShareBtn.onclick = () => {
+                const name = collabNameInput?.value || collabAlias;
+                updateLocalAlias(name);
+                if (collabShareUrlEl?.dataset.url) {
+                    navigator.clipboard.writeText(collabShareUrlEl.dataset.url).then(() => {
+                        appendSessionLog('collab', `Shared link with name "${collabAlias}" copied.`);
+                    });
+                } else {
+                    alert("Generate a session link first.");
+                }
+            };
+        }
         
         document.getElementById('theme-btn').onclick=()=>config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};

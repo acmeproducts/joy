@@ -284,6 +284,7 @@
       let lastSeenId = null;
       let audioCtx = null;
       const clientId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10));
+      let ws = null;
 
       function setStatus(text, state = 'retry') {
         statusLabel.textContent = text;
@@ -395,13 +396,27 @@
         }
       }
 
-      function connect() {
+      function handleEnvelope(envelope) {
+        try {
+          let payload = envelope;
+          if (typeof envelope.message === 'string') {
+            try { payload = JSON.parse(envelope.message); }
+            catch (e) { console.warn('payload parse error', e, envelope.message); }
+          } else if (envelope.message && typeof envelope.message === 'object') {
+            payload = envelope.message;
+          }
+          handleMessage({ payload, id: envelope.id, time: envelope.time });
+        } catch (e) {
+          console.warn('parse error', e);
+        }
+      }
+
+      function connectSse() {
         if (!topic) return;
         if (source) { source.close(); source = null; }
-        clearTimeout(reconnectTimer);
         setStatus('Connecting…', 'retry');
         source = new EventSource(`https://ntfy.sh/${topic}/sse`);
-        source.onopen = () => setStatus('Connected', 'ok');
+        source.onopen = () => setStatus('Connected (SSE)', 'ok');
         source.onerror = () => {
           setStatus('Retrying…', 'retry');
           if (source) { source.close(); source = null; }
@@ -410,18 +425,46 @@
         source.onmessage = evt => {
           try {
             const envelope = JSON.parse(evt.data);
-            let payload = envelope;
-            if (typeof envelope.message === 'string') {
-              try { payload = JSON.parse(envelope.message); }
-              catch (e) { console.warn('payload parse error', e, envelope.message); }
-            } else if (envelope.message && typeof envelope.message === 'object') {
-              payload = envelope.message;
-            }
-            handleMessage({ payload, id: envelope.id, time: envelope.time });
+            handleEnvelope(envelope);
           } catch (e) {
             console.warn('parse error', e);
           }
         };
+      }
+
+      function connectWebSocket() {
+        if (!topic) return connectSse();
+        if (ws) { ws.close(); ws = null; }
+        setStatus('Connecting…', 'retry');
+        ws = new WebSocket('wss://ntfy.sh/ws');
+        ws.onopen = () => {
+          setStatus('Connected (WS)', 'ok');
+          ws.send(JSON.stringify({ action: 'subscribe', topics: [topic] }));
+        };
+        ws.onmessage = evt => {
+          try {
+            const envelope = JSON.parse(evt.data);
+            if (envelope.event === 'message') handleEnvelope(envelope);
+          } catch (e) {
+            console.warn('ws parse error', e);
+          }
+        };
+        ws.onerror = () => {
+          setStatus('Retrying…', 'retry');
+        };
+        ws.onclose = () => {
+          ws = null;
+          reconnectTimer = setTimeout(connect, 1200);
+        };
+      }
+
+      function connect() {
+        clearTimeout(reconnectTimer);
+        if ('WebSocket' in window) {
+          connectWebSocket();
+        } else {
+          connectSse();
+        }
       }
 
       function resetSession() {

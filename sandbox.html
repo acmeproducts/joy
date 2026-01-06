@@ -28,50 +28,178 @@
       box-shadow: 0 20px 60px rgba(0,0,0,0.25);
       padding: 20px 22px;
     }
-    h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: 0.5px; }
-    p.sub { margin: 0 0 16px; color: #9ca3af; font-size: 14px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 6px; }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+    }
+    p.sub {
+      margin: 0 0 16px;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
     input[type="text"], input[type="url"] {
-      width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937;
-      background: #0f172a; color: #f9fafb; font-size: 14px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+      background: #0f172a;
+      color: #f9fafb;
+      font-size: 14px;
     }
-    input[type="color"] { width: 100%; height: 44px; border: 1px solid #1f2937; border-radius: 10px; background: transparent; cursor: pointer; }
-    .row { display: flex; gap: 10px; align-items: center; }
+    input[type="color"] {
+      width: 100%;
+      height: 44px;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
     button {
-      cursor: pointer; border: 1px solid #1f2937; border-radius: 10px; padding: 10px 14px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; font-weight: 600;
-      box-shadow: 0 10px 30px rgba(37,99,235,0.35); transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      cursor: pointer;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(37,99,235,0.35);
+      transition: transform 0.1s ease, box-shadow 0.2s ease, opacity 0.2s ease;
     }
-    button.secondary { background: #0f172a; color: #e5e7eb; box-shadow: none; }
+    button.secondary {
+      background: #0f172a;
+      color: #e5e7eb;
+      box-shadow: none;
+    }
     button:active { transform: translateY(1px); opacity: 0.95; }
     #status {
-      display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px;
-      background: #1f2937; color: #e5e7eb; font-weight: 600; font-size: 13px; margin-bottom: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: #1f2937;
+      color: #e5e7eb;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 16px;
     }
-    #status .dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 0 0 rgba(245,158,11,0.6); animation: pulse 1.5s infinite; }
+    #status .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #f59e0b;
+      box-shadow: 0 0 0 0 rgba(245,158,11,0.6);
+      animation: pulse 1.5s infinite;
+    }
     #status.ok .dot { background: #34d399; }
     #status.error .dot { background: #f87171; }
     #status.retry .dot { background: #fbbf24; }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.35);} 70% { box-shadow: 0 0 0 12px rgba(255,255,255,0);} 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0);} }
-    .panel { padding: 14px; border: 1px dashed #1f2937; border-radius: 12px; background: #0b1223; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.35); }
+      70% { box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+    }
+    .panel {
+      padding: 14px;
+      border: 1px dashed #1f2937;
+      border-radius: 12px;
+      background: #0b1223;
+    }
     #tap-area {
-      position: relative; min-height: 120px; border: 1px solid #1f2937; border-radius: 14px;
+      position: relative;
+      min-height: 120px;
+      border: 1px solid #1f2937;
+      border-radius: 14px;
       background: radial-gradient(circle at 30% 30%, rgba(96,165,250,0.15), transparent 45%), #0f172a;
-      display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-weight: 700; letter-spacing: 0.05em; overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #cbd5e1;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      overflow: hidden;
     }
-    #tap-area .pulse { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: rgba(125, 211, 252, 0.5); pointer-events: none; opacity: 0; transform: scale(0.6); }
-    #tap-area .pulse.active { animation: tapPulse 0.6s ease-out; }
-    @keyframes tapPulse { 0% { transform: scale(0.6); opacity: 0.9; } 60% { transform: scale(2.4); opacity: 0.45; } 100% { transform: scale(3); opacity: 0; } }
-    .text-preview { padding: 12px; border-radius: 12px; background: #0f172a; border: 1px solid #1f2937; min-height: 48px; display: flex; align-items: center; font-weight: 700; color: #f1f5f9; letter-spacing: 0.04em; }
-    .help { margin-top: 14px; font-size: 12px; color: #9ca3af; line-height: 1.5; }
+    #tap-area .pulse {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(125, 211, 252, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    #tap-area .pulse.active {
+      animation: tapPulse 0.6s ease-out;
+    }
+    @keyframes tapPulse {
+      0% { transform: scale(0.6); opacity: 0.9; }
+      60% { transform: scale(2.4); opacity: 0.45; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+    .text-preview {
+      padding: 12px;
+      border-radius: 12px;
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: 0.04em;
+    }
+    .help {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
     .log {
-      margin-top: 14px; border: 1px solid #1f2937; border-radius: 12px; background: #0f172a;
-      max-height: 220px; overflow-y: auto; padding: 10px 12px;
+      margin-top: 14px;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      background: #0f172a;
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 10px 12px;
     }
-    .log-entry { padding: 8px 10px; border-radius: 10px; background: #0b1223; margin-bottom: 8px; border: 1px solid #1f2937; }
-    .log-entry .meta { font-size: 11px; color: #9ca3af; margin-bottom: 4px; }
-    @media (max-width: 640px) { body { padding: 14px; } .row { flex-direction: column; align-items: stretch; } button { width: 100%; text-align: center; } }
+    .log-entry {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #0b1223;
+      margin-bottom: 8px;
+      border: 1px solid #1f2937;
+    }
+    .log-entry .meta {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 4px;
+    }
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .row { flex-direction: column; align-items: stretch; }
+      button { width: 100%; text-align: center; }
+    }
   </style>
 </head>
 <body>
@@ -161,7 +289,7 @@
       let wsFailures = 0;
       let wsForceFallback = false;
       let wsConnectTimer = null;
-      const WS_GRACE_MS = 800;
+      const WS_GRACE_MS = 500;
 
       const baseHttp = () => `https://${baseHost}`;
       const baseWs = () => `wss://${baseHost}`;
@@ -200,12 +328,18 @@
         shareUrlField.value = share.toString();
       }
 
-      function addLog(direction, text) {
+      function formatNowWithMs() {
+        const d = new Date();
+        return `${d.toLocaleTimeString()}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+      }
+
+      function addLog(direction, text, latencyMs = null) {
         const row = document.createElement('div');
         row.className = 'log-entry';
         const meta = document.createElement('div');
         meta.className = 'meta';
-        meta.textContent = `${direction} • ${new Date().toLocaleTimeString()}`;
+        const latencyLabel = latencyMs == null ? '' : ` • +${latencyMs}ms`;
+        meta.textContent = `${direction} • ${formatNowWithMs()}${latencyLabel}`;
         const body = document.createElement('div');
         body.textContent = text;
         row.append(meta, body);
@@ -272,6 +406,7 @@
         const fromSelf = payload.clientId && payload.clientId === clientId;
         if (id && id === lastSeenId) return;
         const ts = time ? time * 1000 : (payload.ts || Date.now());
+        const latencyMs = Math.max(0, Date.now() - ts);
         if (!id && ts <= lastSeenTs) return;
         lastSeenId = id || lastSeenId;
         lastSeenTs = Math.max(lastSeenTs, ts);
@@ -280,9 +415,9 @@
           else if (payload.type === 'text') applyText(payload.value);
           else if (payload.type === 'beep') { beep(); }
           else if (payload.type === 'tap') { beep(); pulse(); }
-          addLog('Peer', `${payload.type}: ${String(payload.value ?? '')}`);
+          addLog('Peer', `${payload.type}: ${String(payload.value ?? '')}`, latencyMs);
         } else {
-          addLog('You (echo)', `${payload.type}: ${String(payload.value ?? '')}`);
+          addLog('You (echo)', `${payload.type}: ${String(payload.value ?? '')}`, latencyMs);
         }
       }
 
@@ -313,7 +448,7 @@
         source.onerror = () => {
           setStatus('Retrying…', 'retry');
           if (source) { source.close(); source = null; }
-          reconnectTimer = setTimeout(connect, 800);
+          reconnectTimer = setTimeout(connect, 400);
         };
         source.onmessage = evt => {
           try {
@@ -358,7 +493,7 @@
         ws.onclose = () => {
           ws = null;
           clearTimeout(wsConnectTimer);
-          reconnectTimer = setTimeout(connect, wsForceFallback ? 0 : 400);
+          reconnectTimer = setTimeout(connect, wsForceFallback ? 0 : 200);
         };
       }
 
@@ -384,8 +519,14 @@
         connect();
       }
 
-      colorInput.addEventListener('input', e => { applyColor(e.target.value); send('color', e.target.value); });
-      textInput.addEventListener('input', e => { applyText(e.target.value); send('text', e.target.value); });
+      colorInput.addEventListener('input', e => {
+        applyColor(e.target.value);
+        send('color', e.target.value);
+      });
+      textInput.addEventListener('input', e => {
+        applyText(e.target.value);
+        send('text', e.target.value);
+      });
       beepBtn.addEventListener('click', () => { beep(); send('beep', true); });
       tapArea.addEventListener('click', () => { pulse(); beep(); send('tap', true); });
       newSessionBtn.addEventListener('click', resetSession);

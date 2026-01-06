@@ -285,6 +285,8 @@
       let audioCtx = null;
       const clientId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10));
       let ws = null;
+      let wsFailures = 0;
+      let preferSse = false;
 
       function setStatus(text, state = 'retry') {
         statusLabel.textContent = text;
@@ -438,6 +440,7 @@
         setStatus('Connecting…', 'retry');
         ws = new WebSocket('wss://ntfy.sh/ws');
         ws.onopen = () => {
+          wsFailures = 0;
           setStatus('Connected (WS)', 'ok');
           ws.send(JSON.stringify({ action: 'subscribe', topics: [topic] }));
         };
@@ -449,22 +452,27 @@
             console.warn('ws parse error', e);
           }
         };
-        ws.onerror = () => {
-          setStatus('Retrying…', 'retry');
+        const handleWsFailure = () => {
+          wsFailures += 1;
+          setStatus(wsFailures >= 3 ? 'Switching to SSE…' : 'Retrying…', 'retry');
+          if (wsFailures >= 3) {
+            preferSse = true;
+          }
         };
+
+        ws.onerror = handleWsFailure;
         ws.onclose = () => {
           ws = null;
           reconnectTimer = setTimeout(connect, 1200);
+          handleWsFailure();
         };
       }
 
       function connect() {
         clearTimeout(reconnectTimer);
-        if ('WebSocket' in window) {
-          connectWebSocket();
-        } else {
-          connectSse();
-        }
+        const canUseWs = 'WebSocket' in window && !preferSse;
+        if (canUseWs) connectWebSocket();
+        else connectSse();
       }
 
       function resetSession() {

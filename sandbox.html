@@ -44,6 +44,7 @@
       position: relative; min-height: 120px; border: 1px solid #1f2937; border-radius: 14px;
       background: radial-gradient(circle at 30% 30%, rgba(96,165,250,0.15), transparent 45%), #0f172a;
       display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-weight: 700; letter-spacing: 0.05em; overflow: hidden;
+      touch-action: none;
     }
     #tap-area .pulse { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: rgba(125, 211, 252, 0.5); pointer-events: none; opacity: 0; transform: scale(0.6); }
     #tap-area .pulse.active { animation: tapPulse 0.6s ease-out; }
@@ -107,7 +108,7 @@
     </div>
 
     <div class="help">
-      Status auto-retries when disconnected. Session events: { session, type: 'color' | 'text' | 'beep' | 'tap', value, ts }.
+      Status auto-retries when disconnected. Session events: { session, type: 'color' | 'text' | 'beep' | 'tap' | 'tap_hold', value, ts }.
     </div>
   </div>
 
@@ -148,6 +149,11 @@
       const WS_GRACE_MS = fastMode ? 300 : 500;
       const SSE_RETRY_MS = fastMode ? 250 : 400;
       const WS_RETRY_MS = fastMode ? 120 : 200;
+      let lastTapTs = 0;
+      let tapHoldTimer = null;
+      let tapHoldFired = false;
+      const DOUBLE_TAP_WINDOW = 260;
+      const TAP_HOLD_MS = 520;
 
       const baseHttp = () => `https://${baseHost}`;
       const baseWs = () => `wss://${baseHost}`;
@@ -208,6 +214,14 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
+      function formatValue(value) {
+        if (value == null) return '';
+        if (typeof value === 'object') {
+          try { return JSON.stringify(value); } catch (_) { return '[object]'; }
+        }
+        return String(value);
+      }
+
       function copyShare() {
         const value = shareUrlField.value;
         if (!value) return;
@@ -254,7 +268,7 @@
         if (!session || !topic) return;
         const ts = Date.now();
         const payload = { session, type, value, ts, clientId };
-        addLog('You', `${type}: ${String(value)}`);
+        addLog('You', `${type}: ${formatValue(value)}`);
         fetch(`${baseHttp()}/${topic}`, {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -275,10 +289,19 @@
           if (payload.type === 'color') applyColor(payload.value);
           else if (payload.type === 'text') applyText(payload.value);
           else if (payload.type === 'beep') { beep(); }
-          else if (payload.type === 'tap') { beep(); pulse(); }
-          addLog('Peer', `${payload.type}: ${String(payload.value ?? '')}`, latencyMs);
+          else if (payload.type === 'tap') {
+            const detail = payload.value && typeof payload.value === 'object' ? payload.value : { double: false };
+            beep();
+            pulse();
+            if (detail.double) pulse();
+          } else if (payload.type === 'tap_hold') {
+            beep();
+            pulse();
+            pulse();
+          }
+          addLog('Peer', `${payload.type}: ${formatValue(payload.value)}`, latencyMs);
         } else {
-          addLog('You (echo)', `${payload.type}: ${String(payload.value ?? '')}`, latencyMs);
+          addLog('You (echo)', `${payload.type}: ${formatValue(payload.value)}`, latencyMs);
         }
       }
 
@@ -383,7 +406,31 @@
       colorInput.addEventListener('input', e => { applyColor(e.target.value); send('color', e.target.value); });
       textInput.addEventListener('input', e => { applyText(e.target.value); send('text', e.target.value); });
       beepBtn.addEventListener('click', () => { beep(); send('beep', true); });
-      tapArea.addEventListener('click', () => { pulse(); beep(); send('tap', true); });
+      tapArea.addEventListener('pointerdown', () => {
+        tapHoldFired = false;
+        clearTimeout(tapHoldTimer);
+        tapHoldTimer = setTimeout(() => {
+          tapHoldFired = true;
+          pulse();
+          pulse();
+          beep();
+          send('tap_hold', { hold: true });
+        }, TAP_HOLD_MS);
+      });
+      tapArea.addEventListener('pointerup', () => {
+        clearTimeout(tapHoldTimer);
+        if (tapHoldFired) return;
+        const now = performance.now();
+        const isDouble = now - lastTapTs <= DOUBLE_TAP_WINDOW;
+        lastTapTs = now;
+        pulse();
+        if (isDouble) pulse();
+        beep();
+        send('tap', { double: isDouble });
+      });
+      tapArea.addEventListener('pointercancel', () => {
+        clearTimeout(tapHoldTimer);
+      });
       newSessionBtn.addEventListener('click', resetSession);
       copyBtn.addEventListener('click', copyShare);
 

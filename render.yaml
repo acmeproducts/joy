@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: gift-signal
-    env: node
-    rootDir: signal-server
-    buildCommand: npm install
-    startCommand: npm start

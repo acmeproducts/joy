@@ -1214,6 +1214,12 @@
             endedAt: null,
             endReason: null
         };
+        const pipelineStatus = {
+            state: 'idle',
+            lastUpdated: null,
+            attempts: 0,
+            lastResult: null
+        };
         let logSent = false;
         const SESSION_CLOSE_GRACE_MS = 30000;
         let sessionFlushTimer = null;
@@ -1242,6 +1248,15 @@
         function appendSessionLog(type, detail, options = {}) {
             if (options.skipLog) return;
             sessionLog.push({ ts: Date.now(), type, detail: (detail ?? '').toString() });
+        }
+
+        function updatePipelineStatus(state, detail) {
+            pipelineStatus.state = state;
+            pipelineStatus.lastUpdated = Date.now();
+            if (detail !== undefined) {
+                pipelineStatus.lastResult = detail;
+            }
+            appendSessionLog('session-submit', `${state}${detail ? `: ${detail}` : ''}`);
         }
 
         function buildSessionLogString() {
@@ -1302,19 +1317,28 @@
 
         async function sendToPipeline(formData) {
             const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`;
+            pipelineStatus.attempts += 1;
+            updatePipelineStatus('submitting', `Attempt ${pipelineStatus.attempts}`);
             try {
                 if (navigator.sendBeacon) {
                     const params = new URLSearchParams();
                     formData.forEach((v,k)=>params.append(k,v));
-                    if (navigator.sendBeacon(url, params)) return true;
+                    if (navigator.sendBeacon(url, params)) {
+                        updatePipelineStatus('sent', 'Beacon queued');
+                        return true;
+                    }
+                    updatePipelineStatus('fallback', 'Beacon returned false');
                 }
             } catch(e) {
+                updatePipelineStatus('fallback', 'Beacon error');
                 console.warn('Beacon send failed, falling back to fetch', e);
             }
             try {
                 await fetch(url, { method: 'POST', mode: 'no-cors', body: formData, keepalive: true });
+                updatePipelineStatus('sent', 'Fetch dispatched');
                 return true;
             } catch(e) {
+                updatePipelineStatus('failed', e?.message || 'Fetch error');
                 console.warn('Pipeline fetch failed', e);
                 return false;
             }

@@ -984,10 +984,10 @@
         const p2p = {
             clientId: syncClientId,
             session: '',
-            topic: '',
+            topics: { live: '', state: '' },
             baseHost: 'ntfy.sh',
             ws: null,
-            source: null,
+            sources: { live: null, state: null },
             wsForceFallback: false,
             wsFailures: 0,
             reconnectTimer: null,
@@ -996,6 +996,7 @@
             lastSeenId: null,
             ready: false,
             fastMode: false,
+            channelReady: { live: false, state: false },
             lastStateRequestId: ''
         };
 
@@ -1038,7 +1039,8 @@
             if (urlHost) url.searchParams.set('host', p2p.baseHost);
             if (p2p.fastMode) url.searchParams.set('fast', '1');
             history.replaceState(null, '', url.toString());
-            p2p.topic = `gift-sync-${p2p.session}`;
+            p2p.topics.live = `gift-sync-${p2p.session}-live`;
+            p2p.topics.state = `gift-sync-${p2p.session}-state`;
             if (p2pSessionEl) p2pSessionEl.value = p2p.session;
             const share = buildShareLink(p2p.session);
             if (p2pShareEl) {
@@ -1056,17 +1058,19 @@
         const baseHttp = () => `https://${p2p.baseHost}`;
         const baseWs = () => `wss://${p2p.baseHost}`;
 
-        function addSyncLog(direction, text, latencyMs = null) {
+        function addSyncLog(direction, text, latencyMs = null, channel = '') {
             const latencyLabel = latencyMs == null ? '' : ` • +${latencyMs}ms`;
-            appendSessionLog(direction, `${text} (${formatNowWithMs()}${latencyLabel})`);
+            const channelLabel = channel ? `[${channel}] ` : '';
+            appendSessionLog(direction, `${channelLabel}${text} (${formatNowWithMs()}${latencyLabel})`);
         }
 
-        function sendSync(type, value = {}) {
-            if (!p2p.session || !p2p.topic) return;
+        function sendSync(type, value = {}, channel = 'live') {
+            const topic = channel === 'state' ? p2p.topics.state : p2p.topics.live;
+            if (!p2p.session || !topic) return;
             const ts = Date.now();
             const payload = { session: p2p.session, type, value, ts, clientId: p2p.clientId };
-            addSyncLog('you', `${type}: ${JSON.stringify(value)}`);
-            fetch(`${baseHttp()}/${p2p.topic}`, {
+            addSyncLog('you', `${type}: ${JSON.stringify(value)}`, null, channel);
+            fetch(`${baseHttp()}/${topic}`, {
                 method: 'POST',
                 body: JSON.stringify(payload),
                 headers: { 'Content-Type': 'application/json' }
@@ -1099,7 +1103,7 @@
             };
         }
 
-        function handleSyncMessage({ payload, id, time }) {
+        function handleSyncMessage({ payload, id, time, topic }) {
             if (!payload || payload.session !== p2p.session) return;
             const fromSelf = payload.clientId && payload.clientId === p2p.clientId;
             if (id && id === p2p.lastSeenId) return;
@@ -1108,11 +1112,12 @@
             if (!id && ts <= p2p.lastSeenTs) return;
             p2p.lastSeenId = id || p2p.lastSeenId;
             p2p.lastSeenTs = Math.max(p2p.lastSeenTs, ts);
+            const channel = topic === p2p.topics.state ? 'state' : 'live';
             if (!fromSelf) {
                 applySyncEvent(payload);
-                addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs);
+                addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs, channel);
             } else {
-                addSyncLog('echo', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs);
+                addSyncLog('echo', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs, channel);
             }
         }
 
@@ -1138,7 +1143,7 @@
             } else if (type === 'state-request') {
                 if (p2p.lastStateRequestId === value.requestId) return;
                 p2p.lastStateRequestId = value.requestId;
-                sendSync('state-sync', { state: getStateSnapshot(), target: clientId });
+                sendSync('state-sync', { state: getStateSnapshot(), target: clientId }, 'state');
             }
         }
 
@@ -1151,29 +1156,52 @@
                 } else if (envelope.message && typeof envelope.message === 'object') {
                     payload = envelope.message;
                 }
-                handleSyncMessage({ payload, id: envelope.id, time: envelope.time });
+                handleSyncMessage({ payload, id: envelope.id, time: envelope.time, topic: envelope.topic });
             } catch (e) {
                 console.warn('parse error', e);
             }
         }
 
-        function connectSse() {
-            if (!p2p.topic) return;
-            if (p2p.source) { p2p.source.close(); p2p.source = null; }
-            setP2PStatus('Connecting…', 'retry');
-            p2p.source = new EventSource(`${baseHttp()}/${p2p.topic}/sse`);
-            p2p.source.onopen = () => {
-                p2p.wsFailures = 0;
-                setP2PStatus('Connected (SSE)', 'ok');
+        function scheduleReconnect(delayMs) {
+            clearTimeout(p2p.reconnectTimer);
+            p2p.reconnectTimer = setTimeout(connectSync, delayMs);
+        }
+
+        function closeSources() {
+            Object.keys(p2p.sources).forEach(key => {
+                if (p2p.sources[key]) {
+                    p2p.sources[key].close();
+                    p2p.sources[key] = null;
+                }
+            });
+        }
+
+        function setChannelReady(channel, ready) {
+            p2p.channelReady[channel] = ready;
+            if (ready) {
+                const liveReady = p2p.channelReady.live;
+                const stateReady = p2p.channelReady.state;
+                setP2PStatus(`Connected (SSE ${liveReady && stateReady ? '2ch' : '1ch'})`, 'ok');
                 p2p.ready = true;
-                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) });
+            }
+        }
+
+        function connectSseChannel(channel, topic) {
+            const source = new EventSource(`${baseHttp()}/${topic}/sse`);
+            p2p.sources[channel] = source;
+            source.onopen = () => {
+                p2p.wsFailures = 0;
+                setChannelReady(channel, true);
+                if (channel === 'state') {
+                    sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) }, 'state');
+                }
             };
-            p2p.source.onerror = () => {
+            source.onerror = () => {
                 setP2PStatus('Retrying…', 'warn');
-                if (p2p.source) { p2p.source.close(); p2p.source = null; }
-                p2p.reconnectTimer = setTimeout(connectSync, p2p.fastMode ? 250 : 400);
+                closeSources();
+                scheduleReconnect(p2p.fastMode ? 250 : 400);
             };
-            p2p.source.onmessage = evt => {
+            source.onmessage = evt => {
                 try {
                     const envelope = JSON.parse(evt.data);
                     handleSyncEnvelope(envelope);
@@ -1183,9 +1211,19 @@
             };
         }
 
+        function connectSse() {
+            if (!p2p.topics.live || !p2p.topics.state) return;
+            closeSources();
+            p2p.channelReady = { live: false, state: false };
+            setP2PStatus('Connecting…', 'retry');
+            connectSseChannel('live', p2p.topics.live);
+            connectSseChannel('state', p2p.topics.state);
+        }
+
         function connectWebSocket() {
-            if (!p2p.topic) return connectSse();
+            if (!p2p.topics.live || !p2p.topics.state) return connectSse();
             if (p2p.ws) { p2p.ws.close(); p2p.ws = null; }
+            closeSources();
             setP2PStatus('Connecting…', 'retry');
             p2p.ws = new WebSocket(`${baseWs()}/ws`);
             clearTimeout(p2p.wsConnectTimer);
@@ -1198,9 +1236,9 @@
                 p2p.wsFailures = 0;
                 clearTimeout(p2p.wsConnectTimer);
                 setP2PStatus('Connected (WS)', 'ok');
-                p2p.ws.send(JSON.stringify({ action: 'subscribe', topics: [p2p.topic] }));
+                p2p.ws.send(JSON.stringify({ action: 'subscribe', topics: [p2p.topics.live, p2p.topics.state] }));
                 p2p.ready = true;
-                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) });
+                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) }, 'state');
             };
             p2p.ws.onmessage = evt => {
                 try {
@@ -1220,7 +1258,7 @@
                 p2p.ws = null;
                 clearTimeout(p2p.wsConnectTimer);
                 const WS_RETRY_MS = p2p.fastMode ? 120 : 200;
-                p2p.reconnectTimer = setTimeout(connectSync, p2p.wsForceFallback ? 0 : WS_RETRY_MS);
+                scheduleReconnect(p2p.wsForceFallback ? 0 : WS_RETRY_MS);
             };
         }
 
@@ -1247,12 +1285,46 @@
         resolveSession();
         connectSync();
 
-        function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false, silentSync = false } = {}) {
+        async function optimizeBackgroundData(dataUrl, { maxEdge = 1280, quality = 0.78, maxBytes = 260000 } = {}) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const render = (edge, q) => {
+                        const scale = Math.min(1, edge / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(img.width * scale));
+                        canvas.height = Math.max(1, Math.round(img.height * scale));
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) return dataUrl;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        return canvas.toDataURL('image/jpeg', q);
+                    };
+                    let edge = maxEdge;
+                    let q = quality;
+                    let output = render(edge, q);
+                    while (output.length > maxBytes && q > 0.5) {
+                        q = Math.max(0.5, q - 0.08);
+                        output = render(edge, q);
+                    }
+                    while (output.length > maxBytes && edge > 640) {
+                        edge = Math.round(edge * 0.85);
+                        q = Math.min(q, 0.7);
+                        output = render(edge, q);
+                    }
+                    resolve(output);
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        async function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false, silentSync = false, optimize = false } = {}) {
             if (!dataUrl) return false;
             let persisted = true;
-            currentBgData = dataUrl;
+            const preparedData = optimize ? await optimizeBackgroundData(dataUrl) : dataUrl;
+            currentBgData = preparedData;
             if (persist) {
-                try { localStorage.setItem('garden_bg', dataUrl); }
+                try { localStorage.setItem('garden_bg', preparedData); }
                 catch (err) {
                     persisted = false;
                     if (notifyOnFail) alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
@@ -1261,8 +1333,8 @@
             }
             const img = new Image();
             img.onload = ()=>{config.backgroundImage=img;config.useGradient=false;};
-            img.src = dataUrl;
-            if (!silentSync) sendSync('background', getBackgroundStatePayload());
+            img.src = preparedData;
+            if (!silentSync) sendSync('background', getBackgroundStatePayload(), 'state');
             return persisted;
         }
 
@@ -1271,7 +1343,7 @@
             currentBgData = null;
             config.useGradient = true;
             config.backgroundImage = null;
-            if (!silentSync) sendSync('background', getBackgroundStatePayload());
+            if (!silentSync) sendSync('background', getBackgroundStatePayload(), 'state');
         }
 
         function getBackgroundStatePayload() {
@@ -1500,8 +1572,8 @@
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
             const r=new FileReader(); 
-            r.onload=e=>{ 
-                setBackgroundImageFromData(e.target.result, { notifyOnFail: true });
+            r.onload=async e=>{ 
+                await setBackgroundImageFromData(e.target.result, { notifyOnFail: true, optimize: true });
                 appendSessionLog('background', 'Applied custom background.');
             }; 
             r.readAsDataURL(f);
@@ -1519,7 +1591,7 @@
         document.getElementById('audio-toggle').onchange=e=>{
             ZenAudio.enabled=e.target.checked;
             appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
-            sendSync('audio', { enabled: ZenAudio.enabled });
+            sendSync('audio', { enabled: ZenAudio.enabled }, 'state');
         };
         
         document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
@@ -1532,7 +1604,7 @@
         };
         document.getElementById('speed-slider').oninput=e=>config.speedMultiplier=0.2+(e.target.value/100)*1.8;
         
-        document.getElementById('theme-btn').onclick=()=>{config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length; sendSync('state-sync', { state: getStateSnapshot() });};
+        document.getElementById('theme-btn').onclick=()=>{config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length; sendSync('state-sync', { state: getStateSnapshot() }, 'state');};
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
         const cBox=document.getElementById('custom-words');
@@ -1541,7 +1613,7 @@
             localStorage.setItem('garden_words',e.target.value);
             if(e.target.value==='6969') config.customWords=[...config.defaultWords,...secretWords];
             else config.customWords=e.target.value.split(',').filter(s=>s.trim());
-            sendSync('custom-words', { words: config.customWords });
+            sendSync('custom-words', { words: config.customWords }, 'state');
         };
 
         const modals = {

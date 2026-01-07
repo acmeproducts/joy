@@ -686,6 +686,36 @@
         resize();
 
         const random = (min, max) => Math.random() * (max - min) + min;
+        function hashSeed(value) {
+            let hash = 2166136261;
+            for (let i = 0; i < value.length; i++) {
+                hash ^= value.charCodeAt(i);
+                hash = Math.imul(hash, 16777619);
+            }
+            return hash >>> 0;
+        }
+        function mulberry32(seed) {
+            let t = seed >>> 0;
+            return function() {
+                t += 0x6D2B79F5;
+                let r = Math.imul(t ^ (t >>> 15), t | 1);
+                r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+                return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function createSeededRng(sessionId, eventId) {
+            return mulberry32(hashSeed(`${sessionId}::${eventId}`));
+        }
+        function withSeededRng(rng, fn) {
+            if (!rng) return fn();
+            const previous = Math.random;
+            Math.random = rng;
+            try {
+                return fn();
+            } finally {
+                Math.random = previous;
+            }
+        }
         function getPastelColor() { 
             const hue = random(0, 360);
             return { hue: hue, str: `hsla(${hue}, 70%, 80%,` };
@@ -1005,6 +1035,9 @@
 
         // --- 4. Input Handling ---
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
+        let activeInputEventId = null;
+        let activeInputRng = null;
+        let inputEventCounter = 0;
         let lastSyncDragEmit = 0;
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
@@ -1033,8 +1066,33 @@
             inboundSeq: {},
             ready: false,
             lastStateRequestId: '',
-            sequence: { live: 0, state: 0 }
+            sequence: { live: 0, state: 0 },
+            lastReconcileAt: {}
         };
+
+        function nextEventId() {
+            inputEventCounter += 1;
+            return `${p2p.clientId}-${inputEventCounter}`;
+        }
+
+        function createEventRng(eventId) {
+            return createSeededRng(p2p.session || 'local', eventId);
+        }
+
+        function ensureInputContext(options = {}) {
+            if (!options.eventId) options.eventId = nextEventId();
+            if (!options.seededRng) options.seededRng = createEventRng(options.eventId);
+            return options;
+        }
+
+        function requestStateSnapshot(peerId, reason = '') {
+            if (!peerId) return;
+            const now = Date.now();
+            const last = p2p.lastReconcileAt[peerId] || 0;
+            if (now - last < 1200) return;
+            p2p.lastReconcileAt[peerId] = now;
+            sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10), reason }, 'state', peerId);
+        }
 
         function formatNowWithMs() {
             const d = new Date();
@@ -1179,7 +1237,13 @@
             }
             const channelKey = channel || payload.channel || 'live';
             const lastState = p2p.inboundSeq[peerKey][channelKey] || { seq: 0, ts: 0 };
-            if (seq <= lastState.seq) return;
+            if (seq <= lastState.seq) {
+                requestStateSnapshot(peerId, 'out-of-order');
+                return;
+            }
+            if (seq > lastState.seq + 1 || ts < lastState.ts) {
+                requestStateSnapshot(peerId, 'missing-events');
+            }
             p2p.inboundSeq[peerKey][channelKey] = { seq, ts: Math.max(lastState.ts, ts) };
             applySyncEvent(payload);
             addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)} (#${seq})`, latencyMs, channelKey);
@@ -1188,9 +1252,9 @@
         function applySyncEvent(payload) {
             const { type, value = {}, clientId } = payload;
             if (type === 'tap') {
-                simulateTap(value.x, value.y, { silentSync: true, sharedWord: value.word, sharedVisual: value.visual, forceDouble: value.double });
+                simulateTap(value.x, value.y, { silentSync: true, sharedWord: value.word, sharedVisual: value.visual, forceDouble: value.double, eventId: value.eventId });
             } else if (type === 'drag') {
-                simulateDrag(value.x1, value.y1, value.x2, value.y2, { silentSync: true, sharedTrail: value.trail });
+                simulateDrag(value.x1, value.y1, value.x2, value.y2, { silentSync: true, sharedTrail: value.trail, eventId: value.eventId });
             } else if (type === 'background') {
                 applyBackgroundStateFromPeer(value);
             } else if (type === 'audio') {
@@ -1486,8 +1550,19 @@
 
         window.addEventListener('beforeunload', () => sendSignal('leave'));
 
+        const STATE_SNAPSHOT_INTERVAL = 5000;
+        let stateSnapshotTimer = null;
+        function startStateSnapshots() {
+            if (stateSnapshotTimer) clearInterval(stateSnapshotTimer);
+            stateSnapshotTimer = setInterval(() => {
+                if (!p2p.session || !p2p.ready) return;
+                sendSync('state-sync', { state: getStateSnapshot(), reason: 'periodic' }, 'state');
+            }, STATE_SNAPSHOT_INTERVAL);
+        }
+
         resolveSession();
         connectSignaling();
+        startStateSnapshots();
 
         async function computeBackgroundHash(file) {
             if (!window.crypto?.subtle) return null;
@@ -1668,6 +1743,9 @@
         document.addEventListener('mousedown', wakeAudio);
 
         function handleInputStart(x,y, options = {}) { 
+            const context = ensureInputContext(options);
+            activeInputEventId = context.eventId;
+            activeInputRng = context.seededRng;
             ZenAudio.warmUp(); // Instant engagement
             document.getElementById('overlay').style.opacity='0'; 
             startX=x; startY=y; 
@@ -1679,6 +1757,7 @@
             if(!startX) return;
             if(Math.sqrt((x-startX)**2 + (y-startY)**2) > 10) {
                 isDragging=true;
+                const context = options.eventId ? ensureInputContext(options) : { eventId: activeInputEventId, seededRng: activeInputRng };
                 
                 // Trail Logic: Switch randomly every 10s
                 if(!options.sharedTrail && Date.now() - config.lastTrailSwitch > 10000) {
@@ -1692,7 +1771,9 @@
                 }
 
                 const trailType = options.sharedTrail || config.currentTrail;
-                visualEntities.push(new TrailBase(x, y, trailType));
+                withSeededRng(context.seededRng, () => {
+                    visualEntities.push(new TrailBase(x, y, trailType));
+                });
                 
                 // Fluid Strumming on Drag
                 if(Date.now()-lastDragSound > 60) { 
@@ -1701,7 +1782,7 @@
                     lastDragSound=Date.now(); 
                 }
                 if (!options.silentSync && Date.now() - lastSyncDragEmit > 120) {
-                    sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType });
+                    sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, eventId: context.eventId });
                     lastSyncDragEmit = Date.now();
                 }
             }
@@ -1710,28 +1791,32 @@
         function handleInputEnd(x,y, options = {}) {
             const now = Date.now();
             if(isDragging) { 
+                const context = options.eventId ? ensureInputContext(options) : { eventId: activeInputEventId, seededRng: activeInputRng };
                 if (!options.skipTelemetry) registerInput('S'); 
                 checkDragUnlock(now-dragStart); 
                 const trailType = options.sharedTrail || config.currentTrail;
                 if (!options.skipTelemetry) appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${trailType})`, options);
-                if (!options.silentSync) sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType });
+                if (!options.silentSync) sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, eventId: context.eventId });
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const freq = ZenAudio.scale[idx];
-                const visualKind = options.sharedVisual || (() => {
-                    const rnd = Math.random();
-                    if(foundEggs.includes(3) && rnd > 0.7) return 'growing-heart';
-                    if(foundEggs.includes(3) && rnd > 0.5) return 'heart-bloom';
-                    return 'bloom';
-                })();
-                const wordChoice = options.sharedWord || getRandomWord();
-
-                const ent = visualKind === 'growing-heart' ? new GrowingHeart(x,y)
-                            : visualKind === 'heart-bloom' ? new HeartBloom(x,y)
-                            : new Bloom(x,y);
-
-                visualEntities.push(ent);
-                wordEntities.push(new Word(x,y-30, wordChoice));
+                const context = options.eventId ? ensureInputContext(options) : { eventId: activeInputEventId, seededRng: activeInputRng };
+                let visualKind = options.sharedVisual;
+                let wordChoice = options.sharedWord;
+                withSeededRng(context.seededRng, () => {
+                    if (!visualKind) {
+                        const rnd = Math.random();
+                        if(foundEggs.includes(3) && rnd > 0.7) visualKind = 'growing-heart';
+                        else if(foundEggs.includes(3) && rnd > 0.5) visualKind = 'heart-bloom';
+                        else visualKind = 'bloom';
+                    }
+                    if (!wordChoice) wordChoice = getRandomWord();
+                    const ent = visualKind === 'growing-heart' ? new GrowingHeart(x,y)
+                                : visualKind === 'heart-bloom' ? new HeartBloom(x,y)
+                                : new Bloom(x,y);
+                    visualEntities.push(ent);
+                    wordEntities.push(new Word(x,y-30, wordChoice));
+                });
                 
                 ZenAudio.playPluck(freq, 0.3);
                 
@@ -1744,14 +1829,16 @@
                 const isDoubleTap = options.forceDouble || ((now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap);
 
                 if(isDoubleTap) {
-                    visualEntities.push(new HeartCloud(x,y));
+                    withSeededRng(context.seededRng, () => {
+                        visualEntities.push(new HeartCloud(x,y));
+                    });
                     ZenAudio.playChord(idx);
                     if (!options.skipTelemetry) window.telemetryStats.drags++;
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} [double]`, options);
-                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: true });
+                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: true, eventId: context.eventId });
                 } else {
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} (${visualKind})`, options);
-                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: false });
+                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: false, eventId: context.eventId });
                 }
                 if (window.gardenRelaySend) window.gardenRelaySend('tap', { x: Math.round(x), y: Math.round(y), double: isDoubleTap, word: wordChoice });
                 lastTap = now;
@@ -1759,6 +1846,8 @@
                 lastTapY = y;
             }
             startX=null; isDragging=false;
+            activeInputEventId = null;
+            activeInputRng = null;
         }
         
         canvas.addEventListener('mousedown',e=>handleInputStart(e.clientX,e.clientY));
@@ -1769,11 +1858,13 @@
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
 
         function simulateTap(x, y, options = {}) {
+            ensureInputContext(options);
             handleInputStart(x, y, options);
             setTimeout(() => handleInputEnd(x, y, options), 30);
         }
 
         function simulateDrag(x1, y1, x2, y2, options = {}) {
+            ensureInputContext(options);
             const steps = 6;
             handleInputStart(x1, y1, options);
             for (let i=1; i<=steps; i++) {
@@ -1831,35 +1922,46 @@
             ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
         }
 
-        const TARGET_FRAME_MS = 1000 / 60;
+        const FIXED_STEP_MS = 1000 / 60;
+        const MAX_ACCUMULATED_MS = 250;
         let lastFrameTime = performance.now();
+        let accumulator = 0;
 
-        function loop(timestamp) {
-            const delta = timestamp - lastFrameTime;
+        function stepSimulation() {
+            for(let i=visualEntities.length-1; i>=0; i--) { visualEntities[i].update(); if(visualEntities[i].isDead()) visualEntities.splice(i,1); }
+            for(let i=wordEntities.length-1; i>=0; i--) { wordEntities[i].update(); if(wordEntities[i].isDead()) wordEntities.splice(i,1); }
+            for(let i=particles.length-1; i>=0; i--) { particles[i].update(); if(particles[i].isDead()) particles.splice(i,1); }
+        }
 
-            if (delta >= TARGET_FRAME_MS) {
-                lastFrameTime = timestamp - (delta % TARGET_FRAME_MS);
-
-                // Note: width/height are logical pixels from resize()
-                // ctx is already scaled by dpr, so we draw using logical coordinates
-                
-                if(config.useGradient || !config.backgroundImage) {
-                    const t=themes[config.currentThemeIndex]; const g=ctx.createLinearGradient(0,0,0,height);
-                    g.addColorStop(0,t.bg[0]); g.addColorStop(1,t.bg[1]); ctx.fillStyle=g; ctx.fillRect(0,0,width,height);
-                } else {
-                    drawBackground(ctx, config.backgroundImage, width, height);
-                }
-
-                for(let i=visualEntities.length-1; i>=0; i--) { visualEntities[i].update(); if(visualEntities[i].isDead()) visualEntities.splice(i,1); }
-                for(let i=wordEntities.length-1; i>=0; i--) { wordEntities[i].update(); if(wordEntities[i].isDead()) wordEntities.splice(i,1); }
-                for(let i=particles.length-1; i>=0; i--) { particles[i].update(); particles[i].draw(ctx); if(particles[i].isDead()) particles.splice(i,1); }
-
-                visualEntities.forEach(e => e.draw(ctx));
-                wordEntities.forEach(w => w.draw(ctx));
-
-                document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        function renderFrame() {
+            // Note: width/height are logical pixels from resize()
+            // ctx is already scaled by dpr, so we draw using logical coordinates
+            
+            if(config.useGradient || !config.backgroundImage) {
+                const t=themes[config.currentThemeIndex]; const g=ctx.createLinearGradient(0,0,0,height);
+                g.addColorStop(0,t.bg[0]); g.addColorStop(1,t.bg[1]); ctx.fillStyle=g; ctx.fillRect(0,0,width,height);
+            } else {
+                drawBackground(ctx, config.backgroundImage, width, height);
             }
 
+            visualEntities.forEach(e => e.draw(ctx));
+            wordEntities.forEach(w => w.draw(ctx));
+            particles.forEach(p => p.draw(ctx));
+
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        }
+
+        function loop(timestamp) {
+            const delta = Math.min(MAX_ACCUMULATED_MS, timestamp - lastFrameTime);
+            lastFrameTime = timestamp;
+            accumulator += delta;
+
+            while (accumulator >= FIXED_STEP_MS) {
+                stepSimulation();
+                accumulator -= FIXED_STEP_MS;
+            }
+
+            renderFrame();
             requestAnimationFrame(loop);
         }
 

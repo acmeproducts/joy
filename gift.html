@@ -1044,6 +1044,7 @@
         const syncClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
         const SESSION_KEY_PARAM = 'session';
         const SIGNAL_KEY_PARAM = 'signal';
+        const DEFAULT_SIGNAL_URL = 'https://gift-signal.onrender.com/signal';
         const p2pStatusEl = document.getElementById('p2p-status');
         const p2pSessionEl = document.getElementById('p2p-session');
         const p2pShareEl = document.getElementById('p2p-share-url');
@@ -1117,9 +1118,7 @@
         function computeSignalUrls(raw) {
             let input = raw;
             if (!input) {
-                const base = new URL(window.location.origin);
-                base.pathname = '/signal';
-                return { httpUrl: base.toString(), wsUrl: base.toString().replace(/^http/, 'ws') };
+                input = DEFAULT_SIGNAL_URL;
             }
             if (!/^https?:\/\//i.test(input) && !/^wss?:\/\//i.test(input)) {
                 input = `https://${input}`;

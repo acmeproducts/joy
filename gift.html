@@ -118,38 +118,27 @@
 
             <div class="space-y-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Live Sync Session</span>
-                    <span class="text-[10px] text-gray-400">Auto key • Zero room codes</span>
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Live Sync (Peer to Peer)</span>
+                    <span id="p2p-status" class="text-[10px] px-2 py-1 rounded-full bg-slate-200 text-slate-600">Connecting…</span>
                 </div>
                 <div class="space-y-1">
                     <label class="text-[11px] text-gray-600 font-semibold uppercase tracking-wide flex items-center justify-between">
-                        Connection Name
-                        <span class="text-[10px] text-gray-400 font-normal">default: wired</span>
+                        Session
+                        <span class="text-[10px] text-gray-400 font-normal">ntfy relay</span>
                     </label>
                     <div class="flex gap-2">
-                        <input id="collab-name" class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-200" placeholder="wired">
-                        <button id="collab-name-share" class="px-3 py-2 text-[11px] bg-slate-50 text-slate-700 rounded border border-slate-200 hover:bg-slate-100 transition">Share name</button>
+                        <input id="p2p-session" class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-200" readonly>
+                        <button id="p2p-new-session" class="px-3 py-2 text-[11px] bg-slate-50 text-slate-700 rounded border border-slate-200 hover:bg-slate-100 transition">New</button>
                     </div>
-                    <p class="text-[10px] text-gray-500 leading-snug">Name is visible to peers and included in the share link.</p>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="collab-start-session" class="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200 hover:bg-emerald-100 transition col-span-2">Start Secure Session</button>
-                    <button id="collab-request-new" class="px-3 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold border border-amber-200 hover:bg-amber-100 transition col-span-2">Request New Session</button>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                     <div class="flex-1">
                         <p class="font-semibold text-slate-700">Shareable Link</p>
-                        <p id="collab-share-url" class="truncate text-slate-500">Waiting to generate...</p>
+                        <p id="p2p-share-url" class="truncate text-slate-500">Generating…</p>
                     </div>
-                    <button id="collab-copy-url" class="px-2 py-1 text-[10px] bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition">Copy</button>
+                    <button id="p2p-copy-url" class="px-2 py-1 text-[10px] bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition">Copy</button>
                 </div>
-                <p id="collab-role-indicator" class="text-[11px] text-gray-500 leading-snug">Role: Waiting to start</p>
-                <div id="collab-state-banner" class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Waiting for connections. Generate a link to host.</div>
-                <div class="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2" id="collab-peers">
-                    <p class="font-semibold text-slate-700 text-xs">Session Participants</p>
-                    <p class="text-slate-400">Not connected</p>
-                </div>
-                <div class="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2">
+                <div class="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-600 space-y-2">
                     <div class="flex items-center justify-between">
                         <p class="font-semibold text-slate-700 text-xs">Session Log</p>
                         <span id="pipeline-status" class="text-[10px] px-2 py-1 rounded-full bg-slate-200 text-slate-600">Idle</span>
@@ -157,15 +146,8 @@
                     <div id="session-log-feed" class="max-h-28 overflow-y-auto space-y-1 text-[10px] leading-snug">
                         <p class="text-slate-400">No activity yet.</p>
                     </div>
-                    <div class="pt-2 border-t border-slate-200 space-y-2">
-                        <div class="flex items-center justify-between">
-                            <p class="font-semibold text-slate-700 text-xs">Automated Sync Checks</p>
-                            <button id="collab-run-tests" class="px-2 py-1 text-[10px] bg-indigo-50 text-indigo-700 rounded border border-indigo-200 hover:bg-indigo-100 transition">Run</button>
-                        </div>
-                        <pre id="collab-test-output" class="bg-slate-900 text-slate-100 rounded p-2 text-[10px] max-h-32 overflow-y-auto">Not run yet.</pre>
-                    </div>
                 </div>
-                <p class="text-[11px] text-gray-500 leading-snug">Share the generated link. Guests join automatically; invalid or expired keys are redirected to request a new session.</p>
+                <p class="text-[11px] text-gray-500 leading-snug">Share the link. Peers mirror background, audio, words, taps, and drags in real time. No master/guest.</p>
             </div>
 
             <div class="space-y-6">
@@ -432,27 +414,11 @@
         };
         const sessionLogFeed = document.getElementById('session-log-feed');
         const pipelineStatusEl = document.getElementById('pipeline-status');
-        const collabPeersEl = document.getElementById('collab-peers');
-        const collabShareUrlEl = document.getElementById('collab-share-url');
-        const collabCopyUrlBtn = document.getElementById('collab-copy-url');
-        const collabPeers = {};
         let pipelineSendCount = 0;
-        function reconcilePeerMasterFlags() {
-            Object.entries(collabPeers).forEach(([id, peer]) => {
-                peer.master = collabMasterId ? id === collabMasterId : false;
-            });
-            updatePeerList();
-        }
-
-        const COLLAB_MANIFEST_CSV = ""; // Optional: published CSV with columns room, master, ts
-        const COLLAB_MANIFEST_FORM_URL = ""; // Optional: Google Form URL for manifest writes
-        const COLLAB_MANIFEST_FORM_FIELDS = { room: "entry.room", master: "entry.master", ts: "entry.ts", status: "entry.status" };
-        const MASTER_NEGOTIATION_MS = 2600;
-        const MASTER_LEASE_MS = 45000;
-        const MASTER_STALE_GRACE_MS = 8000;
 
         function fmtTime(ts) {
-            return new Date(ts).toLocaleTimeString([], { hour12: false });
+            const d = new Date(ts);
+            return `${d.toLocaleTimeString([], { hour12: false })}.${String(d.getMilliseconds()).padStart(3, '0')}`;
         }
 
         function setPipelineStatus(label, tone = 'muted') {
@@ -493,37 +459,9 @@
         }
 
         const SESSION_CLOSE_GRACE_MS = 30000;
-        const COLLAB_HEARTBEAT_STALE_MS = 20000;
         let sessionFlushTimer = null;
         let sessionEndHoldTimer = null;
         let pendingSessionEndReason = null;
-
-        function getAlivePeerIds() {
-            const now = Date.now();
-            if (collabActive) collabLocalLastSeen = now;
-            const alive = Object.entries(collabPeers)
-                .filter(([id, peer]) => id && (now - (peer.lastSeen || 0) < MASTER_LEASE_MS))
-                .map(([id]) => id);
-            if ((now - collabLocalLastSeen) < MASTER_LEASE_MS && !alive.includes(collabClientId)) {
-                alive.push(collabClientId);
-            }
-            return alive;
-        }
-
-        function electMaster(preferredId = null) {
-            const aliveIds = getAlivePeerIds();
-            if (!aliveIds.length) return null;
-            if (collabPreferredMasterId && aliveIds.includes(collabPreferredMasterId)) return collabPreferredMasterId;
-            if (preferredId && aliveIds.includes(preferredId)) return preferredId;
-            return [...aliveIds].sort()[0];
-        }
-
-        function collabHasFreshPeer() {
-            const now = Date.now();
-            const hasPeer = Object.entries(collabPeers).some(([id, peer]) => id !== 'local' && (now - (peer.lastSeen || 0) < MASTER_LEASE_MS));
-            const heartbeatFresh = collabLastHeartbeat && (now - collabLastHeartbeat < COLLAB_HEARTBEAT_STALE_MS);
-            return collabActive && hasPeer && heartbeatFresh;
-        }
 
         function scheduleSessionFlush(reason) {
             clearTimeout(sessionFlushTimer);
@@ -539,22 +477,6 @@
                     sessionEndHoldTimer = null;
                 }
                 completeSession(reason);
-                return;
-            }
-            pendingSessionEndReason = reason;
-            if (collabHasFreshPeer()) {
-                appendSessionLog('session-lifecycle', `End deferred (${reason}) while peers active.`);
-                if (!sessionEndHoldTimer) {
-                    sessionEndHoldTimer = setInterval(() => {
-                        if (!collabHasFreshPeer()) {
-                            clearInterval(sessionEndHoldTimer);
-                            sessionEndHoldTimer = null;
-                            const pending = pendingSessionEndReason || reason;
-                            pendingSessionEndReason = null;
-                            requestSessionEnd(pending, false);
-                        }
-                    }, 3000);
-                }
                 return;
             }
             scheduleSessionFlush(reason);
@@ -590,144 +512,7 @@
             logSession(reason);
         }
 
-        function touchPeer(id, alias, meta = {}) {
-            if (!id) return;
-            const existing = collabPeers[id] || {};
-            const firstSeen = existing.firstSeen || meta.firstSeen || meta.ts || Date.now();
-            collabPeers[id] = {
-                ...existing,
-                ...meta,
-                alias: alias || existing.alias || id.slice(0, 6),
-                lastSeen: Date.now(),
-                firstSeen
-            };
-            if (id === 'local' || id === collabClientId) collabLocalLastSeen = Date.now();
-            updatePeerList();
-        }
-
-        function prunePeers() {
-            const now = Date.now();
-            let changed = false;
-            Object.entries(collabPeers).forEach(([id, peer]) => {
-                if (now - peer.lastSeen > 45000 && id !== 'local') {
-                    delete collabPeers[id];
-                    changed = true;
-                }
-            });
-            if (changed) updatePeerList();
-        }
-
-        function isManifestFresh(entry) {
-            if (!entry || !entry.ts) return false;
-            const ts = Number(entry.ts);
-            if (Number.isNaN(ts)) return false;
-            return Date.now() - ts < (MASTER_LEASE_MS + MASTER_STALE_GRACE_MS);
-        }
-
-        async function fetchManifestState(room) {
-            if (!COLLAB_MANIFEST_CSV || !room) return null;
-            try {
-                const r = await fetch(COLLAB_MANIFEST_CSV, { cache: 'no-store' });
-                if (!r.ok) return null;
-                const csv = (await r.text()).trim();
-                if (!csv) return null;
-                const lines = csv.split(/\r?\n/).filter(Boolean);
-                if (!lines.length) return null;
-                const headers = lines.shift().split(',').map(h => h.trim().toLowerCase());
-                const idxRoom = headers.indexOf('room');
-                const idxMaster = headers.indexOf('master');
-                const idxTs = headers.indexOf('ts');
-                const idxStatus = headers.indexOf('status');
-                if (idxRoom === -1 || idxMaster === -1 || idxTs === -1) return null;
-                let latest = null;
-                lines.forEach(line => {
-                    const parts = line.split(',');
-                    const lineRoom = (parts[idxRoom] || '').trim().toLowerCase();
-                    if (!lineRoom || lineRoom !== room.toLowerCase()) return;
-                    const candidate = {
-                        room: lineRoom,
-                        master: (parts[idxMaster] || '').trim(),
-                        ts: Number(parts[idxTs]),
-                        status: idxStatus >= 0 ? (parts[idxStatus] || '').trim() : 'unknown'
-                    };
-                    if (!candidate.master || Number.isNaN(candidate.ts)) return;
-                    if (!latest || candidate.ts > latest.ts) latest = candidate;
-                });
-                return latest;
-            } catch (e) {
-                console.warn('manifest fetch failed', e);
-                return null;
-            }
-        }
-
-        async function publishManifest(masterId, status = 'active') {
-            if (!COLLAB_MANIFEST_FORM_URL) return;
-            try {
-                const fd = new FormData();
-                const roomField = COLLAB_MANIFEST_FORM_FIELDS.room;
-                const masterField = COLLAB_MANIFEST_FORM_FIELDS.master;
-                const tsField = COLLAB_MANIFEST_FORM_FIELDS.ts;
-                const statusField = COLLAB_MANIFEST_FORM_FIELDS.status;
-                if (roomField) fd.append(roomField, collabSessionKey || 'garden');
-                if (masterField) fd.append(masterField, masterId || '');
-                if (tsField) fd.append(tsField, Date.now());
-                if (statusField) fd.append(statusField, status);
-                await fetch(COLLAB_MANIFEST_FORM_URL, { method: 'POST', mode: 'no-cors', body: fd, keepalive: true });
-                appendSessionLog('manifest', `Manifest updated (${status}).`, { skipLog: !collabActive });
-            } catch (e) {
-                console.warn('manifest publish failed', e);
-            }
-        }
-
-        async function refreshMasterFromManifest(reason = 'manual') {
-            if (!collabActive || !collabSessionKey) return false;
-            const entry = await fetchManifestState(collabSessionKey);
-            if (entry && entry.master && isManifestFresh(entry)) {
-                adoptMaster(entry.master, entry.ts);
-                appendSessionLog('collab', `Adopted manifest master (${reason}).`, { skipLog: !collabActive });
-                return true;
-            }
-            return false;
-        }
-
-        async function resolveMasterClaim(reason = 'timer') {
-            if (collabMasterId) return;
-            const adopted = await refreshMasterFromManifest(reason);
-            if (adopted) return;
-            const elected = electMaster(collabPreferredMasterId || collabClientId);
-            if (elected && elected !== collabMasterId) {
-                adoptMaster(elected, Date.now(), null, reason);
-                if (collabIsMaster) emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
-                return;
-            }
-            if (!collabMasterId) {
-                claimMasterRole();
-                publishManifest(collabMasterId, 'active');
-            }
-        }
-
-        function updatePeerList() {
-            if (!collabPeersEl) return;
-            collabPeersEl.innerHTML = `<p class="font-semibold text-slate-700 text-xs">Room Participants</p>`;
-            const peers = Object.entries(collabPeers).sort((a,b) => (a[1].alias || a[0]).localeCompare(b[1].alias || b[0]));
-            if (!peers.length) {
-                const p = document.createElement('p');
-                p.className = 'text-slate-400';
-                p.textContent = 'Not connected';
-                collabPeersEl.appendChild(p);
-                return;
-            }
-            peers.forEach(([id, peer]) => {
-                const row = document.createElement('div');
-                row.className = 'flex items-center justify-between text-[10px] text-slate-600';
-                const badge = peer.master ? 'Master' : 'Guest';
-                row.innerHTML = `<span class="font-semibold ${id==='local'?'text-emerald-700':''}">${peer.alias || id.slice(0,6)}</span><span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">${badge}</span>`;
-                collabPeersEl.appendChild(row);
-            });
-        }
-
         renderSessionLog();
-        setInterval(prunePeers, 10000);
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
         setPipelineStatus('Idle');
 
@@ -1185,286 +970,284 @@
 
         // --- 4. Input Handling ---
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
-        let lastCollabDragEmit = 0;
+        let lastSyncDragEmit = 0;
         const DOUBLE_TAP_WINDOW = 240; // tighten window to avoid false doubles
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
-        const PERSISTED_SESSION_KEY = 'garden_session_key';
-        const PERSISTED_MASTER_ID_KEY = 'garden_master_id';
-        const PERSISTED_CLIENT_ID_KEY = 'garden_client_id';
-        const PERSISTED_SESSION_TS_KEY = 'garden_session_ts';
-        const PERSISTED_ALIAS_KEY = 'garden_alias';
-        function loadPersistedSessionState() {
-            try {
-                const key = localStorage.getItem(PERSISTED_SESSION_KEY) || '';
-                const masterId = localStorage.getItem(PERSISTED_MASTER_ID_KEY) || '';
-                const clientId = localStorage.getItem(PERSISTED_CLIENT_ID_KEY) || '';
-                const tsRaw = localStorage.getItem(PERSISTED_SESSION_TS_KEY);
-                const ts = tsRaw ? Number(tsRaw) : 0;
-                return { key, masterId, clientId, ts };
-            } catch (e) {
-                return { key: '', masterId: '', clientId: '', ts: 0 };
+        const syncClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+        const SESSION_KEY_PARAM = 'session';
+        const p2pStatusEl = document.getElementById('p2p-status');
+        const p2pSessionEl = document.getElementById('p2p-session');
+        const p2pShareEl = document.getElementById('p2p-share-url');
+        const p2pCopyEl = document.getElementById('p2p-copy-url');
+        const p2pNewBtn = document.getElementById('p2p-new-session');
+
+        const p2p = {
+            clientId: syncClientId,
+            session: '',
+            topic: '',
+            baseHost: 'ntfy.sh',
+            ws: null,
+            source: null,
+            wsForceFallback: false,
+            wsFailures: 0,
+            reconnectTimer: null,
+            wsConnectTimer: null,
+            lastSeenTs: 0,
+            lastSeenId: null,
+            ready: false,
+            fastMode: false,
+            lastStateRequestId: ''
+        };
+
+        function formatNowWithMs() {
+            const d = new Date();
+            return `${d.toLocaleTimeString([], { hour12: false })}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+        }
+
+        function setP2PStatus(text, tone = 'retry') {
+            if (p2pStatusEl) {
+                p2pStatusEl.textContent = text;
+                p2pStatusEl.className = 'text-[10px] px-2 py-1 rounded-full';
+                if (tone === 'ok') p2pStatusEl.classList.add('bg-emerald-100','text-emerald-700','border','border-emerald-200');
+                else if (tone === 'error') p2pStatusEl.classList.add('bg-red-100','text-red-700','border','border-red-200');
+                else p2pStatusEl.classList.add('bg-slate-200','text-slate-600');
             }
-        }
-        let persistedSessionState = loadPersistedSessionState();
-        const collabClientId = persistedSessionState.clientId || (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
-        function persistClientId(id) {
-            try {
-                localStorage.setItem(PERSISTED_CLIENT_ID_KEY, id);
-                if (!persistedSessionState) persistedSessionState = {};
-                persistedSessionState.clientId = id;
-            } catch (e) {}
-        }
-        persistClientId(collabClientId);
-        function loadPersistedAlias() {
-            try {
-                return localStorage.getItem(PERSISTED_ALIAS_KEY) || '';
-            } catch (e) {
-                return '';
-            }
-        }
-        function persistAlias(alias) {
-            try {
-                localStorage.setItem(PERSISTED_ALIAS_KEY, alias);
-            } catch (e) {}
-        }
-        let collabAlias = 'wired';
-        const urlAlias = new URLSearchParams(window.location.search || '').get('name') || new URLSearchParams((window.location.hash || '').replace(/^#/, '')).get('name');
-        const storedAlias = loadPersistedAlias();
-        if (urlAlias && urlAlias.trim()) collabAlias = urlAlias.trim();
-        else if (storedAlias && storedAlias.trim()) collabAlias = storedAlias.trim();
-        else collabAlias = 'wired';
-        persistAlias(collabAlias);
-        const collabSessionId = `${collabClientId}-${Date.now().toString(36)}`;
-        const SESSION_KEY_PARAM = 'sessionKey';
-        const SESSION_KEY_LENGTH = 7;
-        const SESSION_EXPIRY_MS = 45 * 60 * 1000;
-        const SESSION_INACTIVITY_MS = 30 * 60 * 1000;
-        let collabActive = false, collabTopic = null, collabSource = null;
-        let collabLastHeartbeat = 0;
-        let collabSessionKey = '';
-        let collabSeq = 0;
-        let collabReady = false;
-        let collabReconnectTimer = null;
-        let collabBackoffMs = 1000;
-        const collabQueue = [];
-        const lastSeqBySender = {};
-        let collabLocalLastSeen = Date.now();
-        let collabMasterId = null;
-        let collabMasterTs = null;
-        let collabMasterClaimTimer = null;
-        let collabPreferredMasterId = persistedSessionState?.masterId || null;
-        let collabRoleSanityTimer = null;
-        let collabJoinTs = 0;
-        let collabIsMaster = false;
-        let collabHeartbeat = null;
-        let collabHostNonce = '';
-        let collabHostBroadcastToken = '';
-        let collabClientNonce = '';
-        let collabSessionToken = '';
-        const liveSessionRegistry = {};
-        const collabRoleIndicator = document.getElementById('collab-role-indicator');
-        const collabStartBtn = document.getElementById('collab-start-session');
-        const collabRequestBtn = document.getElementById('collab-request-new');
-        const collabStateBanner = document.getElementById('collab-state-banner');
-        const collabRunTestsBtn = document.getElementById('collab-run-tests');
-        const collabTestOutput = document.getElementById('collab-test-output');
-
-        touchPeer('local', collabAlias, { master: false, alias: collabAlias });
-
-        function resetCollabRetryState() {
-            collabBackoffMs = 1000;
-            if (collabReconnectTimer) {
-                clearTimeout(collabReconnectTimer);
-                collabReconnectTimer = null;
-            }
+            setPipelineStatus(text, tone === 'ok' ? 'success' : tone === 'error' ? 'error' : 'warn');
         }
 
-        function updateLocalAlias(nextAlias, options = { silent: false }) {
-            const trimmed = (nextAlias || '').trim() || 'wired';
-            collabAlias = trimmed;
-            persistAlias(collabAlias);
-            touchPeer('local', collabAlias, { alias: collabAlias, master: collabIsMaster });
-            if (!options.silent) {
-                appendSessionLog('collab', `Name set to ${collabAlias}.`);
-                announcePresence('alias', { alias: collabAlias });
-                updateShareLink(collabSessionKey);
-                if (collabSessionKey) setCollabUrl(collabSessionKey);
-            }
+        function randomSession() {
+            return `gift-${Math.random().toString(36).slice(2, 8)}`;
         }
 
-        function updateCollabRoleLabel(text, intent = 'neutral') {
-            if (!collabRoleIndicator) return;
-            collabRoleIndicator.textContent = text;
-            collabRoleIndicator.classList.remove('text-emerald-700', 'text-amber-700', 'text-gray-500');
-            if (intent === 'master') collabRoleIndicator.classList.add('text-emerald-700');
-            else if (intent === 'sub') collabRoleIndicator.classList.add('text-amber-700');
-            else collabRoleIndicator.classList.add('text-gray-500');
-            if (collabPeers.local) {
-                collabPeers.local.master = intent === 'master';
-                updatePeerList();
-            }
-        }
-
-        function updateCollabStateBanner(text, tone = 'muted') {
-            if (!collabStateBanner) return;
-            collabStateBanner.textContent = text;
-            collabStateBanner.className = 'text-[11px] px-3 py-2 rounded-lg border';
-            if (tone === 'success') collabStateBanner.classList.add('text-emerald-700','bg-emerald-50','border-emerald-200');
-            else if (tone === 'warn') collabStateBanner.classList.add('text-amber-700','bg-amber-50','border-amber-200');
-            else if (tone === 'error') collabStateBanner.classList.add('text-red-700','bg-red-50','border-red-200');
-            else collabStateBanner.classList.add('text-slate-700','bg-slate-50','border-slate-200');
-        }
-
-        function generateSessionKey(length = SESSION_KEY_LENGTH) {
-            const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let out = '';
-            crypto.getRandomValues(new Uint32Array(length)).forEach(v => out += alphabet[v % alphabet.length]);
-            return out;
-        }
-
-        function maskKey(key) {
-            if (!key) return '—';
-            if (key.length <= 4) return `${key[0]}***${key.slice(-1)}`;
-            return `${key.slice(0,2)}***${key.slice(-2)}`;
-        }
-
-        function parseSessionKeyFromLocation(loc = window.location) {
-            try {
-                const params = new URLSearchParams(loc.search || '');
-                const hashParams = new URLSearchParams((loc.hash || '').replace(/^#/, ''));
-                return (params.get(SESSION_KEY_PARAM) || hashParams.get(SESSION_KEY_PARAM) || '').trim();
-            } catch (e) {
-                return '';
-            }
-        }
-
-        function buildShareLink(sessionKey, alias = collabAlias) {
+        function buildShareLink(session) {
             const url = new URL(window.location.href);
-            url.searchParams.delete('room');
-            url.searchParams.delete('r');
-            url.searchParams.set(SESSION_KEY_PARAM, sessionKey);
-            if (alias) url.searchParams.set('name', alias);
-            else url.searchParams.delete('name');
+            url.searchParams.set(SESSION_KEY_PARAM, session);
+            if (p2p.fastMode) url.searchParams.set('fast', '1');
+            else url.searchParams.delete('fast');
             return url.toString();
         }
 
-        function persistSessionStateSnapshot({ key = collabSessionKey, masterId = collabMasterId } = {}) {
+        function resolveSession() {
+            const url = new URL(window.location.href);
+            const urlSession = (url.searchParams.get(SESSION_KEY_PARAM) || '').trim();
+            const urlHost = (url.searchParams.get('host') || '').trim();
+            p2p.fastMode = url.searchParams.get('fast') === '1';
+            if (urlHost) p2p.baseHost = urlHost.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            p2p.session = urlSession || randomSession();
+            url.searchParams.set(SESSION_KEY_PARAM, p2p.session);
+            if (urlHost) url.searchParams.set('host', p2p.baseHost);
+            if (p2p.fastMode) url.searchParams.set('fast', '1');
+            history.replaceState(null, '', url.toString());
+            p2p.topic = `gift-sync-${p2p.session}`;
+            if (p2pSessionEl) p2pSessionEl.value = p2p.session;
+            const share = buildShareLink(p2p.session);
+            if (p2pShareEl) {
+                p2pShareEl.textContent = share;
+                p2pShareEl.dataset.url = share;
+            }
+        }
+
+        function copyShareUrl() {
+            const value = p2pShareEl?.dataset.url || '';
+            if (!value) return;
+            navigator.clipboard?.writeText(value).then(() => setP2PStatus('URL copied', 'ok')).catch(() => setP2PStatus('Copy failed', 'error'));
+        }
+
+        const baseHttp = () => `https://${p2p.baseHost}`;
+        const baseWs = () => `wss://${p2p.baseHost}`;
+
+        function addSyncLog(direction, text, latencyMs = null) {
+            const latencyLabel = latencyMs == null ? '' : ` • +${latencyMs}ms`;
+            appendSessionLog(direction, `${text} (${formatNowWithMs()}${latencyLabel})`);
+        }
+
+        function sendSync(type, value = {}) {
+            if (!p2p.session || !p2p.topic) return;
+            const ts = Date.now();
+            const payload = { session: p2p.session, type, value, ts, clientId: p2p.clientId };
+            addSyncLog('you', `${type}: ${JSON.stringify(value)}`);
+            fetch(`${baseHttp()}/${p2p.topic}`, {
+                method: 'POST',
+                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' }
+            }).catch(() => setP2PStatus('Send failed', 'error'));
+        }
+
+        function applyStateSnapshot(state = {}) {
+            if (state.background) applyBackgroundStateFromPeer(state.background);
+            if (typeof state.themeIndex === 'number') config.currentThemeIndex = state.themeIndex % themes.length;
+            if (typeof state.audioEnabled === 'boolean') {
+                ZenAudio.enabled = state.audioEnabled;
+                const audioToggle = document.getElementById('audio-toggle');
+                if (audioToggle) audioToggle.checked = ZenAudio.enabled;
+            }
+            if (state.customWords) {
+                config.customWords = Array.isArray(state.customWords) ? state.customWords : [];
+                const cBox = document.getElementById('custom-words');
+                if (cBox) cBox.value = config.customWords.join(',');
+            }
+            if (state.trail) config.currentTrail = state.trail;
+        }
+
+        function getStateSnapshot() {
+            return {
+                background: getBackgroundStatePayload(),
+                themeIndex: config.currentThemeIndex,
+                audioEnabled: ZenAudio.enabled,
+                customWords: config.customWords,
+                trail: config.currentTrail
+            };
+        }
+
+        function handleSyncMessage({ payload, id, time }) {
+            if (!payload || payload.session !== p2p.session) return;
+            const fromSelf = payload.clientId && payload.clientId === p2p.clientId;
+            if (id && id === p2p.lastSeenId) return;
+            const ts = time ? time * 1000 : (payload.ts || Date.now());
+            const latencyMs = Math.max(0, Date.now() - ts);
+            if (!id && ts <= p2p.lastSeenTs) return;
+            p2p.lastSeenId = id || p2p.lastSeenId;
+            p2p.lastSeenTs = Math.max(p2p.lastSeenTs, ts);
+            if (!fromSelf) {
+                applySyncEvent(payload);
+                addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs);
+            } else {
+                addSyncLog('echo', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs);
+            }
+        }
+
+        function applySyncEvent(payload) {
+            const { type, value = {}, clientId } = payload;
+            if (type === 'tap') {
+                simulateTap(value.x, value.y, { silentSync: true, sharedWord: value.word, sharedVisual: value.visual, forceDouble: value.double });
+            } else if (type === 'drag') {
+                simulateDrag(value.x1, value.y1, value.x2, value.y2, { silentSync: true, sharedTrail: value.trail });
+            } else if (type === 'background') {
+                applyBackgroundStateFromPeer(value);
+            } else if (type === 'audio') {
+                ZenAudio.enabled = !!value.enabled;
+                const audioToggle = document.getElementById('audio-toggle');
+                if (audioToggle) audioToggle.checked = ZenAudio.enabled;
+            } else if (type === 'custom-words') {
+                config.customWords = Array.isArray(value.words) ? value.words : [];
+                const cBox = document.getElementById('custom-words');
+                if (cBox) cBox.value = config.customWords.join(',');
+            } else if (type === 'state-sync') {
+                if (value.target && value.target !== p2p.clientId) return;
+                applyStateSnapshot(value.state || {});
+            } else if (type === 'state-request') {
+                if (p2p.lastStateRequestId === value.requestId) return;
+                p2p.lastStateRequestId = value.requestId;
+                sendSync('state-sync', { state: getStateSnapshot(), target: clientId });
+            }
+        }
+
+        function handleSyncEnvelope(envelope) {
             try {
-                if (key) localStorage.setItem(PERSISTED_SESSION_KEY, key);
-                if (masterId) localStorage.setItem(PERSISTED_MASTER_ID_KEY, masterId);
-                else localStorage.removeItem(PERSISTED_MASTER_ID_KEY);
-                localStorage.setItem(PERSISTED_SESSION_TS_KEY, Date.now().toString());
-                persistClientId(collabClientId);
-                persistedSessionState = {
-                    key: key || '',
-                    masterId: masterId || '',
-                    clientId: collabClientId,
-                    ts: Date.now()
-                };
-            } catch (e) {
-                console.warn('persist session state failed', e);
-            }
-        }
-
-        function clearPersistedSessionState() {
-            try {
-                localStorage.removeItem(PERSISTED_SESSION_KEY);
-                localStorage.removeItem(PERSISTED_MASTER_ID_KEY);
-                localStorage.removeItem(PERSISTED_SESSION_TS_KEY);
-                persistedSessionState = { key: '', masterId: '', clientId: collabClientId, ts: 0 };
-            } catch (e) {}
-        }
-
-        function isPersistedSessionFresh(state = persistedSessionState) {
-            if (!state || !state.key || !state.ts) return false;
-            return (Date.now() - state.ts) < SESSION_EXPIRY_MS;
-        }
-
-        function updateShareLink(sessionKey, alias = collabAlias) {
-            if (!collabShareUrlEl) return;
-            if (!sessionKey) {
-                collabShareUrlEl.textContent = 'Waiting to generate...';
-                collabShareUrlEl.dataset.url = '';
-                return;
-            }
-            const shareUrl = buildShareLink(sessionKey, alias);
-            collabShareUrlEl.textContent = shareUrl;
-            collabShareUrlEl.dataset.url = shareUrl;
-        }
-
-        function requireSecureTransport() {
-            const protocol = window.location.protocol;
-            const host = window.location.hostname;
-            const isSecure = protocol === 'https:' || host === 'localhost' || host === '127.0.0.1';
-            if (!isSecure) {
-                updateCollabStateBanner('Secure transport required. Reload over HTTPS to enable sync.', 'error');
-            }
-            return isSecure;
-        }
-
-        function randomNonce(len = 12) {
-            return generateSessionKey(len);
-        }
-
-        async function deriveSessionToken(key, hostNonce, clientNonce) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(`${key}:${hostNonce}:${clientNonce}`);
-            const digest = await crypto.subtle.digest('SHA-256', data);
-            return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/=+$/g, '');
-        }
-
-        function buildHostBroadcastToken(key, hostNonce) {
-            return btoa(`${key}:${hostNonce}`).replace(/=+$/g, '');
-        }
-
-        function ensureHostSessionRecord(sessionKey) {
-            if (!sessionKey) return null;
-            if (!liveSessionRegistry[sessionKey]) {
-                liveSessionRegistry[sessionKey] = {
-                    key: sessionKey,
-                    hostNonce: collabHostNonce || randomNonce(10),
-                    createdAt: Date.now(),
-                    lastActivity: Date.now(),
-                    expiresAt: Date.now() + SESSION_EXPIRY_MS,
-                    clients: {}
-                };
-            }
-            return liveSessionRegistry[sessionKey];
-        }
-
-        function updateSessionActivity(sessionKey) {
-            const rec = liveSessionRegistry[sessionKey];
-            if (rec) rec.lastActivity = Date.now();
-        }
-
-        function sessionExpired(rec) {
-            if (!rec) return true;
-            const now = Date.now();
-            return now > rec.expiresAt || now - rec.lastActivity > SESSION_INACTIVITY_MS;
-        }
-
-        let collabExpiryMonitor = null;
-        function startExpiryMonitor() {
-            if (collabExpiryMonitor) clearInterval(collabExpiryMonitor);
-            collabExpiryMonitor = setInterval(() => {
-                const rec = liveSessionRegistry[collabSessionKey];
-                if (!rec) return;
-                if (sessionExpired(rec)) {
-                    handleSessionExpired('inactive/expired');
+                let payload = envelope;
+                if (typeof envelope.message === 'string') {
+                    try { payload = JSON.parse(envelope.message); }
+                    catch (e) { console.warn('payload parse error', e, envelope.message); }
+                } else if (envelope.message && typeof envelope.message === 'object') {
+                    payload = envelope.message;
                 }
-            }, 5000);
+                handleSyncMessage({ payload, id: envelope.id, time: envelope.time });
+            } catch (e) {
+                console.warn('parse error', e);
+            }
         }
 
-        function setCollabUrl(sessionKey, alias = collabAlias) {
-            history.replaceState(null, '', buildShareLink(sessionKey, alias));
+        function connectSse() {
+            if (!p2p.topic) return;
+            if (p2p.source) { p2p.source.close(); p2p.source = null; }
+            setP2PStatus('Connecting…', 'retry');
+            p2p.source = new EventSource(`${baseHttp()}/${p2p.topic}/sse`);
+            p2p.source.onopen = () => {
+                p2p.wsFailures = 0;
+                setP2PStatus('Connected (SSE)', 'ok');
+                p2p.ready = true;
+                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) });
+            };
+            p2p.source.onerror = () => {
+                setP2PStatus('Retrying…', 'warn');
+                if (p2p.source) { p2p.source.close(); p2p.source = null; }
+                p2p.reconnectTimer = setTimeout(connectSync, p2p.fastMode ? 250 : 400);
+            };
+            p2p.source.onmessage = evt => {
+                try {
+                    const envelope = JSON.parse(evt.data);
+                    handleSyncEnvelope(envelope);
+                } catch (e) {
+                    console.warn('parse error', e);
+                }
+            };
         }
 
-        function markCollabConnected(sessionKey, alias = collabAlias) {
-            updateShareLink(sessionKey, alias);
-            setCollabUrl(sessionKey, alias);
+        function connectWebSocket() {
+            if (!p2p.topic) return connectSse();
+            if (p2p.ws) { p2p.ws.close(); p2p.ws = null; }
+            setP2PStatus('Connecting…', 'retry');
+            p2p.ws = new WebSocket(`${baseWs()}/ws`);
+            clearTimeout(p2p.wsConnectTimer);
+            const WS_GRACE_MS = p2p.fastMode ? 300 : 500;
+            p2p.wsConnectTimer = setTimeout(() => {
+                p2p.wsForceFallback = true;
+                try { p2p.ws?.close(); } catch (_) {}
+            }, WS_GRACE_MS);
+            p2p.ws.onopen = () => {
+                p2p.wsFailures = 0;
+                clearTimeout(p2p.wsConnectTimer);
+                setP2PStatus('Connected (WS)', 'ok');
+                p2p.ws.send(JSON.stringify({ action: 'subscribe', topics: [p2p.topic] }));
+                p2p.ready = true;
+                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) });
+            };
+            p2p.ws.onmessage = evt => {
+                try {
+                    const envelope = JSON.parse(evt.data);
+                    if (envelope.event === 'message') handleSyncEnvelope(envelope);
+                } catch (e) {
+                    console.warn('ws parse error', e);
+                }
+            };
+            p2p.ws.onerror = () => {
+                p2p.wsFailures += 1;
+                p2p.wsForceFallback = p2p.wsFailures >= 2;
+                clearTimeout(p2p.wsConnectTimer);
+                setP2PStatus('Retrying…', 'warn');
+            };
+            p2p.ws.onclose = () => {
+                p2p.ws = null;
+                clearTimeout(p2p.wsConnectTimer);
+                const WS_RETRY_MS = p2p.fastMode ? 120 : 200;
+                p2p.reconnectTimer = setTimeout(connectSync, p2p.wsForceFallback ? 0 : WS_RETRY_MS);
+            };
         }
 
-        function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false } = {}) {
+        function connectSync() {
+            clearTimeout(p2p.reconnectTimer);
+            if ('WebSocket' in window && !p2p.wsForceFallback) connectWebSocket();
+            else connectSse();
+        }
+
+        function resetSyncSession() {
+            const fresh = randomSession();
+            const url = new URL(window.location.href);
+            url.searchParams.set(SESSION_KEY_PARAM, fresh);
+            history.replaceState(null, '', url.toString());
+            resolveSession();
+            p2p.wsForceFallback = false;
+            p2p.wsFailures = 0;
+            connectSync();
+        }
+
+        if (p2pCopyEl) p2pCopyEl.addEventListener('click', copyShareUrl);
+        if (p2pNewBtn) p2pNewBtn.addEventListener('click', resetSyncSession);
+
+        resolveSession();
+        connectSync();
+
+        function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false, silentSync = false } = {}) {
             if (!dataUrl) return false;
             let persisted = true;
             currentBgData = dataUrl;
@@ -1479,462 +1262,31 @@
             const img = new Image();
             img.onload = ()=>{config.backgroundImage=img;config.useGradient=false;};
             img.src = dataUrl;
+            if (!silentSync) sendSync('background', getBackgroundStatePayload());
             return persisted;
         }
 
-        function resetBackgroundToGradient({ persist = true } = {}) {
+        function resetBackgroundToGradient({ persist = true, silentSync = false } = {}) {
             if (persist) localStorage.removeItem('garden_bg');
             currentBgData = null;
             config.useGradient = true;
             config.backgroundImage = null;
+            if (!silentSync) sendSync('background', getBackgroundStatePayload());
         }
 
         function getBackgroundStatePayload() {
             return {
                 useGradient: config.useGradient,
                 imageData: config.useGradient ? null : currentBgData,
-                masterId: collabMasterId || collabClientId,
                 ts: Date.now()
             };
         }
 
-        function applyBackgroundStateFromMaster(payload) {
+        function applyBackgroundStateFromPeer(payload) {
             if (!payload) return;
-            if (payload.useGradient || !payload.imageData) resetBackgroundToGradient();
-            else setBackgroundImageFromData(payload.imageData);
-            appendSessionLog('background', payload.useGradient ? 'Gradient restored from master.' : 'Background synced from master.');
-        }
-
-        function broadcastBackgroundUpdate(targetId = null) {
-            if (!collabActive || !collabIsMaster) return;
-            emitCollabEvent('bg-update', { ...getBackgroundStatePayload(), target: targetId });
-        }
-
-        function claimMasterRole() {
-            const elected = electMaster(collabClientId);
-            if (elected && elected !== collabClientId) {
-                adoptMaster(elected, Date.now(), null, 'election-defers-claim');
-                return;
-            }
-            collabIsMaster = true;
-            collabMasterId = collabClientId;
-            collabPreferredMasterId = collabClientId;
-            collabMasterTs = collabJoinTs || Date.now();
-            updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
-            collabHostNonce = collabHostNonce || randomNonce(12);
-            collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
-            ensureHostSessionRecord(collabSessionKey);
-            touchPeer('local', collabAlias, { master: true, alias: collabAlias });
-            reconcilePeerMasterFlags();
-            persistSessionStateSnapshot({ masterId: collabMasterId });
-            appendSessionLog('collab', `Assumed host role for session ${maskKey(collabSessionKey) || '—'}.`);
-            emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
-            publishManifest(collabMasterId, 'active');
-        }
-
-        function adoptMaster(masterId, ts, background, reason = 'announce') {
-            const incomingTs = ts || Date.now();
-            if (masterId && !collabPeers[masterId]) {
-                touchPeer(masterId, masterId.slice(0,6), { master: true, ts: incomingTs, firstSeen: incomingTs });
-            }
-            const elected = electMaster(masterId);
-            if (!elected) return;
-            const previousMaster = collabMasterId;
-            const demoting = collabIsMaster && elected !== collabClientId;
-            if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
-            if (collabRoleSanityTimer) clearTimeout(collabRoleSanityTimer);
-            collabMasterId = elected;
-            collabPreferredMasterId = elected;
-            collabMasterTs = incomingTs;
-            collabIsMaster = elected === collabClientId;
-            if (collabIsMaster) {
-                updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey) || '—'})`, 'master');
-                collabHostNonce = collabHostNonce || randomNonce(12);
-                collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
-                ensureHostSessionRecord(collabSessionKey);
-                touchPeer('local', collabAlias, { master: true, alias: collabAlias });
-                publishManifest(collabMasterId, 'active');
-            } else {
-                updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey) || '—'})`, 'sub');
-                touchPeer('local', collabAlias, { master: false, alias: collabAlias });
-            }
-            reconcilePeerMasterFlags();
-            if (demoting && previousMaster && previousMaster !== collabMasterId) {
-                appendSessionLog('collab', `Detected lower master ${collabMasterId.slice(0,6)}; demoting to guest.`, { skipLog: !collabActive });
-            }
-            appendSessionLog('collab', `Master set to ${collabMasterId.slice(0,6)} for session ${maskKey(collabSessionKey) || '—'} (${reason}).`, { skipLog: !collabActive });
-            persistSessionStateSnapshot({ masterId: collabMasterId });
-            if (!collabIsMaster) {
-                if (background) {
-                    applyBackgroundStateFromMaster(background);
-                } else {
-                    requestBackgroundFromMaster();
-                }
-            }
-        }
-
-        function scheduleMasterClaim() {
-            if (collabMasterClaimTimer) clearTimeout(collabMasterClaimTimer);
-            collabMasterClaimTimer = setTimeout(() => {
-                resolveMasterClaim('negotiation');
-                runRoleSanityCheck('sanity-claim');
-            }, MASTER_NEGOTIATION_MS);
-        }
-
-        function startRoleSanityWatchdog(reason = 'connect') {
-            if (collabRoleSanityTimer) clearTimeout(collabRoleSanityTimer);
-            collabRoleSanityTimer = setTimeout(() => runRoleSanityCheck(reason), 1800);
-        }
-
-        function runRoleSanityCheck(reason = 'sanity') {
-            if (!collabActive) return;
-            const elected = electMaster(collabMasterId || collabPreferredMasterId || collabClientId);
-            if (!collabMasterId) {
-                adoptMaster(elected || collabClientId, Date.now(), null, reason);
-                emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
-                return;
-            }
-            if (elected && elected !== collabMasterId) {
-                adoptMaster(elected, Date.now(), null, reason);
-            }
-        }
-
-        function requestBackgroundFromMaster() {
-            if (!collabActive || collabIsMaster || !collabMasterId) return;
-            emitCollabEvent('bg-request', { target: collabMasterId, requester: collabClientId });
-        }
-
-        function flushCollabQueue() {
-            if (!collabReady || !collabQueue.length || !collabTopic) return;
-            const evt = collabQueue.shift();
-            const body = JSON.stringify(evt);
-            fetch(`https://ntfy.sh/${collabTopic}`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Title': 'garden-collab' } })
-                .then(() => { if (collabQueue.length) setTimeout(flushCollabQueue, 20); })
-                .catch(() => { collabQueue.unshift(evt); collabReady = false; scheduleCollabReconnect(); });
-        }
-
-        function emitCollabEvent(kind, payload={}) {
-            if (!collabActive || !collabTopic || payload.silentCollab) return;
-            const event = { kind, ...payload, sender: collabClientId, alias: payload.alias || collabAlias, session: collabSessionId, room: collabSessionKey, seq: ++collabSeq, ts: Date.now(), token: collabIsMaster ? collabHostBroadcastToken : collabSessionToken };
-            if (collabIsMaster) updateSessionActivity(collabSessionKey);
-            collabQueue.push(event);
-            flushCollabQueue();
-        }
-
-        function scheduleCollabReconnect() {
-            if (collabReconnectTimer || !collabActive) return;
-            collabReconnectTimer = setTimeout(() => {
-                collabReconnectTimer = null;
-                collabBackoffMs = Math.min(collabBackoffMs * 1.6, 15000);
-                updateCollabStateBanner('Reconnecting to session...', 'warn');
-                openCollabStream();
-            }, collabBackoffMs);
-        }
-
-        function announcePresence(status = 'join', extra = {}) {
-            emitCollabEvent('presence', { status, alias: collabAlias, masterId: collabMasterId, ...extra });
-        }
-
-        function handleSessionExpired(reason = 'expired') {
-            if (!collabSessionKey) return;
-            collabActive = false;
-            collabReady = false;
-            collabIsMaster = false;
-            collabSessionToken = '';
-            collabHostBroadcastToken = '';
-            collabHostNonce = '';
-            collabLastHeartbeat = 0;
-            resetCollabRetryState();
-            if (collabSource) { collabSource.close(); collabSource = null; }
-            updateCollabRoleLabel('Role: Key expired — request a new link', 'neutral');
-            updateCollabStateBanner('Key expired — request a new session link.', 'warn');
-            appendSessionLog('collab', `Session expired (${reason}). Key masked: ${maskKey(collabSessionKey)}`);
-            if (collabRequestBtn) collabRequestBtn.disabled = false;
-            collabSessionKey = '';
-            clearPersistedSessionState();
-            updateShareLink('');
-            setTimeout(() => {
-                if (collabRequestBtn) collabRequestBtn.click();
-            }, 800);
-        }
-
-        function handleCollabRejection(reason = 'session-rejected') {
-            updateCollabStateBanner('Session expired—start new link', 'error');
-            appendSessionLog('collab', `Session rejected (${reason}).`);
-            resetCollabRetryState();
-            collabActive = false;
-            if (collabSource) { collabSource.close(); collabSource = null; }
-            collabReady = false;
-            collabLastHeartbeat = 0;
-            const urlKey = parseSessionKeyFromLocation();
-            const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
-            const fallbackKey = urlKey || collabSessionKey || persistedKey;
-            if (/expired|invalid/i.test(reason)) {
-                clearPersistedSessionState();
-                startHostSession('sse-rejected');
-                return;
-            }
-            if (fallbackKey) {
-                joinSessionFromLink(fallbackKey);
-            } else {
-                startHostSession('sse-rejected');
-            }
-        }
-
-        async function startHostSession(reason = 'manual') {
-            if (!requireSecureTransport()) return;
-            resetCollabRetryState();
-            collabLastHeartbeat = 0;
-            collabSessionKey = generateSessionKey();
-            collabHostNonce = randomNonce(10);
-            collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce);
-            collabIsMaster = true;
-            collabMasterId = collabClientId;
-            collabMasterTs = Date.now();
-            collabPreferredMasterId = collabMasterId;
-            collabSessionToken = '';
-            ensureHostSessionRecord(collabSessionKey);
-            updateCollabRoleLabel(`Role: Host (key ${maskKey(collabSessionKey)})`, 'master');
-            updateCollabStateBanner('Waiting for connections. Share the link.', 'warn');
-            markCollabConnected(collabSessionKey);
-            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
-            connectCollab(collabSessionKey, { asHost: true, reason });
-            startExpiryMonitor();
-        }
-
-        async function joinSessionFromLink(sessionKey) {
-            if (!sessionKey) {
-                updateCollabStateBanner('Key missing. Request a new session.', 'error');
-                return;
-            }
-            if (!requireSecureTransport()) return;
-            resetCollabRetryState();
-            collabLastHeartbeat = 0;
-            collabSessionKey = sessionKey;
-            collabIsMaster = false;
-            collabMasterId = null;
-            collabMasterTs = null;
-            collabPreferredMasterId = persistedSessionState?.masterId || null;
-            collabHostNonce = '';
-            collabSessionToken = '';
-            updateCollabRoleLabel(`Role: Guest (key ${maskKey(collabSessionKey)})`, 'sub');
-            updateCollabStateBanner('Joining session...', 'warn');
-            markCollabConnected(collabSessionKey);
-            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
-            connectCollab(collabSessionKey, { asHost: false, reason: 'guest-link' });
-        }
-
-        function openCollabStream() {
-            if (!collabTopic) return;
-            if (collabSource) collabSource.close();
-            collabReady = false;
-            collabSource = new EventSource(`https://ntfy.sh/${collabTopic}/sse`);
-            collabSource.onopen = () => {
-                collabReady = true;
-                resetCollabRetryState();
-                collabLastHeartbeat = Date.now();
-                collabBackoffMs = 1000;
-                updateCollabStateBanner(collabIsMaster ? 'Waiting for connections (link active)' : 'Negotiating secure handshake...', collabIsMaster ? 'warn' : 'muted');
-                if (collabIsMaster) {
-                    collabSessionToken = collabHostBroadcastToken;
-                    announcePresence('join', { hostNonce: collabHostNonce });
-                    scheduleMasterClaim();
-                } else {
-                    collabClientNonce = randomNonce(10);
-                    emitCollabEvent('handshake-request', { key: collabSessionKey, clientNonce: collabClientNonce });
-                }
-                startRoleSanityWatchdog('sse-open');
-                flushCollabQueue(); // resync any buffered actions
-            };
-            collabSource.onerror = () => {
-                collabReady = false;
-                scheduleCollabReconnect();
-            };
-            collabSource.onmessage = evt => {
-                try {
-                    collabLastHeartbeat = Date.now();
-                    const data = JSON.parse(evt.data || '{}');
-                    const rejection = (() => {
-                        if (!data) return false;
-                        const eventType = (data.event || '').toString().toLowerCase();
-                        const code = Number(data.code);
-                        const textFields = [data.message, data.error, data.info, data.title].filter(Boolean).map(v => v.toString().toLowerCase()).join(' ');
-                        const rejectionTokens = ['unauthorized', 'forbidden', 'denied', 'expired', 'invalid token', 'bad token', 'invalid session'];
-                        if (eventType === 'error' || eventType === 'reject' || eventType === 'close') return true;
-                        if (!Number.isNaN(code) && (code === 401 || code === 403)) return true;
-                        return rejectionTokens.some(token => textFields.includes(token));
-                    })();
-                    if (rejection) {
-                        handleCollabRejection(data.message || data.error || data.event || 'sse-rejected');
-                        return;
-                    }
-                    if (!data.message) return;
-                    const msg = JSON.parse(data.message);
-                    if (msg.sender === collabClientId || msg.session === collabSessionId) return;
-                    if (msg.room && msg.room !== collabSessionKey) return;
-                    applyRemoteEvent(msg);
-                } catch(e) { console.warn('collab parse error', e); }
-            };
-        }
-
-        function connectCollab(sessionKey, { asHost = false, reason = 'manual' } = {}) {
-            const key = (sessionKey || '').trim();
-            if (!key) {
-                updateCollabStateBanner('Missing session key. Request a new link.', 'error');
-                return;
-            }
-            resetCollabRetryState();
-            collabLastHeartbeat = 0;
-            if (collabSource) { collabSource.close(); collabSource = null; }
-            collabSessionKey = key;
-            collabTopic = `garden-${collabSessionKey}`;
-            collabActive = true;
-            collabIsMaster = asHost;
-            collabMasterId = asHost ? collabClientId : null;
-            collabMasterTs = asHost ? Date.now() : null;
-            collabPreferredMasterId = collabMasterId || collabPreferredMasterId;
-            collabJoinTs = Date.now();
-            collabSeq = 0;
-            collabQueue.length = 0;
-            Object.keys(lastSeqBySender).forEach(k => delete lastSeqBySender[k]);
-            collabBackoffMs = 1000;
-            touchPeer('local', collabAlias, { master: asHost, alias: collabAlias });
-            updateCollabRoleLabel(asHost ? `Role: Host (key ${maskKey(collabSessionKey)})` : `Role: Guest (key ${maskKey(collabSessionKey)})`, asHost ? 'master' : 'sub');
-            appendSessionLog('collab', `${asHost ? 'Hosting' : 'Joining'} session ${maskKey(collabSessionKey)} (${reason}).`);
-            if (asHost) ensureHostSessionRecord(collabSessionKey);
-            persistSessionStateSnapshot({ key: collabSessionKey, masterId: collabMasterId });
-            startExpiryMonitor();
-            if (collabHeartbeat) clearInterval(collabHeartbeat);
-            collabHeartbeat = setInterval(() => announcePresence('ping'), 12000);
-            openCollabStream();
-        }
-
-        async function runSyncTests() {
-            const lines = [];
-            let duplicate = false;
-            const sampleKeys = new Set();
-            for (let i = 0; i < 300; i++) {
-                const k = generateSessionKey();
-                if (sampleKeys.has(k)) duplicate = true;
-                sampleKeys.add(k);
-            }
-            lines.push(`${duplicate ? '❌' : '✅'} Unique key generation (${sampleKeys.size} samples)`);
-            const inactiveRecord = { lastActivity: Date.now() - SESSION_INACTIVITY_MS - 2000, expiresAt: Date.now() + 1000 };
-            lines.push(`${sessionExpired(inactiveRecord) ? '✅' : '❌'} Expiration after inactivity window`);
-            const freshRecord = { lastActivity: Date.now(), expiresAt: Date.now() + SESSION_EXPIRY_MS };
-            lines.push(`${!sessionExpired(freshRecord) ? '✅' : '❌'} Valid session remains active`);
-            const key = 'TestKeyA';
-            const hostNonce = 'HostNonceX';
-            const clientNonce = 'ClientNonceY';
-            const goodToken = await deriveSessionToken(key, hostNonce, clientNonce);
-            const badToken = await deriveSessionToken(key + 'x', hostNonce, clientNonce);
-            lines.push(`${goodToken ? '✅' : '❌'} Handshake token derived`);
-            lines.push(`${goodToken !== badToken ? '✅' : '❌'} Handshake fails with wrong key`);
-            if (collabTestOutput) collabTestOutput.textContent = lines.join('\\n');
-        }
-
-        function applyRemoteEvent(msg) {
-            if (msg.target && msg.target !== collabClientId) return;
-            const seqKey = msg.session || msg.sender;
-            if (msg.seq) {
-                const lastSeq = lastSeqBySender[seqKey] || 0;
-                if (msg.seq <= lastSeq) return;
-                lastSeqBySender[seqKey] = msg.seq;
-            }
-            const alias = msg.alias || (msg.sender ? msg.sender.slice(0,6) : 'peer');
-            touchPeer(msg.sender, alias, { master: msg.masterId ? msg.sender === msg.masterId : msg.sender === collabMasterId });
-            if (msg.kind === 'handshake-request') {
-                if (!collabIsMaster) return;
-                const rec = ensureHostSessionRecord(collabSessionKey);
-                if (!rec || sessionExpired(rec) || msg.key !== collabSessionKey) {
-                    emitCollabEvent('handshake-failed', { reason: 'invalid-or-expired', target: msg.sender });
-                    return;
-                }
-                updateSessionActivity(collabSessionKey);
-                deriveSessionToken(collabSessionKey, rec.hostNonce, msg.clientNonce || '')
-                    .then(token => {
-                        rec.clients[msg.sender] = { token, clientNonce: msg.clientNonce, ts: Date.now() };
-                        emitCollabEvent('handshake-ack', { hostNonce: rec.hostNonce, masterId: collabMasterId, expiresAt: rec.expiresAt, target: msg.sender });
-                        updateCollabStateBanner('Client connected. Secure channel established.', 'success');
-                        appendSessionLog('collab', `Handshake accepted for ${alias}.`);
-                    })
-                    .catch(() => emitCollabEvent('handshake-failed', { reason: 'token-error', target: msg.sender }));
-                return;
-            }
-            if (msg.kind === 'handshake-ack') {
-                collabHostNonce = msg.hostNonce || collabHostNonce;
-                const announcedMaster = msg.masterId || msg.sender || collabMasterId;
-                collabHostBroadcastToken = buildHostBroadcastToken(collabSessionKey, collabHostNonce || '');
-                deriveSessionToken(collabSessionKey, collabHostNonce || '', collabClientNonce || '')
-                    .then(token => {
-                        collabSessionToken = token;
-                        adoptMaster(announcedMaster, msg.ts || Date.now(), msg.background, 'handshake');
-                        updateCollabStateBanner('Client connected. Session locked.', 'success');
-                        announcePresence('join', { hostNonce: collabHostNonce });
-                    })
-                    .catch(() => updateCollabStateBanner('Handshake token failed. Request new session.', 'error'));
-                return;
-            }
-            if (msg.kind === 'handshake-failed') {
-                handleSessionExpired(msg.reason || 'handshake-failed');
-                return;
-            }
-            if (collabIsMaster) {
-                const rec = liveSessionRegistry[collabSessionKey];
-                const clientRec = rec?.clients?.[msg.sender];
-                if (!clientRec || msg.token !== clientRec.token) return;
-                updateSessionActivity(collabSessionKey);
-            } else {
-                const expectedHostToken = collabHostBroadcastToken;
-                const expectedSession = collabSessionToken;
-                if (expectedHostToken && msg.sender === collabMasterId && msg.token !== expectedHostToken && msg.token !== expectedSession) {
-                    return;
-                }
-            }
-            if (msg.kind === 'tap') {
-                appendSessionLog('collab-tap', `${alias} tapped`, { skipLog: false });
-                simulateTap(msg.x, msg.y, { silentCollab: true, forceDouble: msg.double, sharedWord: msg.word, sharedVisual: msg.visual, skipTelemetry: true });
-            }
-            else if (msg.kind === 'drag') {
-                appendSessionLog('collab-drag', `${alias} dragged`, { skipLog: false });
-                simulateDrag(msg.x1, msg.y1, msg.x2, msg.y2, { silentCollab: true, sharedTrail: msg.trail, skipTelemetry: true });
-            }
-            else if (msg.kind === 'presence') {
-                if (msg.background) applyBackgroundStateFromMaster(msg.background);
-                if (collabIsMaster) {
-                    emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload(), target: msg.sender });
-                    broadcastBackgroundUpdate(msg.sender);
-                } else if (!collabMasterId && msg.masterId) {
-                    adoptMaster(msg.masterId, msg.ts, msg.background);
-                }
-                if (msg.status === 'join') appendSessionLog('collab', `${alias} joined session ${maskKey(collabSessionKey) || '—'}.`);
-            }
-            else if (msg.kind === 'master-announce') {
-                adoptMaster(msg.masterId || msg.sender, msg.ts, msg.background);
-                if (!msg.background) requestBackgroundFromMaster();
-            }
-            else if (msg.kind === 'master-ping') {
-                if (collabIsMaster) emitCollabEvent('master-announce', { masterId: collabMasterId, ts: collabMasterTs, background: getBackgroundStatePayload() });
-            }
-            else if (msg.kind === 'bg-request') {
-                if (collabIsMaster && (!msg.target || msg.target === collabMasterId)) broadcastBackgroundUpdate();
-            }
-            else if (msg.kind === 'bg-update') {
-                if (msg.target && msg.target !== collabClientId) return;
-                const senderMaster = msg.masterId || msg.sender;
-                if (!collabMasterId) adoptMaster(senderMaster, msg.ts, msg);
-                else if (senderMaster !== collabMasterId) {
-                    if (!collabMasterTs || (msg.ts && msg.ts < collabMasterTs)) adoptMaster(senderMaster, msg.ts, msg);
-                    else return;
-                }
-                applyBackgroundStateFromMaster(msg);
-            }
-            else if (msg.kind === 'audio-toggle') {
-                ZenAudio.enabled = !!msg.enabled;
-                const audioToggle = document.getElementById('audio-toggle');
-                if (audioToggle) audioToggle.checked = ZenAudio.enabled;
-                appendSessionLog('audio', `${alias} ${ZenAudio.enabled ? 'enabled' : 'muted'} audio.`, { skipLog: false });
-            }
+            if (payload.useGradient || !payload.imageData) resetBackgroundToGradient({ silentSync: true });
+            else setBackgroundImageFromData(payload.imageData, { silentSync: true });
+            appendSessionLog('background', payload.useGradient ? 'Gradient restored from peer.' : 'Background synced from peer.');
         }
 
         // Immediate Audio Wake Up
@@ -1979,9 +1331,9 @@
                     ZenAudio.playPluck(ZenAudio.scale[idx], 0.1); 
                     lastDragSound=Date.now(); 
                 }
-                if (!options.silentCollab && Date.now() - lastCollabDragEmit > 120) {
-                    emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, alias: collabAlias, silentCollab: options.silentCollab });
-                    lastCollabDragEmit = Date.now();
+                if (!options.silentSync && Date.now() - lastSyncDragEmit > 120) {
+                    sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType });
+                    lastSyncDragEmit = Date.now();
                 }
             }
         }
@@ -1993,7 +1345,7 @@
                 checkDragUnlock(now-dragStart); 
                 const trailType = options.sharedTrail || config.currentTrail;
                 if (!options.skipTelemetry) appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${trailType})`, options);
-                emitCollabEvent('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType, alias: collabAlias, silentCollab: options.silentCollab });
+                if (!options.silentSync) sendSync('drag', { x1: startX, y1: startY, x2: x, y2: y, trail: trailType });
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const freq = ZenAudio.scale[idx];
@@ -2027,10 +1379,10 @@
                     ZenAudio.playChord(idx);
                     if (!options.skipTelemetry) window.telemetryStats.drags++;
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} [double]`, options);
-                    emitCollabEvent('tap', { x, y, word: wordChoice, visual: visualKind, double: true, alias: collabAlias, silentCollab: options.silentCollab });
+                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: true });
                 } else {
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} (${visualKind})`, options);
-                    emitCollabEvent('tap', { x, y, word: wordChoice, visual: visualKind, double: false, alias: collabAlias, silentCollab: options.silentCollab });
+                    if (!options.silentSync) sendSync('tap', { x, y, word: wordChoice, visual: visualKind, double: false });
                 }
                 if (window.gardenRelaySend) window.gardenRelaySend('tap', { x: Math.round(x), y: Math.round(y), double: isDoubleTap, word: wordChoice });
                 lastTap = now;
@@ -2144,26 +1496,20 @@
 
         // --- 7. UI Logic ---
         const bgInput=document.getElementById('bg-upload-input');
-        const collabNameInput = document.getElementById('collab-name');
-        const collabNameShareBtn = document.getElementById('collab-name-share');
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
-            if (collabActive && !collabIsMaster) { alert("Background is controlled by the room master. Ask them to update it."); return; }
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
             const r=new FileReader(); 
             r.onload=e=>{ 
                 setBackgroundImageFromData(e.target.result, { notifyOnFail: true });
                 appendSessionLog('background', 'Applied custom background.');
-                broadcastBackgroundUpdate();
             }; 
             r.readAsDataURL(f);
         });
         
         document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
-            if (collabActive && !collabIsMaster) { alert("Only the room master can reset the background."); return; }
             resetBackgroundToGradient();
             appendSessionLog('background', 'Background reset to gradient.');
-            broadcastBackgroundUpdate();
         });
         if(currentBgData){ setBackgroundImageFromData(currentBgData, { persist: false }); }
 
@@ -2173,7 +1519,7 @@
         document.getElementById('audio-toggle').onchange=e=>{
             ZenAudio.enabled=e.target.checked;
             appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
-            emitCollabEvent('audio-toggle', { enabled: ZenAudio.enabled, alias: collabAlias });
+            sendSync('audio', { enabled: ZenAudio.enabled });
         };
         
         document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
@@ -2185,70 +1531,18 @@
             config.trailSpeed = speeds[val-1];
         };
         document.getElementById('speed-slider').oninput=e=>config.speedMultiplier=0.2+(e.target.value/100)*1.8;
-        if (collabNameInput) {
-            collabNameInput.value = collabAlias;
-            collabNameInput.addEventListener('change', (e) => updateLocalAlias(e.target.value || 'wired'));
-        }
-        if (collabNameShareBtn) {
-            collabNameShareBtn.onclick = () => {
-                const name = collabNameInput?.value || collabAlias;
-                updateLocalAlias(name);
-                if (collabShareUrlEl?.dataset.url) {
-                    navigator.clipboard.writeText(collabShareUrlEl.dataset.url).then(() => {
-                        appendSessionLog('collab', `Shared link with name "${collabAlias}" copied.`);
-                    });
-                } else {
-                    alert("Generate a session link first.");
-                }
-            };
-        }
         
-        document.getElementById('theme-btn').onclick=()=>config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
+        document.getElementById('theme-btn').onclick=()=>{config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length; sendSync('state-sync', { state: getStateSnapshot() });};
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
         const cBox=document.getElementById('custom-words');
         cBox.value=localStorage.getItem('garden_words')||"";
-        cBox.onblur=e=>{localStorage.setItem('garden_words',e.target.value);if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];else config.customWords=e.target.value.split(',').filter(s=>s.trim());};
-        updateShareLink('');
-        if (collabCopyUrlBtn) {
-            collabCopyUrlBtn.onclick = () => {
-                const shareUrl = collabShareUrlEl?.dataset.url;
-                if (!shareUrl) { alert("Generate a session link first."); return; }
-                navigator.clipboard.writeText(shareUrl).then(() => appendSessionLog('collab', 'Share link copied.'));
-            };
-        }
-        if (collabRunTestsBtn) {
-            collabRunTestsBtn.onclick = () => runSyncTests();
-        }
-        if (collabStartBtn) {
-            collabStartBtn.onclick = () => startHostSession('manual-start');
-        }
-        if (collabRequestBtn) {
-            collabRequestBtn.onclick = () => {
-                const url = new URL(window.location.href);
-                url.searchParams.delete(SESSION_KEY_PARAM);
-                history.replaceState(null, '', url.toString());
-                startHostSession('request-new');
-            };
-        }
-        const urlSessionKey = parseSessionKeyFromLocation();
-        const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
-        if (urlSessionKey) {
-            joinSessionFromLink(urlSessionKey);
-        } else if (persistedKey) {
-            appendSessionLog('collab', `Rejoining stored session ${maskKey(persistedKey)}.`, { skipLog: false });
-            joinSessionFromLink(persistedKey);
-        } else {
-            startHostSession('page-load');
-        }
-
-        window.addEventListener('popstate', () => {
-            const nextKey = parseSessionKeyFromLocation();
-            const persistedKey = isPersistedSessionFresh() ? persistedSessionState.key : '';
-            if (nextKey && nextKey !== collabSessionKey) joinSessionFromLink(nextKey);
-            if (!nextKey && persistedKey) joinSessionFromLink(persistedKey);
-            if (!nextKey && !persistedKey) startHostSession('history-reset');
-        });
+        cBox.onblur=e=>{
+            localStorage.setItem('garden_words',e.target.value);
+            if(e.target.value==='6969') config.customWords=[...config.defaultWords,...secretWords];
+            else config.customWords=e.target.value.split(',').filter(s=>s.trim());
+            sendSync('custom-words', { words: config.customWords });
+        };
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),

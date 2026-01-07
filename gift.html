@@ -512,11 +512,46 @@
             logSession(reason);
         }
 
+        const BACKGROUND_UPLOAD_ENDPOINT = '/api/backgrounds';
+        const BACKGROUND_CACHE = 'garden-bg-assets-v1';
+        const BACKGROUND_STORAGE_KEY = 'garden_bg_asset';
+
+        function loadStoredBackgroundAsset() {
+            try {
+                const raw = localStorage.getItem(BACKGROUND_STORAGE_KEY);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') return null;
+                if (!parsed.url || typeof parsed.url !== 'string') return null;
+                return {
+                    hash: parsed.hash || null,
+                    url: parsed.url,
+                    metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : {}
+                };
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function persistBackgroundAsset(asset) {
+            if (!asset || !asset.url) return;
+            localStorage.setItem(BACKGROUND_STORAGE_KEY, JSON.stringify({
+                hash: asset.hash || null,
+                url: asset.url,
+                metadata: asset.metadata || {}
+            }));
+        }
+
+        function clearStoredBackgroundAsset() {
+            localStorage.removeItem(BACKGROUND_STORAGE_KEY);
+        }
+
         renderSessionLog();
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
         setPipelineStatus('Idle');
 
-        let currentBgData = localStorage.getItem('garden_bg') || null;
+        let currentBgAsset = loadStoredBackgroundAsset();
+        let currentBgObjectUrl = null;
         let visualEntities = [];
         let wordEntities = [];
         let particles = []; 
@@ -1454,80 +1489,173 @@
         resolveSession();
         connectSignaling();
 
-        async function optimizeBackgroundData(dataUrl, { maxEdge = 1280, quality = 0.78, maxBytes = 260000 } = {}) {
+        async function computeBackgroundHash(file) {
+            if (!window.crypto?.subtle) return null;
+            const buffer = await file.arrayBuffer();
+            const digest = await crypto.subtle.digest('SHA-256', buffer);
+            return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function readImageDimensions(file) {
+            if ('createImageBitmap' in window) {
+                try {
+                    const bitmap = await createImageBitmap(file);
+                    const dimensions = { width: bitmap.width, height: bitmap.height };
+                    bitmap.close();
+                    return dimensions;
+                } catch (_) {
+                    // fallback below
+                }
+            }
             return new Promise(resolve => {
+                const url = URL.createObjectURL(file);
                 const img = new Image();
                 img.onload = () => {
-                    const render = (edge, q) => {
-                        const scale = Math.min(1, edge / Math.max(img.width, img.height));
-                        const canvas = document.createElement('canvas');
-                        canvas.width = Math.max(1, Math.round(img.width * scale));
-                        canvas.height = Math.max(1, Math.round(img.height * scale));
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) return dataUrl;
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        return canvas.toDataURL('image/jpeg', q);
-                    };
-                    let edge = maxEdge;
-                    let q = quality;
-                    let output = render(edge, q);
-                    while (output.length > maxBytes && q > 0.5) {
-                        q = Math.max(0.5, q - 0.08);
-                        output = render(edge, q);
-                    }
-                    while (output.length > maxBytes && edge > 640) {
-                        edge = Math.round(edge * 0.85);
-                        q = Math.min(q, 0.7);
-                        output = render(edge, q);
-                    }
-                    resolve(output);
+                    resolve({ width: img.naturalWidth, height: img.naturalHeight });
+                    URL.revokeObjectURL(url);
                 };
-                img.onerror = () => resolve(dataUrl);
-                img.src = dataUrl;
+                img.onerror = () => {
+                    resolve({});
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
             });
         }
 
-        async function setBackgroundImageFromData(dataUrl, { persist = true, notifyOnFail = false, silentSync = false, optimize = false } = {}) {
-            if (!dataUrl) return false;
-            let persisted = true;
-            const preparedData = optimize ? await optimizeBackgroundData(dataUrl) : dataUrl;
-            currentBgData = preparedData;
-            if (persist) {
-                try { localStorage.setItem('garden_bg', preparedData); }
-                catch (err) {
-                    persisted = false;
-                    if (notifyOnFail) alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
-                    console.warn("Image too large to persist; will reset on reload.", err);
-                }
+        async function buildBackgroundMetadata(file) {
+            const dimensions = await readImageDimensions(file);
+            return {
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                lastModified: file.lastModified,
+                ...dimensions
+            };
+        }
+
+        async function uploadBackgroundAsset(file) {
+            if (!BACKGROUND_UPLOAD_ENDPOINT) {
+                throw new Error('Upload endpoint not configured');
             }
-            const img = new Image();
-            img.onload = ()=>{config.backgroundImage=img;config.useGradient=false;};
-            img.src = preparedData;
-            if (!silentSync) sendSync('background', getBackgroundStatePayload(), 'state');
-            return persisted;
+            const [hash, metadata] = await Promise.all([
+                computeBackgroundHash(file),
+                buildBackgroundMetadata(file)
+            ]);
+            const formData = new FormData();
+            formData.append('file', file, file.name);
+            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            const response = await fetch(BACKGROUND_UPLOAD_ENDPOINT, {
+                method: 'POST',
+                body: formData
+            });
+            if (!response.ok) {
+                throw new Error(`Upload failed (${response.status})`);
+            }
+            const data = await response.json();
+            const url = data.url || data.cdnUrl || data.location;
+            if (!url) {
+                throw new Error('Upload response missing URL');
+            }
+            return {
+                hash: data.hash || hash,
+                url,
+                metadata: { ...metadata, ...(data.metadata || {}) }
+            };
+        }
+
+        async function fetchCachedBackground(asset) {
+            if (!('caches' in window)) {
+                return fetch(asset.url, { cache: 'no-store' });
+            }
+            const cache = await caches.open(BACKGROUND_CACHE);
+            const cached = await cache.match(asset.url);
+            if (cached) return cached;
+            const response = await fetch(asset.url, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Fetch failed (${response.status})`);
+            await cache.put(asset.url, response.clone());
+            return response;
+        }
+
+        function revokeCurrentBackgroundUrl() {
+            if (currentBgObjectUrl) {
+                URL.revokeObjectURL(currentBgObjectUrl);
+                currentBgObjectUrl = null;
+            }
+        }
+
+        function setBackgroundFromBlob(blob) {
+            return new Promise((resolve, reject) => {
+                const objectUrl = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    revokeCurrentBackgroundUrl();
+                    currentBgObjectUrl = objectUrl;
+                    config.backgroundImage = img;
+                    config.useGradient = false;
+                    resolve(true);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error('Image decode failed'));
+                };
+                img.src = objectUrl;
+            });
+        }
+
+        async function applyBackgroundAsset(asset, { persist = true, silentSync = false } = {}) {
+            if (!asset || !asset.url) {
+                resetBackgroundToGradient({ silentSync });
+                return false;
+            }
+            try {
+                const response = await fetchCachedBackground(asset);
+                const blob = await response.blob();
+                await setBackgroundFromBlob(blob);
+                currentBgAsset = asset;
+                if (persist) persistBackgroundAsset(asset);
+                if (!silentSync) sendSync('background', getBackgroundStatePayload(), 'state');
+                return true;
+            } catch (err) {
+                console.warn('Background fetch failed, falling back to gradient.', err);
+                resetBackgroundToGradient({ persist: false, silentSync: true });
+                appendSessionLog('background', 'Background fetch failed; using gradient fallback.');
+                return false;
+            }
         }
 
         function resetBackgroundToGradient({ persist = true, silentSync = false } = {}) {
-            if (persist) localStorage.removeItem('garden_bg');
-            currentBgData = null;
+            if (persist) clearStoredBackgroundAsset();
+            currentBgAsset = null;
+            revokeCurrentBackgroundUrl();
             config.useGradient = true;
             config.backgroundImage = null;
             if (!silentSync) sendSync('background', getBackgroundStatePayload(), 'state');
         }
 
         function getBackgroundStatePayload() {
+            if (!currentBgAsset || config.useGradient) {
+                return { hash: null, url: null, metadata: { useGradient: true } };
+            }
             return {
-                useGradient: config.useGradient,
-                imageData: config.useGradient ? null : currentBgData,
-                ts: Date.now()
+                hash: currentBgAsset.hash || null,
+                url: currentBgAsset.url,
+                metadata: currentBgAsset.metadata || {}
             };
         }
 
         function applyBackgroundStateFromPeer(payload) {
-            if (!payload) return;
-            if (payload.useGradient || !payload.imageData) resetBackgroundToGradient({ silentSync: true });
-            else setBackgroundImageFromData(payload.imageData, { silentSync: true });
-            appendSessionLog('background', payload.useGradient ? 'Gradient restored from peer.' : 'Background synced from peer.');
+            if (!payload || !payload.url) {
+                resetBackgroundToGradient({ silentSync: true });
+                appendSessionLog('background', 'Gradient restored from peer.');
+                return;
+            }
+            applyBackgroundAsset({
+                hash: payload.hash || null,
+                url: payload.url,
+                metadata: payload.metadata || {}
+            }, { silentSync: true }).then(success => {
+                appendSessionLog('background', success ? 'Background synced from peer.' : 'Background failed from peer; used gradient.');
+            });
         }
 
         // Immediate Audio Wake Up
@@ -1738,21 +1866,35 @@
         // --- 7. UI Logic ---
         const bgInput=document.getElementById('bg-upload-input');
         
-        document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
-            const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
-            const r=new FileReader(); 
-            r.onload=async e=>{ 
-                await setBackgroundImageFromData(e.target.result, { notifyOnFail: true, optimize: true });
-                appendSessionLog('background', 'Applied custom background.');
-            }; 
-            r.readAsDataURL(f);
+        document.getElementById('apply-bg-btn').addEventListener('click', async ()=>{
+            const file = bgInput.files[0];
+            if (!file) { alert("Please select an image file first."); return; }
+            try {
+                setPipelineStatus('Uploading background…', 'warn');
+                const asset = await uploadBackgroundAsset(file);
+                const applied = await applyBackgroundAsset(asset);
+                if (applied) {
+                    appendSessionLog('background', 'Applied custom background via CDN.');
+                    setPipelineStatus('Background synced', 'success');
+                } else {
+                    setPipelineStatus('Background fallback', 'warn');
+                }
+            } catch (err) {
+                console.error('Background upload failed:', err);
+                setPipelineStatus('Upload failed', 'error');
+                alert('Background upload failed. Please check the upload endpoint.');
+            } finally {
+                setTimeout(() => setPipelineStatus('Idle'), 1500);
+            }
         });
         
         document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
             resetBackgroundToGradient();
             appendSessionLog('background', 'Background reset to gradient.');
         });
-        if(currentBgData){ setBackgroundImageFromData(currentBgData, { persist: false }); }
+        if (currentBgAsset) {
+            applyBackgroundAsset(currentBgAsset, { persist: false, silentSync: true });
+        }
 
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');

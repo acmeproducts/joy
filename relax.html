@@ -1200,14 +1200,27 @@
             "entry.1854154093": "@referrer",
             "entry.1036649804": "@session_start_iso",
             "entry.1683490369": "@standard_words",
-            "entry.1722638233": "@custom_words"
+            "entry.1722638233": "@custom_words",
+            "entry.527394232": "@session_log"
         };
-
-        const START_TIME = Date.now();
-        const c19_session_start_la = new Date(START_TIME).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
 
         window.telemetryStats = { taps: 0, drags: 0, secrets: 0, mouseDist: 0 };
         let cachedIP = "pending";
+        const sessionLog = [];
+        const SESSION_LOG_CHAR_LIMIT = 1800;
+        const sessionLifecycle = {
+            id: Date.now().toString(36),
+            startedAt: Date.now(),
+            endedAt: null,
+            endReason: null
+        };
+        const pipelineStatusEl = document.getElementById('pipeline-status');
+        let pipelineSendCount = 0;
+        let logSent = false;
+        const SESSION_CLOSE_GRACE_MS = 30000;
+        let sessionFlushTimer = null;
+        let sessionEndHoldTimer = null;
+        let pendingSessionEndReason = null;
 
         fetch('https://api.ipify.org?format=json')
             .then(r => r.json()).then(d => cachedIP = d.ip).catch(e => cachedIP = "offline");
@@ -1228,21 +1241,122 @@
             } catch(e) { return "err"; }
         };
 
-        async function logSession() {
-            const now = Date.now();
-            const duration = (now - START_TIME) / 1000;
+        function appendSessionLog(type, detail, options = {}) {
+            if (options.skipLog) return;
+            sessionLog.push({ ts: Date.now(), type, detail: (detail ?? '').toString() });
+        }
+
+        function setPipelineStatus(label, tone = 'muted') {
+            if (!pipelineStatusEl) return;
+            pipelineStatusEl.textContent = label;
+            pipelineStatusEl.className = 'text-[10px] px-2 py-1 rounded-full';
+            if (tone === 'success') pipelineStatusEl.classList.add('bg-emerald-100','text-emerald-700','border','border-emerald-200');
+            else if (tone === 'warn') pipelineStatusEl.classList.add('bg-amber-100','text-amber-700','border','border-amber-200');
+            else if (tone === 'error') pipelineStatusEl.classList.add('bg-red-100','text-red-700','border','border-red-200');
+            else pipelineStatusEl.classList.add('bg-slate-200','text-slate-600');
+        }
+
+        function buildSessionLogString() {
+            return sessionLog
+                .map(item => `[${new Date(item.ts).toISOString()}] ${item.type}: ${item.detail}`)
+                .join(' | ')
+                .slice(-SESSION_LOG_CHAR_LIMIT);
+        }
+
+        function scheduleSessionFlush(reason) {
+            clearTimeout(sessionFlushTimer);
+            sessionFlushTimer = setTimeout(() => completeSession(reason), SESSION_CLOSE_GRACE_MS);
+            appendSessionLog('session-lifecycle', `Pending end (${reason}) in ${Math.round(SESSION_CLOSE_GRACE_MS/1000)}s.`);
+        }
+
+        function requestSessionEnd(reason = 'pagehide', immediate = false) {
+            if (logSent) return;
+            if (immediate) {
+                if (sessionEndHoldTimer) {
+                    clearInterval(sessionEndHoldTimer);
+                    sessionEndHoldTimer = null;
+                }
+                completeSession(reason);
+                return;
+            }
+            scheduleSessionFlush(reason);
+        }
+
+        function cancelSessionEnd(reason = 'resume') {
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
+            }
+            pendingSessionEndReason = null;
+            appendSessionLog('session-lifecycle', `End cancelled (${reason}).`);
+        }
+
+        function completeSession(reason = 'pagehide') {
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
+            }
+            if (!sessionLifecycle.endedAt) {
+                sessionLifecycle.endedAt = Date.now();
+                sessionLifecycle.endReason = reason;
+                appendSessionLog('session-end', `Ended (${reason}).`);
+            }
+            logSession(reason);
+        }
+
+        async function sendToPipeline(formData) {
+            const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`;
+            try {
+                if (navigator.sendBeacon) {
+                    const params = new URLSearchParams();
+                    formData.forEach((v,k)=>params.append(k,v));
+                    if (navigator.sendBeacon(url, params)) return true;
+                }
+            } catch(e) {
+                console.warn('Beacon send failed, falling back to fetch', e);
+            }
+            try {
+                await fetch(url, { method: 'POST', mode: 'no-cors', body: formData, keepalive: true });
+                return true;
+            } catch(e) {
+                console.warn('Pipeline fetch failed', e);
+                return false;
+            }
+        }
+
+        async function logSession(reason = 'unspecified') {
+            if (logSent) return;
+            logSent = true;
+            pipelineSendCount += 1;
+            setPipelineStatus('Sending...', 'warn');
+
+            if (!sessionLifecycle.endedAt) sessionLifecycle.endedAt = Date.now();
+            if (!sessionLifecycle.endReason) sessionLifecycle.endReason = reason;
+
+            const duration = (sessionLifecycle.endedAt - sessionLifecycle.startedAt) / 1000;
+            const startIso = new Date(sessionLifecycle.startedAt).toISOString();
+            const endIso = new Date(sessionLifecycle.endedAt).toISOString();
+            const c19_session_start_la = new Date(sessionLifecycle.startedAt).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
             const standardWordsString = config.defaultWords.join(', ');
             const customWordsRaw = (config.customWords && config.customWords.length)
                 ? config.customWords
                 : (typeof cBox !== 'undefined' ? cBox.value.split(',').map(s=>s.trim()).filter(Boolean) : []);
             const customWordsString = customWordsRaw.filter(Boolean).join(', ');
             const dataLayer = {
-                "@session_start_iso": new Date(START_TIME).toISOString(),
+                "@session_start_iso": startIso,
                 "@start_time_la": c19_session_start_la,
-                "@session_end_iso": new Date(now).toISOString(),
+                "@session_end_iso": endIso,
                 "@duration_formatted": `${Math.floor(duration/60)}m ${Math.floor(duration%60)}s`,
                 "@ip_address": cachedIP,
-                "@session_id": START_TIME.toString(36),
+                "@session_id": sessionLifecycle.id,
                 "@theme_code": "DEFAULT",
                 "@user_agent": navigator.userAgent,
                 "@screen_resolution": `${window.screen.width}x${window.screen.height}`,
@@ -1263,7 +1377,8 @@
                 "@mouse_pixels_moved": Math.round(window.telemetryStats.mouseDist),
                 "@secrets_found_count": window.telemetryStats.secrets,
                 "@standard_words": standardWordsString,
-                "@custom_words": customWordsString
+                "@custom_words": customWordsString,
+                "@session_log": buildSessionLogString()
             };
 
             const formData = new FormData();
@@ -1272,16 +1387,33 @@
                 formData.append(entryId, val);
             }
 
-            try {
-                await fetch(`https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`, {
-                    method: 'POST', mode: 'no-cors', body: formData, keepalive: true
-                });
-            } catch(e) {}
+            const ok = await sendToPipeline(formData);
+            if (ok) {
+                setPipelineStatus(`Sent (${pipelineSendCount})`, 'success');
+                appendSessionLog('pipeline', 'Session log submitted.');
+            } else {
+                setPipelineStatus('Send failed', 'error');
+                appendSessionLog('pipeline', 'Session log failed to submit.', { skipLog: false });
+            }
         }
 
-        window.addEventListener('beforeunload', logSession);
-        window.addEventListener('pagehide', logSession);
-        window.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') logSession(); });
+        appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
+        setPipelineStatus('Idle');
+
+        window.addEventListener('beforeunload', () => requestSessionEnd('beforeunload', true));
+        window.addEventListener('pagehide', () => requestSessionEnd('pagehide', true));
+        window.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                requestSessionEnd('visibility-hidden', false);
+            } else {
+                cancelSessionEnd('visible');
+                appendSessionLog('session-lifecycle', 'Resumed (visible).');
+            }
+        });
+
+        ['pointerdown','touchstart','keydown','mousemove'].forEach(evt => {
+            window.addEventListener(evt, () => cancelSessionEnd('activity'));
+        });
     </script>
 
     <script>

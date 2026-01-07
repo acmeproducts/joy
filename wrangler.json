@@ -1,0 +1,20 @@
+{
+  "name": "gift-signal",
+  "main": "signal-worker/worker.js",
+  "compatibility_date": "2024-12-01",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SIGNAL_SESSION",
+        "class_name": "SignalSession"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["SignalSession"],
+      "new_sqlite_classes": ["SignalSession"]
+    }
+  ]
+}

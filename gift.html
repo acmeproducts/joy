@@ -124,7 +124,7 @@
                 <div class="space-y-1">
                     <label class="text-[11px] text-gray-600 font-semibold uppercase tracking-wide flex items-center justify-between">
                         Session
-                        <span class="text-[10px] text-gray-400 font-normal">ntfy relay</span>
+                        <span class="text-[10px] text-gray-400 font-normal">WebRTC signaling</span>
                     </label>
                     <div class="flex gap-2">
                         <input id="p2p-session" class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-200" readonly>
@@ -975,6 +975,7 @@
         const DOUBLE_TAP_DISTANCE = 40; // require taps to be near each other
         const syncClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
         const SESSION_KEY_PARAM = 'session';
+        const SIGNAL_KEY_PARAM = 'signal';
         const p2pStatusEl = document.getElementById('p2p-status');
         const p2pSessionEl = document.getElementById('p2p-session');
         const p2pShareEl = document.getElementById('p2p-share-url');
@@ -984,20 +985,20 @@
         const p2p = {
             clientId: syncClientId,
             session: '',
-            topics: { live: '', state: '' },
-            baseHost: 'ntfy.sh',
-            ws: null,
-            sources: { live: null, state: null },
-            wsForceFallback: false,
-            wsFailures: 0,
-            reconnectTimer: null,
-            wsConnectTimer: null,
-            lastSeenTs: 0,
-            lastSeenId: null,
+            signalHttpUrl: '',
+            signalWsUrl: '',
+            signalParam: '',
+            signalWs: null,
+            signalPollTimer: null,
+            signalPollSince: 0,
+            signalSeq: 0,
+            signalWsFailures: 0,
+            forceHttp: false,
+            peers: new Map(),
+            inboundSeq: {},
             ready: false,
-            fastMode: false,
-            channelReady: { live: false, state: false },
-            lastStateRequestId: ''
+            lastStateRequestId: '',
+            sequence: { live: 0, state: 0 }
         };
 
         function formatNowWithMs() {
@@ -1020,27 +1021,46 @@
             return `gift-${Math.random().toString(36).slice(2, 8)}`;
         }
 
+        function computeSignalUrls(raw) {
+            let input = raw;
+            if (!input) {
+                const base = new URL(window.location.origin);
+                base.pathname = '/signal';
+                return { httpUrl: base.toString(), wsUrl: base.toString().replace(/^http/, 'ws') };
+            }
+            if (!/^https?:\/\//i.test(input) && !/^wss?:\/\//i.test(input)) {
+                input = `https://${input}`;
+            }
+            const url = new URL(input);
+            if (!url.pathname || url.pathname === '/') {
+                url.pathname = '/signal';
+            }
+            const httpUrl = url.toString().replace(/^ws/i, 'http');
+            const wsUrl = url.toString().replace(/^http/i, 'ws');
+            return { httpUrl, wsUrl };
+        }
+
         function buildShareLink(session) {
             const url = new URL(window.location.href);
             url.searchParams.set(SESSION_KEY_PARAM, session);
-            if (p2p.fastMode) url.searchParams.set('fast', '1');
-            else url.searchParams.delete('fast');
+            if (p2p.signalParam) url.searchParams.set(SIGNAL_KEY_PARAM, p2p.signalParam);
+            else url.searchParams.delete(SIGNAL_KEY_PARAM);
             return url.toString();
         }
 
         function resolveSession() {
             const url = new URL(window.location.href);
             const urlSession = (url.searchParams.get(SESSION_KEY_PARAM) || '').trim();
-            const urlHost = (url.searchParams.get('host') || '').trim();
-            p2p.fastMode = url.searchParams.get('fast') === '1';
-            if (urlHost) p2p.baseHost = urlHost.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+            const urlSignal = (url.searchParams.get(SIGNAL_KEY_PARAM) || '').trim();
             p2p.session = urlSession || randomSession();
+            p2p.signalParam = urlSignal;
+            const { httpUrl, wsUrl } = computeSignalUrls(urlSignal);
+            p2p.signalHttpUrl = httpUrl;
+            p2p.signalWsUrl = wsUrl;
             url.searchParams.set(SESSION_KEY_PARAM, p2p.session);
-            if (urlHost) url.searchParams.set('host', p2p.baseHost);
-            if (p2p.fastMode) url.searchParams.set('fast', '1');
+            if (p2p.signalParam) url.searchParams.set(SIGNAL_KEY_PARAM, p2p.signalParam);
+            else url.searchParams.delete(SIGNAL_KEY_PARAM);
             history.replaceState(null, '', url.toString());
-            p2p.topics.live = `gift-sync-${p2p.session}-live`;
-            p2p.topics.state = `gift-sync-${p2p.session}-state`;
             if (p2pSessionEl) p2pSessionEl.value = p2p.session;
             const share = buildShareLink(p2p.session);
             if (p2pShareEl) {
@@ -1055,26 +1075,34 @@
             navigator.clipboard?.writeText(value).then(() => setP2PStatus('URL copied', 'ok')).catch(() => setP2PStatus('Copy failed', 'error'));
         }
 
-        const baseHttp = () => `https://${p2p.baseHost}`;
-        const baseWs = () => `wss://${p2p.baseHost}`;
-
         function addSyncLog(direction, text, latencyMs = null, channel = '') {
             const latencyLabel = latencyMs == null ? '' : ` • +${latencyMs}ms`;
             const channelLabel = channel ? `[${channel}] ` : '';
             appendSessionLog(direction, `${channelLabel}${text} (${formatNowWithMs()}${latencyLabel})`);
         }
 
-        function sendSync(type, value = {}, channel = 'live') {
-            const topic = channel === 'state' ? p2p.topics.state : p2p.topics.live;
-            if (!p2p.session || !topic) return;
+        function broadcastSync(payload, channel, targetPeerId = null) {
+            const serialized = JSON.stringify(payload);
+            const peers = targetPeerId ? [p2p.peers.get(targetPeerId)].filter(Boolean) : Array.from(p2p.peers.values());
+            peers.forEach(peer => {
+                const dataChannel = channel === 'state' ? peer.stateChannel : peer.liveChannel;
+                if (!dataChannel) return;
+                if (dataChannel.readyState === 'open') {
+                    dataChannel.send(serialized);
+                } else {
+                    peer.pending[channel].push(serialized);
+                }
+            });
+        }
+
+        function sendSync(type, value = {}, channel = 'live', targetPeerId = null) {
+            if (!p2p.session) return;
             const ts = Date.now();
-            const payload = { session: p2p.session, type, value, ts, clientId: p2p.clientId };
-            addSyncLog('you', `${type}: ${JSON.stringify(value)}`, null, channel);
-            fetch(`${baseHttp()}/${topic}`, {
-                method: 'POST',
-                body: JSON.stringify(payload),
-                headers: { 'Content-Type': 'application/json' }
-            }).catch(() => setP2PStatus('Send failed', 'error'));
+            const seq = (p2p.sequence[channel] || 0) + 1;
+            p2p.sequence[channel] = seq;
+            const payload = { session: p2p.session, type, value, ts, seq, channel, clientId: p2p.clientId };
+            addSyncLog('you', `${type}: ${JSON.stringify(value)} (#${seq})`, null, channel);
+            broadcastSync(payload, channel, targetPeerId);
         }
 
         function applyStateSnapshot(state = {}) {
@@ -1103,22 +1131,23 @@
             };
         }
 
-        function handleSyncMessage({ payload, id, time, topic }) {
+        function handleSyncMessage({ payload, channel, peerId }) {
             if (!payload || payload.session !== p2p.session) return;
             const fromSelf = payload.clientId && payload.clientId === p2p.clientId;
-            if (id && id === p2p.lastSeenId) return;
-            const ts = time ? time * 1000 : (payload.ts || Date.now());
+            if (fromSelf) return;
+            const ts = payload.ts || Date.now();
+            const seq = payload.seq || 0;
             const latencyMs = Math.max(0, Date.now() - ts);
-            if (!id && ts <= p2p.lastSeenTs) return;
-            p2p.lastSeenId = id || p2p.lastSeenId;
-            p2p.lastSeenTs = Math.max(p2p.lastSeenTs, ts);
-            const channel = topic === p2p.topics.state ? 'state' : 'live';
-            if (!fromSelf) {
-                applySyncEvent(payload);
-                addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs, channel);
-            } else {
-                addSyncLog('echo', `${payload.type}: ${JSON.stringify(payload.value)}`, latencyMs, channel);
+            const peerKey = peerId || payload.clientId || 'peer';
+            if (!p2p.inboundSeq[peerKey]) {
+                p2p.inboundSeq[peerKey] = { live: { seq: 0, ts: 0 }, state: { seq: 0, ts: 0 } };
             }
+            const channelKey = channel || payload.channel || 'live';
+            const lastState = p2p.inboundSeq[peerKey][channelKey] || { seq: 0, ts: 0 };
+            if (seq <= lastState.seq) return;
+            p2p.inboundSeq[peerKey][channelKey] = { seq, ts: Math.max(lastState.ts, ts) };
+            applySyncEvent(payload);
+            addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)} (#${seq})`, latencyMs, channelKey);
         }
 
         function applySyncEvent(payload) {
@@ -1143,129 +1172,266 @@
             } else if (type === 'state-request') {
                 if (p2p.lastStateRequestId === value.requestId) return;
                 p2p.lastStateRequestId = value.requestId;
-                sendSync('state-sync', { state: getStateSnapshot(), target: clientId }, 'state');
+                sendSync('state-sync', { state: getStateSnapshot(), target: clientId }, 'state', clientId);
             }
         }
 
-        function handleSyncEnvelope(envelope) {
-            try {
-                let payload = envelope;
-                if (typeof envelope.message === 'string') {
-                    try { payload = JSON.parse(envelope.message); }
-                    catch (e) { console.warn('payload parse error', e, envelope.message); }
-                } else if (envelope.message && typeof envelope.message === 'object') {
-                    payload = envelope.message;
-                }
-                handleSyncMessage({ payload, id: envelope.id, time: envelope.time, topic: envelope.topic });
-            } catch (e) {
-                console.warn('parse error', e);
+        function updatePeerStatus() {
+            const peers = Array.from(p2p.peers.values());
+            const liveReady = peers.filter(peer => peer.ready.live).length;
+            const stateReady = peers.filter(peer => peer.ready.state).length;
+            if (liveReady || stateReady) {
+                setP2PStatus(`Connected (${liveReady} live / ${stateReady} state)`, 'ok');
+                p2p.ready = true;
+            } else if (p2p.signalWs && p2p.signalWs.readyState === WebSocket.OPEN) {
+                setP2PStatus('Waiting for peers…', 'retry');
+            } else {
+                setP2PStatus('Signaling…', 'retry');
             }
         }
 
-        function scheduleReconnect(delayMs) {
-            clearTimeout(p2p.reconnectTimer);
-            p2p.reconnectTimer = setTimeout(connectSync, delayMs);
+        function flushPending(peer, channelKey) {
+            const dataChannel = channelKey === 'state' ? peer.stateChannel : peer.liveChannel;
+            if (!dataChannel || dataChannel.readyState !== 'open') return;
+            const queue = peer.pending[channelKey];
+            while (queue.length) {
+                dataChannel.send(queue.shift());
+            }
         }
 
-        function closeSources() {
-            Object.keys(p2p.sources).forEach(key => {
-                if (p2p.sources[key]) {
-                    p2p.sources[key].close();
-                    p2p.sources[key] = null;
+        function setupDataChannel(peer, channel, channelKey) {
+            channel.onopen = () => {
+                peer.ready[channelKey] = true;
+                flushPending(peer, channelKey);
+                updatePeerStatus();
+                if (channelKey === 'state') {
+                    sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) }, 'state', peer.id);
                 }
+            };
+            channel.onclose = () => {
+                peer.ready[channelKey] = false;
+                updatePeerStatus();
+            };
+            channel.onerror = () => updatePeerStatus();
+            channel.onmessage = event => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    handleSyncMessage({ payload, channel: channelKey, peerId: peer.id });
+                } catch (e) {
+                    console.warn('datachannel parse error', e);
+                }
+            };
+        }
+
+        function ensurePeer(remoteId) {
+            if (p2p.peers.has(remoteId)) return p2p.peers.get(remoteId);
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
+            const peer = {
+                id: remoteId,
+                pc,
+                liveChannel: null,
+                stateChannel: null,
+                pending: { live: [], state: [] },
+                ready: { live: false, state: false },
+                makingOffer: false,
+                isSettingRemoteAnswerPending: false,
+                ignoreOffer: false,
+                initiator: p2p.clientId < remoteId,
+                polite: p2p.clientId > remoteId,
+                hasOffered: false
+            };
+            p2p.peers.set(remoteId, peer);
+
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    sendSignal('ice', { candidate: event.candidate }, remoteId);
+                }
+            };
+            pc.onconnectionstatechange = () => {
+                if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+                    updatePeerStatus();
+                }
+            };
+            pc.ondatachannel = event => {
+                const channel = event.channel;
+                if (channel.label === 'live') {
+                    peer.liveChannel = channel;
+                    setupDataChannel(peer, channel, 'live');
+                } else if (channel.label === 'state') {
+                    peer.stateChannel = channel;
+                    setupDataChannel(peer, channel, 'state');
+                }
+            };
+
+            if (peer.initiator) {
+                peer.liveChannel = pc.createDataChannel('live', { ordered: false, maxRetransmits: 0 });
+                peer.stateChannel = pc.createDataChannel('state', { ordered: true });
+                setupDataChannel(peer, peer.liveChannel, 'live');
+                setupDataChannel(peer, peer.stateChannel, 'state');
+            }
+            updatePeerStatus();
+            return peer;
         }
 
-        function setChannelReady(channel, ready) {
-            p2p.channelReady[channel] = ready;
-            if (ready) {
-                const liveReady = p2p.channelReady.live;
-                const stateReady = p2p.channelReady.state;
-                setP2PStatus(`Connected (SSE ${liveReady && stateReady ? '2ch' : '1ch'})`, 'ok');
-                p2p.ready = true;
+        async function negotiateOffer(peer) {
+            try {
+                peer.makingOffer = true;
+                await peer.pc.setLocalDescription(await peer.pc.createOffer());
+                sendSignal('offer', { description: peer.pc.localDescription }, peer.id);
+                peer.hasOffered = true;
+            } catch (e) {
+                console.warn('offer failed', e);
+            } finally {
+                peer.makingOffer = false;
             }
         }
 
-        function connectSseChannel(channel, topic) {
-            const source = new EventSource(`${baseHttp()}/${topic}/sse`);
-            p2p.sources[channel] = source;
-            source.onopen = () => {
-                p2p.wsFailures = 0;
-                setChannelReady(channel, true);
-                if (channel === 'state') {
-                    sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) }, 'state');
+        async function handleOffer(peer, description) {
+            const readyForOffer = !peer.makingOffer && (peer.pc.signalingState === 'stable' || peer.isSettingRemoteAnswerPending);
+            const offerCollision = !readyForOffer;
+            peer.ignoreOffer = !peer.polite && offerCollision;
+            if (peer.ignoreOffer) return;
+            peer.isSettingRemoteAnswerPending = description.type === 'offer';
+            await peer.pc.setRemoteDescription(description);
+            peer.isSettingRemoteAnswerPending = false;
+            if (description.type === 'offer') {
+                await peer.pc.setLocalDescription(await peer.pc.createAnswer());
+                sendSignal('answer', { description: peer.pc.localDescription }, peer.id);
+            }
+        }
+
+        async function handleSignalMessage(message) {
+            if (!message || message.session !== p2p.session) return;
+            if (message.to && message.to !== p2p.clientId) return;
+            if (message.from === p2p.clientId) return;
+            const remoteId = message.from;
+            const peer = ensurePeer(remoteId);
+            try {
+                if (message.type === 'join') {
+                    if (peer.initiator && !peer.hasOffered) {
+                        await negotiateOffer(peer);
+                    }
+                } else if (message.type === 'offer' || message.type === 'answer') {
+                    await handleOffer(peer, message.payload.description);
+                } else if (message.type === 'ice' && message.payload?.candidate) {
+                    try {
+                        await peer.pc.addIceCandidate(message.payload.candidate);
+                    } catch (e) {
+                        if (!peer.ignoreOffer) console.warn('ice error', e);
+                    }
+                } else if (message.type === 'leave') {
+                    closePeer(remoteId);
                 }
+            } catch (e) {
+                console.warn('signal handling error', e);
+            }
+        }
+
+        function sendSignal(type, payload = {}, to = null) {
+            if (!p2p.session) return;
+            const message = {
+                session: p2p.session,
+                from: p2p.clientId,
+                to,
+                type,
+                payload,
+                ts: Date.now(),
+                seq: ++p2p.signalSeq
             };
-            source.onerror = () => {
-                setP2PStatus('Retrying…', 'warn');
-                closeSources();
-                scheduleReconnect(p2p.fastMode ? 250 : 400);
+            if (p2p.signalWs && p2p.signalWs.readyState === WebSocket.OPEN) {
+                p2p.signalWs.send(JSON.stringify(message));
+            } else {
+                fetch(p2p.signalHttpUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(message)
+                }).catch(() => setP2PStatus('Signal send failed', 'error'));
+            }
+        }
+
+        function connectSignalingWs() {
+            if (!p2p.signalWsUrl) return;
+            const wsUrl = new URL(p2p.signalWsUrl);
+            wsUrl.searchParams.set('session', p2p.session);
+            wsUrl.searchParams.set('client', p2p.clientId);
+            p2p.signalWs = new WebSocket(wsUrl.toString());
+            p2p.signalWs.onopen = () => {
+                p2p.signalWsFailures = 0;
+                setP2PStatus('Signaling ready', 'ok');
+                sendSignal('join');
+                updatePeerStatus();
             };
-            source.onmessage = evt => {
+            p2p.signalWs.onmessage = event => {
                 try {
-                    const envelope = JSON.parse(evt.data);
-                    handleSyncEnvelope(envelope);
+                    const data = JSON.parse(event.data);
+                    if (Array.isArray(data)) data.forEach(handleSignalMessage);
+                    else handleSignalMessage(data);
                 } catch (e) {
-                    console.warn('parse error', e);
+                    console.warn('signal parse error', e);
                 }
             };
-        }
-
-        function connectSse() {
-            if (!p2p.topics.live || !p2p.topics.state) return;
-            closeSources();
-            p2p.channelReady = { live: false, state: false };
-            setP2PStatus('Connecting…', 'retry');
-            connectSseChannel('live', p2p.topics.live);
-            connectSseChannel('state', p2p.topics.state);
-        }
-
-        function connectWebSocket() {
-            if (!p2p.topics.live || !p2p.topics.state) return connectSse();
-            if (p2p.ws) { p2p.ws.close(); p2p.ws = null; }
-            closeSources();
-            setP2PStatus('Connecting…', 'retry');
-            p2p.ws = new WebSocket(`${baseWs()}/ws`);
-            clearTimeout(p2p.wsConnectTimer);
-            const WS_GRACE_MS = p2p.fastMode ? 300 : 500;
-            p2p.wsConnectTimer = setTimeout(() => {
-                p2p.wsForceFallback = true;
-                try { p2p.ws?.close(); } catch (_) {}
-            }, WS_GRACE_MS);
-            p2p.ws.onopen = () => {
-                p2p.wsFailures = 0;
-                clearTimeout(p2p.wsConnectTimer);
-                setP2PStatus('Connected (WS)', 'ok');
-                p2p.ws.send(JSON.stringify({ action: 'subscribe', topics: [p2p.topics.live, p2p.topics.state] }));
-                p2p.ready = true;
-                sendSync('state-request', { requestId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) }, 'state');
+            p2p.signalWs.onerror = () => {
+                p2p.signalWsFailures += 1;
+                if (p2p.signalWsFailures >= 2) p2p.forceHttp = true;
+                setP2PStatus('Signaling error', 'warn');
             };
-            p2p.ws.onmessage = evt => {
-                try {
-                    const envelope = JSON.parse(evt.data);
-                    if (envelope.event === 'message') handleSyncEnvelope(envelope);
-                } catch (e) {
-                    console.warn('ws parse error', e);
+            p2p.signalWs.onclose = () => {
+                p2p.signalWs = null;
+                scheduleSignalReconnect();
+            };
+        }
+
+        async function pollSignalHttp() {
+            const url = new URL(p2p.signalHttpUrl);
+            url.searchParams.set('session', p2p.session);
+            url.searchParams.set('client', p2p.clientId);
+            if (p2p.signalPollSince) url.searchParams.set('since', p2p.signalPollSince);
+            try {
+                const res = await fetch(url.toString());
+                if (!res.ok) throw new Error('signal poll failed');
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    data.forEach(msg => {
+                        if (msg.seq) p2p.signalPollSince = Math.max(p2p.signalPollSince, msg.seq);
+                        handleSignalMessage(msg);
+                    });
                 }
-            };
-            p2p.ws.onerror = () => {
-                p2p.wsFailures += 1;
-                p2p.wsForceFallback = p2p.wsFailures >= 2;
-                clearTimeout(p2p.wsConnectTimer);
-                setP2PStatus('Retrying…', 'warn');
-            };
-            p2p.ws.onclose = () => {
-                p2p.ws = null;
-                clearTimeout(p2p.wsConnectTimer);
-                const WS_RETRY_MS = p2p.fastMode ? 120 : 200;
-                scheduleReconnect(p2p.wsForceFallback ? 0 : WS_RETRY_MS);
-            };
+                setP2PStatus('Signaling ready', 'ok');
+            } catch (e) {
+                setP2PStatus('Signaling retry…', 'warn');
+            } finally {
+                p2p.signalPollTimer = setTimeout(pollSignalHttp, 1200);
+            }
         }
 
-        function connectSync() {
-            clearTimeout(p2p.reconnectTimer);
-            if ('WebSocket' in window && !p2p.wsForceFallback) connectWebSocket();
-            else connectSse();
+        function scheduleSignalReconnect() {
+            clearTimeout(p2p.signalPollTimer);
+            p2p.signalPollTimer = setTimeout(connectSignaling, 800);
+        }
+
+        function connectSignaling() {
+            clearTimeout(p2p.signalPollTimer);
+            if (p2p.signalWs) {
+                try { p2p.signalWs.close(); } catch (_) {}
+                p2p.signalWs = null;
+            }
+            setP2PStatus('Signaling…', 'retry');
+            if (!p2p.forceHttp && 'WebSocket' in window) {
+                connectSignalingWs();
+            } else {
+                sendSignal('join');
+                pollSignalHttp();
+            }
+        }
+
+        function closePeer(peerId) {
+            const peer = p2p.peers.get(peerId);
+            if (!peer) return;
+            try { peer.pc.close(); } catch (_) {}
+            p2p.peers.delete(peerId);
+            updatePeerStatus();
         }
 
         function resetSyncSession() {
@@ -1274,16 +1440,19 @@
             url.searchParams.set(SESSION_KEY_PARAM, fresh);
             history.replaceState(null, '', url.toString());
             resolveSession();
-            p2p.wsForceFallback = false;
-            p2p.wsFailures = 0;
-            connectSync();
+            p2p.peers.forEach((_, peerId) => closePeer(peerId));
+            p2p.signalWsFailures = 0;
+            p2p.forceHttp = false;
+            connectSignaling();
         }
 
         if (p2pCopyEl) p2pCopyEl.addEventListener('click', copyShareUrl);
         if (p2pNewBtn) p2pNewBtn.addEventListener('click', resetSyncSession);
 
+        window.addEventListener('beforeunload', () => sendSignal('leave'));
+
         resolveSession();
-        connectSync();
+        connectSignaling();
 
         async function optimizeBackgroundData(dataUrl, { maxEdge = 1280, quality = 0.78, maxBytes = 260000 } = {}) {
             return new Promise(resolve => {

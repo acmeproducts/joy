@@ -1570,36 +1570,67 @@
                 });
         }
 
+        function setJoinApproved(reason = 'approved') {
+            if (joinState.approved) return;
+            joinState.approved = true;
+            joinState.denied = false;
+            localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+            startRelayKeepalive();
+            startPresenceUpdates();
+            cancelJoinFallback();
+            ensureJoinName();
+            if (reason) {
+                appendSessionLog('join-approve', reason);
+            }
+        }
+
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
             if (message.to && message.to !== RELAY_CLIENT_ID) return;
 
-            if (!joinState.approved) {
-                if (message.type === 'join-accept') {
-                    joinState.approved = true;
-                    joinState.denied = false;
-                    localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
-                    showShareOverlay('Access granted. Joining session.', 3000);
-                    sendRelayMessage({ type: 'hello', reason: 'approved' });
-                    startRelayKeepalive();
-                    startPresenceUpdates();
-                    cancelJoinFallback();
-                    ensureJoinName();
-                } else if (message.type === 'join-deny') {
-                    joinState.denied = true;
-                    showShareOverlay('Access denied. Waiting for approval.', 3500);
-                    cancelJoinFallback();
-                }
-                return;
-            }
-
-            if (message.type === 'join-request' || message.type === 'join-info') {
+            if (message.type === 'join-request') {
                 enqueueJoinRequest({
                     from: message.from,
                     name: message.name,
                     ts: message.ts
                 });
+                return;
+            }
+
+            if (message.type === 'join-info') {
+                const existingActive = joinState.activeRequest && joinState.activeRequest.from === message.from
+                    ? joinState.activeRequest
+                    : null;
+                if (existingActive) {
+                    existingActive.name = message.name || existingActive.name || null;
+                    showJoinRequest(existingActive);
+                }
+                const queuedIndex = joinState.requestQueue.findIndex(item => item.from === message.from);
+                if (queuedIndex >= 0) {
+                    joinState.requestQueue[queuedIndex].name = message.name || joinState.requestQueue[queuedIndex].name || null;
+                }
+                const existingPresence = peerPresence.get(message.from) || { id: message.from };
+                peerPresence.set(message.from, {
+                    id: message.from,
+                    name: message.name || existingPresence.name || null,
+                    state: existingPresence.state || 'active',
+                    lastSeen: message.ts || Date.now()
+                });
+                renderSessionStatus();
+                return;
+            }
+
+            if (!joinState.approved) {
+                if (message.type === 'join-accept') {
+                    setJoinApproved('remote-accept');
+                    showShareOverlay('Access granted. Joining session.', 3000);
+                    sendRelayMessage({ type: 'hello', reason: 'approved' });
+                } else if (message.type === 'join-deny') {
+                    joinState.denied = true;
+                    showShareOverlay('Access denied. Waiting for approval.', 3500);
+                    cancelJoinFallback();
+                }
                 return;
             }
 
@@ -1947,7 +1978,18 @@
 
         function respondToJoinRequest(type) {
             if (!joinState.activeRequest) return;
-            sendRelayMessage({ type, to: joinState.activeRequest.from });
+            const target = joinState.activeRequest.from;
+            sendRelayMessage({ type, to: target });
+            if (type === 'join-accept') {
+                setJoinApproved('host-accept');
+                if (joinState.name) {
+                    sendRelayMessage({ type: 'join-info', name: joinState.name, to: target });
+                    sendPresence('host-accept');
+                } else {
+                    pendingJoinInfoRequest = target;
+                    ensureJoinName();
+                }
+            }
             dequeueJoinRequest();
         }
 

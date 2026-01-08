@@ -773,7 +773,17 @@
             isDead() { return this.alpha <= 0; }
         }
 
+        const RELAY_SESSION_ID = 'relax-hidden-fixed';
+        const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
+        const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
+        const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+        const RELAY_DRAG_THROTTLE_MS = 40;
+        const RELAY_POLL_MS = 400;
+        const relayState = { ws: null, pollTimer: null, pollSince: 0 };
+
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
+        let lastRelayDragSend = 0;
+        let lastRemoteDragSound = 0;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         
@@ -818,6 +828,16 @@
                         volume: 0.1
                     });
                     lastDragSound=Date.now(); 
+                }
+
+                if (Date.now() - lastRelayDragSend > RELAY_DRAG_THROTTLE_MS) {
+                    sendRelayMessage({
+                        type: 'drag',
+                        x: x / width,
+                        y: y / height,
+                        trail: config.currentTrail
+                    });
+                    lastRelayDragSend = Date.now();
                 }
             }
         }
@@ -866,6 +886,14 @@
                     window.telemetryStats.drags++;
                     appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} [double]`);
                 }
+
+                sendRelayMessage({
+                    type: 'tap',
+                    x: x / width,
+                    y: y / height,
+                    double: isDoubleTap,
+                    entType: ent?.constructor?.name || 'Bloom'
+                });
                 lastTap = now;
                 lastTapX = x;
                 lastTapY = y;
@@ -879,6 +907,122 @@
         canvas.addEventListener('touchstart',e=>{e.preventDefault();handleInputStart(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
+
+        function spawnRemoteTap(x, y, options = {}) {
+            const { entType = 'Bloom', isDouble = false } = options;
+            let ent;
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y);
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y);
+            else ent = new Bloom(x, y);
+            visualEntities.push(ent);
+            wordEntities.push(new Word(x, y - 30));
+
+            const idx = ZenAudio.getFreqIndex(y, height);
+            pendingAudioEvents.push({
+                type: 'pluck',
+                freq: ZenAudio.scale[idx],
+                volume: 0.3
+            });
+
+            if (isDouble) {
+                visualEntities.push(new HeartCloud(x, y));
+                pendingAudioEvents.push({
+                    type: 'chord',
+                    baseIdx: idx
+                });
+            }
+        }
+
+        function spawnRemoteDrag(x, y, trail) {
+            visualEntities.push(new TrailBase(x, y, trail || config.currentTrail));
+            if (Date.now() - lastRemoteDragSound > 60) {
+                const idx = ZenAudio.getFreqIndex(y, height);
+                pendingAudioEvents.push({
+                    type: 'pluck',
+                    freq: ZenAudio.scale[idx],
+                    volume: 0.1
+                });
+                lastRemoteDragSound = Date.now();
+            }
+        }
+
+        function handleRelayMessage(message) {
+            if (!message || message.session !== RELAY_SESSION_ID) return;
+            if (message.from && message.from === RELAY_CLIENT_ID) return;
+            const x = Math.max(0, Math.min(1, message.x ?? 0.5)) * width;
+            const y = Math.max(0, Math.min(1, message.y ?? 0.5)) * height;
+            document.getElementById('overlay').style.opacity='0';
+
+            if (message.type === 'tap') {
+                spawnRemoteTap(x, y, {
+                    entType: message.entType || 'Bloom',
+                    isDouble: Boolean(message.double)
+                });
+            } else if (message.type === 'drag') {
+                spawnRemoteDrag(x, y, message.trail);
+            }
+        }
+
+        function sendRelayMessage(payload) {
+            const message = {
+                session: RELAY_SESSION_ID,
+                from: RELAY_CLIENT_ID,
+                ts: Date.now(),
+                ...payload
+            };
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                relayState.ws.send(JSON.stringify(message));
+                return;
+            }
+            fetch(RELAY_SIGNAL_HTTP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(message),
+                keepalive: true
+            }).catch(() => {});
+        }
+
+        function scheduleRelayPoll() {
+            clearTimeout(relayState.pollTimer);
+            relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
+        }
+
+        async function pollRelayMessages() {
+            const url = new URL(RELAY_SIGNAL_HTTP_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            if (relayState.pollSince) url.searchParams.set('since', relayState.pollSince);
+            try {
+                const res = await fetch(url.toString());
+                if (res.ok) {
+                    const messages = await res.json();
+                    messages.forEach(msg => {
+                        if (msg.seq) relayState.pollSince = Math.max(relayState.pollSince, msg.seq);
+                        handleRelayMessage(msg);
+                    });
+                }
+            } catch (_) {}
+            scheduleRelayPoll();
+        }
+
+        function connectRelay() {
+            const url = new URL(RELAY_SIGNAL_WS_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            relayState.ws = new WebSocket(url.toString());
+            relayState.ws.onmessage = event => {
+                try {
+                    handleRelayMessage(JSON.parse(event.data));
+                } catch (_) {}
+            };
+            relayState.ws.onclose = () => {
+                relayState.ws = null;
+                scheduleRelayPoll();
+            };
+            relayState.ws.onerror = () => {
+                if (relayState.ws) relayState.ws.close();
+            };
+        }
 
         const rhythmSequences = [
             { code: "TTT", id: 1, desc: "Tap Tap Tap", title: "Jewel Core" }, 
@@ -1182,6 +1326,7 @@
             recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
         }
 
+        connectRelay();
         requestAnimationFrame(loop);
     </script>
 

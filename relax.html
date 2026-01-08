@@ -265,9 +265,6 @@
                 <button id="deny-join-btn" class="flex-1 py-2.5 bg-red-50 text-red-700 text-sm font-semibold rounded-lg hover:bg-red-100 transition">
                     No
                 </button>
-                <button id="ask-info-btn" class="flex-1 py-2.5 bg-amber-50 text-amber-700 text-sm font-semibold rounded-lg hover:bg-amber-100 transition">
-                    Ask Info
-                </button>
             </div>
         </div>
     </div>
@@ -870,18 +867,11 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_STORAGE_KEY = 'relax_relay_session_id';
-        const DEFAULT_RELAY_SESSION_ID = 'relax-hidden-fixed';
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlSession = urlParams.get('sessionKey') || urlParams.get('session');
-        const isHostParam = urlParams.get('host') === '1' || urlParams.get('host') === 'true';
-        const RELAY_SESSION_ID = urlSession
-            || localStorage.getItem(RELAY_SESSION_STORAGE_KEY)
-            || DEFAULT_RELAY_SESSION_ID;
-        if (urlSession) {
-            localStorage.setItem(RELAY_SESSION_STORAGE_KEY, urlSession);
-        } else if (!localStorage.getItem(RELAY_SESSION_STORAGE_KEY)) {
-            localStorage.setItem(RELAY_SESSION_STORAGE_KEY, RELAY_SESSION_ID);
+        const RELAY_SESSION_ID = 'relax-hidden-fixed';
+        if (window.location.search) {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.search = '';
+            history.replaceState({}, document.title, cleanUrl.toString());
         }
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
@@ -906,7 +896,6 @@
         const joinRequestMessage = document.getElementById('join-request-message');
         const approveJoinBtn = document.getElementById('approve-join-btn');
         const denyJoinBtn = document.getElementById('deny-join-btn');
-        const askInfoBtn = document.getElementById('ask-info-btn');
         const closeJoinApprovalBtn = document.getElementById('close-join-approval');
         const joinInfoModal = document.getElementById('join-info-modal');
         const joinNameInput = document.getElementById('join-name-input');
@@ -922,9 +911,11 @@
         let shareOverlayTimer = null;
         let relayKeepaliveTimer = null;
         let pendingJoinInfoRequest = null;
+        let joinFallbackTimer = null;
         const JOIN_APPROVAL_STORAGE_KEY = `relax_join_approved_${RELAY_SESSION_ID}`;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
+        const JOIN_FALLBACK_MS = 8000;
         const joinState = {
             approved: localStorage.getItem(JOIN_APPROVAL_STORAGE_KEY) === 'true',
             denied: false,
@@ -932,11 +923,6 @@
             requestQueue: [],
             name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || ''
         };
-        const isSessionOwner = isHostParam || (!urlSession && !joinState.approved);
-        if (isSessionOwner) {
-            joinState.approved = true;
-            localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
-        }
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
@@ -1028,7 +1014,8 @@
 
         function buildShareUrl() {
             const url = new URL(window.location.href);
-            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.search = '';
+            url.hash = '';
             return url.toString();
         }
 
@@ -1448,6 +1435,38 @@
             });
         }
 
+        function scheduleJoinFallback() {
+            if (joinFallbackTimer) return;
+            joinFallbackTimer = setTimeout(() => {
+                joinFallbackTimer = null;
+                if (!joinState.approved && !joinState.denied) {
+                    joinState.approved = true;
+                    localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+                    showShareOverlay('No host found. Starting a new session.', 3500);
+                    sendRelayMessage({ type: 'hello', reason: 'fallback-host' });
+                    startRelayKeepalive();
+                    startPresenceUpdates();
+                    ensureJoinName();
+                }
+            }, JOIN_FALLBACK_MS);
+        }
+
+        function cancelJoinFallback() {
+            if (joinFallbackTimer) {
+                clearTimeout(joinFallbackTimer);
+                joinFallbackTimer = null;
+            }
+        }
+
+        function ensureJoinName() {
+            if (!joinState.approved) return;
+            if (!joinState.name) {
+                openJoinInfoModal();
+                return;
+            }
+            sendPresence('name-ready');
+        }
+
         function startRelayKeepalive() {
             if (relayKeepaliveTimer) return;
             relayKeepaliveTimer = setInterval(() => {
@@ -1501,13 +1520,13 @@
             }
 
             peers
-                .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+                .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
                 .forEach(peer => {
                     const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
                     const statusLabel = status === 'active' ? 'Active' : 'Suspended';
-                    const displayName = peer.name?.trim() || peer.id;
+                    const displayName = peer.name?.trim() || 'Unnamed device';
 
                     const row = document.createElement('li');
                     row.className = 'flex items-center justify-between text-xs text-gray-600';
@@ -1515,7 +1534,6 @@
                         <div class="flex items-center gap-2 min-w-0">
                             <span class="w-2.5 h-2.5 rounded-full ${dotClass}"></span>
                             <span class="font-medium text-gray-700 truncate">${displayName}</span>
-                            ${peer.name ? `<span class="text-[10px] text-gray-400 font-mono truncate">${peer.id}</span>` : ''}
                         </div>
                         <span class="text-[10px] uppercase tracking-wider text-gray-400">${statusLabel}</span>
                     `;
@@ -1537,12 +1555,12 @@
                     sendRelayMessage({ type: 'hello', reason: 'approved' });
                     startRelayKeepalive();
                     startPresenceUpdates();
+                    cancelJoinFallback();
+                    ensureJoinName();
                 } else if (message.type === 'join-deny') {
                     joinState.denied = true;
                     showShareOverlay('Access denied. Waiting for approval.', 3500);
-                } else if (message.type === 'join-need-info') {
-                    pendingJoinInfoRequest = message.from;
-                    openJoinInfoModal();
+                    cancelJoinFallback();
                 }
                 return;
             }
@@ -1603,7 +1621,7 @@
         }
 
         function sendRelayMessage(payload) {
-            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'join-need-info', 'ping'];
+            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping'];
             if (!joinState.approved && !joinTypes.includes(payload.type)) return;
             const message = {
                 session: RELAY_SESSION_ID,
@@ -1681,6 +1699,7 @@
                     startPresenceUpdates();
                 } else {
                     sendJoinRequest();
+                    scheduleJoinFallback();
                 }
             };
             relayState.ws.onmessage = event => {
@@ -1909,9 +1928,6 @@
         if (denyJoinBtn) {
             denyJoinBtn.onclick = () => respondToJoinRequest('join-deny');
         }
-        if (askInfoBtn) {
-            askInfoBtn.onclick = () => respondToJoinRequest('join-need-info');
-        }
         if (closeJoinApprovalBtn) {
             closeJoinApprovalBtn.onclick = () => respondToJoinRequest('join-deny');
         }
@@ -1920,12 +1936,17 @@
             const name = (joinNameInput?.value || '').trim() || 'Anonymous';
             joinState.name = name;
             localStorage.setItem(JOIN_NAME_STORAGE_KEY, name);
-            if (pendingJoinInfoRequest) {
-                sendRelayMessage({ type: 'join-info', name, to: pendingJoinInfoRequest });
-            }
+            const recipient = pendingJoinInfoRequest;
             pendingJoinInfoRequest = null;
             closeJoinInfoModal();
-            sendPresence('name-update');
+            if (joinState.approved) {
+                if (recipient) {
+                    sendRelayMessage({ type: 'join-info', name, to: recipient });
+                } else {
+                    sendRelayMessage({ type: 'join-info', name });
+                }
+                sendPresence('name-update');
+            }
         }
 
         if (submitJoinInfoBtn) {

@@ -1477,7 +1477,7 @@
         }
 
         function getLocalPresenceState() {
-            return (document.visibilityState === 'visible' && document.hasFocus()) ? 'active' : 'suspended';
+            return document.visibilityState === 'visible' ? 'active' : 'suspended';
         }
 
         function sendPresence(reason = 'interval') {
@@ -1529,14 +1529,43 @@
                     const displayName = peer.name?.trim() || 'Unnamed device';
 
                     const row = document.createElement('li');
-                    row.className = 'flex items-center justify-between text-xs text-gray-600';
-                    row.innerHTML = `
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="w-2.5 h-2.5 rounded-full ${dotClass}"></span>
-                            <span class="font-medium text-gray-700 truncate">${displayName}</span>
-                        </div>
-                        <span class="text-[10px] uppercase tracking-wider text-gray-400">${statusLabel}</span>
-                    `;
+                    row.className = 'flex items-center justify-between gap-2 text-xs text-gray-600';
+
+                    const left = document.createElement('div');
+                    left.className = 'flex items-center gap-2 min-w-0';
+
+                    const dot = document.createElement('span');
+                    dot.className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'font-medium text-gray-700 truncate';
+                    nameSpan.textContent = displayName;
+
+                    left.appendChild(dot);
+                    left.appendChild(nameSpan);
+
+                    const right = document.createElement('div');
+                    right.className = 'flex items-center gap-2 shrink-0';
+
+                    const statusSpan = document.createElement('span');
+                    statusSpan.className = 'text-[10px] uppercase tracking-wider text-gray-400';
+                    statusSpan.textContent = statusLabel;
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
+                    removeBtn.title = 'Clear';
+                    removeBtn.textContent = '✕';
+                    removeBtn.addEventListener('click', () => {
+                        peerPresence.delete(peer.id);
+                        renderSessionStatus();
+                    });
+
+                    right.appendChild(statusSpan);
+                    right.appendChild(removeBtn);
+
+                    row.appendChild(left);
+                    row.appendChild(right);
                     sessionStatusList.appendChild(row);
                 });
         }

@@ -872,7 +872,9 @@
 
         const RELAY_SESSION_STORAGE_KEY = 'relax_relay_session_id';
         const DEFAULT_RELAY_SESSION_ID = 'relax-hidden-fixed';
-        const urlSession = new URLSearchParams(window.location.search).get('session');
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlSession = urlParams.get('sessionKey') || urlParams.get('session');
+        const isHostParam = urlParams.get('host') === '1' || urlParams.get('host') === 'true';
         const RELAY_SESSION_ID = urlSession
             || localStorage.getItem(RELAY_SESSION_STORAGE_KEY)
             || DEFAULT_RELAY_SESSION_ID;
@@ -930,7 +932,7 @@
             requestQueue: [],
             name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || ''
         };
-        const isSessionOwner = !urlSession && !joinState.approved;
+        const isSessionOwner = isHostParam || (!urlSession && !joinState.approved);
         if (isSessionOwner) {
             joinState.approved = true;
             localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');

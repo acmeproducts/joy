@@ -934,7 +934,7 @@
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
-        const RELAY_DRAG_THROTTLE_MS = 40;
+        const RELAY_DRAG_THROTTLE_MS = 20;
         const RELAY_POLL_MS = 400;
         const RELAY_RECONNECT_BASE_MS = 800;
         const RELAY_RECONNECT_MAX_MS = 10000;

@@ -930,6 +930,11 @@
             requestQueue: [],
             name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || ''
         };
+        const isSessionOwner = !urlSession && !joinState.approved;
+        if (isSessionOwner) {
+            joinState.approved = true;
+            localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+        }
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;

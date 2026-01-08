@@ -827,6 +827,7 @@
             if(isDragging) { 
                 registerInput('S'); 
                 checkDragUnlock(now-dragStart); 
+                appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${config.currentTrail})`);
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const freq = ZenAudio.scale[idx];
@@ -847,6 +848,7 @@
                 });
                 
                 window.telemetryStats.taps++;
+                appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)}`);
 
                 registerInput('T');
 
@@ -862,6 +864,7 @@
                     });
                     
                     window.telemetryStats.drags++;
+                    appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)} [double]`);
                 }
                 lastTap = now;
                 lastTapX = x;
@@ -908,6 +911,7 @@
                 visualEntities.push(b);
                 
                 window.telemetryStats.secrets++;
+                appendSessionLog('secret', `Unlocked ${id}`);
 
                 ZenAudio.playDiscovery(); 
                 updateSecretsUI();
@@ -981,17 +985,26 @@
                 const i=new Image(); 
                 i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; 
                 i.src=e.target.result; 
+                appendSessionLog('background', 'Applied custom background.');
             }; 
             r.readAsDataURL(f);
         });
         
-        document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ localStorage.removeItem('garden_bg'); config.useGradient=true; config.backgroundImage=null; });
+        document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
+            localStorage.removeItem('garden_bg'); 
+            config.useGradient=true; 
+            config.backgroundImage=null; 
+            appendSessionLog('background', 'Background reset to gradient.');
+        });
         if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
 
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');
         document.getElementById('close-btn').onclick = ()=>panel.classList.add('translate-x-full');
-        document.getElementById('audio-toggle').onchange=e=>ZenAudio.enabled=e.target.checked;
+        document.getElementById('audio-toggle').onchange=e=>{
+            ZenAudio.enabled=e.target.checked;
+            appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
+        };
         
         document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
         document.getElementById('trail-slider').oninput=e=>{
@@ -1325,6 +1338,7 @@
                     formData.forEach((v,k)=>params.append(k,v));
                     if (navigator.sendBeacon(url, params)) {
                         updatePipelineStatus('sent', 'Beacon queued');
+                        appendSessionLog('pipeline', 'Session log submitted.');
                         return true;
                     }
                     updatePipelineStatus('fallback', 'Beacon returned false');
@@ -1336,10 +1350,12 @@
             try {
                 await fetch(url, { method: 'POST', mode: 'no-cors', body: formData, keepalive: true });
                 updatePipelineStatus('sent', 'Fetch dispatched');
+                appendSessionLog('pipeline', 'Session log submitted.');
                 return true;
             } catch(e) {
                 updatePipelineStatus('failed', e?.message || 'Fetch error');
                 console.warn('Pipeline fetch failed', e);
+                appendSessionLog('pipeline', 'Session log failed to submit.');
                 return false;
             }
         }

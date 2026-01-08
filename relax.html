@@ -64,6 +64,11 @@
         REC
     </div>
 
+    <div class="fixed top-5 left-24 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="sync-indicator">
+        <div class="w-2.5 h-2.5 bg-amber-400 rounded-full animate-pulse"></div>
+        SYNCING
+    </div>
+
     <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
       • A Time to Relax • Penang 2025 • <span id="clock">--:--</span>
     </div>
@@ -461,14 +466,23 @@
         window.addEventListener('orientationchange', () => { setTimeout(resize, 100); });
         resize();
 
-        const random = (min, max) => Math.random() * (max - min) + min;
-        function getPastelColor() { 
-            const hue = random(0, 360);
+        const random = (min, max, rng = Math.random) => rng() * (max - min) + min;
+        function createSeededRng(seed) {
+            let t = seed >>> 0;
+            return function() {
+                t += 0x6D2B79F5;
+                let r = Math.imul(t ^ (t >>> 15), 1 | t);
+                r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+                return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function getPastelColor(rng = Math.random) { 
+            const hue = random(0, 360, rng);
             return { hue: hue, str: `hsla(${hue}, 70%, 80%,` };
         }
-        function getRandomWord() {
-            if (config.customWords.length > 0) return config.customWords[Math.floor(Math.random() * config.customWords.length)];
-            return config.defaultWords[Math.floor(Math.random() * config.defaultWords.length)];
+        function getRandomWord(rng = Math.random) {
+            if (config.customWords.length > 0) return config.customWords[Math.floor(rng() * config.customWords.length)];
+            return config.defaultWords[Math.floor(rng() * config.defaultWords.length)];
         }
 
         class Particle {
@@ -494,10 +508,10 @@
         }
 
         class Word {
-            constructor(x, y, text) {
+            constructor(x, y, text, options = {}) {
                 this.x = x; this.y = y; this.text = text || getRandomWord();
                 this.velocity = -0.5; this.alpha = 0; this.fadeIn = true;
-                this.color = themes[config.currentThemeIndex].text; 
+                this.color = options.color || themes[config.currentThemeIndex].text; 
             }
             update() {
                 this.y += this.velocity * config.speedMultiplier;
@@ -514,19 +528,23 @@
         }
 
         class Bloom {
-            constructor(x, y, size=null) {
+            constructor(x, y, size=null, options = {}) {
+                const rng = options.rng || Math.random;
                 this.x = x; this.y = y; this.size = 0; 
-                this.maxSize = size || random(30, 80);
-                this.colorObj = getPastelColor();
+                this.maxSize = options.maxSize ?? size ?? random(30, 80, rng);
+                const hue = options.hue ?? random(0, 360, rng);
+                this.colorObj = { hue: hue, str: `hsla(${hue}, 70%, 80%,` };
                 this.colorBase = this.colorObj.str;
-                this.petals = Math.floor(random(5, 9));
+                this.petals = options.petals ?? Math.floor(random(5, 9, rng));
                 this.alpha = 1; 
                 this.compColor = `hsla(${(this.colorObj.hue + 180)%360}, 60%, 70%,`;
-                this.rotation = random(0, Math.PI*2);
-                const shapeRnd = Math.random();
-                if(shapeRnd > 0.6) this.shape = 'pointed';
-                else if (shapeRnd > 0.3) this.shape = 'round';
-                else this.shape = 'hybrid';
+                this.rotation = options.rotation ?? random(0, Math.PI*2, rng);
+                if (options.shape) {
+                    this.shape = options.shape;
+                } else {
+                    const shapeRoll = rng();
+                    this.shape = shapeRoll > 0.6 ? 'pointed' : (shapeRoll > 0.3 ? 'round' : 'hybrid');
+                }
             }
             update() {
                 this.rotation += 0.002;
@@ -611,10 +629,11 @@
         }
 
         class GrowingHeart {
-            constructor(x, y) {
+            constructor(x, y, options = {}) {
+                const rng = options.rng || Math.random;
                 this.x = x; this.y = y; this.size = 0; 
-                this.maxSize = random(40, 90);
-                this.hue = random(0, 360);
+                this.maxSize = options.maxSize ?? random(40, 90, rng);
+                this.hue = options.hue ?? random(0, 360, rng);
                 this.alpha = 1;
             }
             update() {
@@ -685,18 +704,23 @@
         }
 
         class HeartCloud {
-            constructor(x, y) {
+            constructor(x, y, options = {}) {
+                const rng = options.rng || Math.random;
                 this.x = x; this.y = y; this.alpha = 1;
                 this.hearts = [];
-                const count = Math.floor(random(4, 12));
-                const colors = ["#ff0000", "#ff7f00", "#ffff00", "#00ff00", "#0000ff", "#4b0082", "#9400d3", "#ff1493"];
-                for(let i=0; i<count; i++) {
-                    this.hearts.push({
-                        ox: random(-40, 40), oy: random(-40, 40),
-                        size: random(10, 25),
-                        color: colors[Math.floor(Math.random()*colors.length)],
-                        rot: random(-0.2, 0.2)
-                    });
+                if (options.hearts) {
+                    this.hearts = options.hearts.map(h => ({ ...h }));
+                } else {
+                    const count = Math.floor(random(4, 12, rng));
+                    const colors = ["#ff0000", "#ff7f00", "#ffff00", "#00ff00", "#0000ff", "#4b0082", "#9400d3", "#ff1493"];
+                    for(let i=0; i<count; i++) {
+                        this.hearts.push({
+                            ox: random(-40, 40, rng), oy: random(-40, 40, rng),
+                            size: random(10, 25, rng),
+                            color: colors[Math.floor(rng() * colors.length)],
+                            rot: random(-0.2, 0.2, rng)
+                        });
+                    }
                 }
             }
             update() {
@@ -731,13 +755,14 @@
         }
 
         class TrailBase {
-            constructor(x, y, type) {
+            constructor(x, y, type, options = {}) {
+                const rng = options.rng || Math.random;
                 this.x = x; this.y = y; this.alpha = 1; 
-                this.size = random(10, 20);
+                this.size = options.size ?? random(10, 20, rng);
                 this.type = type; 
-                this.hue = random(0, 360);
-                this.color = `hsl(${this.hue},100%,60%)`; 
-                this.cometColor = `hsl(${random(200,260)},100%,80%)`;
+                this.hue = options.hue ?? random(0, 360, rng);
+                this.color = options.color ?? `hsl(${this.hue},100%,60%)`; 
+                this.cometColor = options.cometColor ?? `hsl(${random(200,260, rng)},100%,80%)`;
             }
             update() {
                 this.y -= config.trailSpeed; 
@@ -780,12 +805,78 @@
         const RELAY_DRAG_THROTTLE_MS = 40;
         const RELAY_POLL_MS = 400;
         const relayState = { ws: null, pollTimer: null, pollSince: 0 };
+        const syncState = { lastStateTs: 0, initialSent: false };
+        const syncIndicator = document.getElementById('sync-indicator');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         let lastRelayDragSend = 0;
         let lastRemoteDragSound = 0;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
+
+        function createSeed() {
+            if (crypto?.getRandomValues) {
+                const arr = new Uint32Array(1);
+                crypto.getRandomValues(arr);
+                return arr[0];
+            }
+            return Math.floor(Math.random() * 2 ** 32);
+        }
+
+        function buildBloomPayload(rng) {
+            const hue = random(0, 360, rng);
+            const shapeRoll = rng();
+            return {
+                maxSize: random(30, 80, rng),
+                hue,
+                petals: Math.floor(random(5, 9, rng)),
+                rotation: random(0, Math.PI * 2, rng),
+                shape: shapeRoll > 0.6 ? 'pointed' : (shapeRoll > 0.3 ? 'round' : 'hybrid')
+            };
+        }
+
+        function buildGrowingHeartPayload(rng) {
+            return {
+                maxSize: random(40, 90, rng),
+                hue: random(0, 360, rng)
+            };
+        }
+
+        function buildHeartCloudPayload(rng) {
+            const colors = ["#ff0000", "#ff7f00", "#ffff00", "#00ff00", "#0000ff", "#4b0082", "#9400d3", "#ff1493"];
+            const count = Math.floor(random(4, 12, rng));
+            const hearts = [];
+            for (let i = 0; i < count; i++) {
+                hearts.push({
+                    ox: random(-40, 40, rng),
+                    oy: random(-40, 40, rng),
+                    size: random(10, 25, rng),
+                    color: colors[Math.floor(rng() * colors.length)],
+                    rot: random(-0.2, 0.2, rng)
+                });
+            }
+            return { hearts };
+        }
+
+        function buildTrailPayload(rng, trailType) {
+            const hue = random(0, 360, rng);
+            return {
+                type: trailType,
+                size: random(10, 20, rng),
+                hue,
+                color: `hsl(${hue},100%,60%)`,
+                cometColor: `hsl(${random(200,260, rng)},100%,80%)`
+            };
+        }
+
+        function updateSyncIndicator(mode) {
+            if (!syncIndicator) return;
+            if (mode === 'live') {
+                syncIndicator.style.opacity = '0';
+                return;
+            }
+            syncIndicator.style.opacity = '1';
+        }
         
         function wakeAudio() {
             ZenAudio.warmUp();
@@ -805,18 +896,23 @@
         
         function spawnTap(x, y, options = {}) {
             const {
-                entType = 'bloom',
+                entType = 'Bloom',
                 idx = ZenAudio.getFreqIndex(y, height),
                 isDouble = false,
-                trackTelemetry = false
+                trackTelemetry = false,
+                wordText,
+                wordColor,
+                bloomPayload,
+                heartPayload,
+                cloudPayload
             } = options;
             let ent;
-            if (entType === 'growing-heart') ent = new GrowingHeart(x, y);
-            else if (entType === 'heart-bloom') ent = new HeartBloom(x, y);
-            else ent = new Bloom(x, y);
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
+            else ent = new Bloom(x, y, null, bloomPayload || {});
 
             visualEntities.push(ent);
-            wordEntities.push(new Word(x, y - 30));
+            wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
 
             pendingAudioEvents.push({
                 type: 'pluck',
@@ -830,7 +926,7 @@
             }
 
             if (isDouble) {
-                visualEntities.push(new HeartCloud(x, y));
+                visualEntities.push(new HeartCloud(x, y, cloudPayload || {}));
                 pendingAudioEvents.push({
                     type: 'chord',
                     baseIdx: idx
@@ -843,8 +939,9 @@
         }
 
         function spawnDrag(x, y, options = {}) {
-            const { trailType = config.currentTrail, idx = ZenAudio.getFreqIndex(y, height) } = options;
-            visualEntities.push(new TrailBase(x, y, trailType));
+            const { trailType = config.currentTrail, idx = ZenAudio.getFreqIndex(y, height), trailPayload } = options;
+            const resolvedType = trailPayload?.type || trailType;
+            visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
             pendingAudioEvents.push({
                 type: 'pluck',
                 freq: ZenAudio.scale[idx],
@@ -868,7 +965,10 @@
                 }
 
                 const idx = ZenAudio.getFreqIndex(y, height);
-                spawnDrag(x, y, { trailType: config.currentTrail, idx });
+                const trailSeed = createSeed();
+                const trailRng = createSeededRng(trailSeed);
+                const trailPayload = buildTrailPayload(trailRng, config.currentTrail);
+                spawnDrag(x, y, { trailType: config.currentTrail, idx, trailPayload });
 
                 if(Date.now()-lastDragSound > 40) { 
                     pendingAudioEvents.push({
@@ -884,7 +984,8 @@
                         type: 'drag',
                         x: x / width,
                         y: y / height,
-                        trail: config.currentTrail
+                        trail: config.currentTrail,
+                        trailPayload
                     });
                     lastRelayDragSend = Date.now();
                 }
@@ -899,25 +1000,39 @@
                 appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${config.currentTrail})`);
             } else {
                 const idx = ZenAudio.getFreqIndex(y, height);
-                const rnd = Math.random();
+                const seed = createSeed();
+                const rng = createSeededRng(seed);
+                const rnd = rng();
                 const entType = (foundEggs.includes(3) && rnd > 0.7)
-                    ? 'growing-heart'
+                    ? 'GrowingHeart'
                     : (foundEggs.includes(3) && rnd > 0.5)
-                        ? 'heart-bloom'
-                        : 'bloom';
+                        ? 'HeartBloom'
+                        : 'Bloom';
 
                 registerInput('T');
 
                 const isNearLastTap = lastTapX !== null && lastTapY !== null && Math.hypot(x - lastTapX, y - lastTapY) <= DOUBLE_TAP_DISTANCE;
                 const isDoubleTap = (now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap;
 
-                const ent = spawnTap(x, y, { entType, idx, isDouble: isDoubleTap, trackTelemetry: true });
+                const wordText = getRandomWord(rng);
+                const wordColor = themes[config.currentThemeIndex].text;
+                const bloomPayload = entType === 'Bloom' || entType === 'HeartBloom' ? buildBloomPayload(rng) : null;
+                const heartPayload = entType === 'GrowingHeart' ? buildGrowingHeartPayload(rng) : null;
+                const cloudPayload = isDoubleTap ? buildHeartCloudPayload(rng) : null;
+
+                const ent = spawnTap(x, y, { entType, idx, isDouble: isDoubleTap, trackTelemetry: true, wordText, wordColor, bloomPayload, heartPayload, cloudPayload });
                 sendRelayMessage({
                     type: 'tap',
                     x: x / width,
                     y: y / height,
                     double: isDoubleTap,
-                    entType: ent?.constructor?.name || 'Bloom'
+                    entType: ent?.constructor?.name || 'Bloom',
+                    word: wordText,
+                    wordColor,
+                    bloomPayload,
+                    heartPayload,
+                    cloudPayload,
+                    seed
                 });
                 lastTap = now;
                 lastTapX = x;
@@ -934,13 +1049,21 @@
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
 
         function spawnRemoteTap(x, y, options = {}) {
-            const { entType = 'Bloom', isDouble = false } = options;
+            const {
+                entType = 'Bloom',
+                isDouble = false,
+                wordText,
+                wordColor,
+                bloomPayload,
+                heartPayload,
+                cloudPayload
+            } = options;
             let ent;
-            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y);
-            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y);
-            else ent = new Bloom(x, y);
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
+            else ent = new Bloom(x, y, null, bloomPayload || {});
             visualEntities.push(ent);
-            wordEntities.push(new Word(x, y - 30));
+            wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
 
             const idx = ZenAudio.getFreqIndex(y, height);
             pendingAudioEvents.push({
@@ -950,7 +1073,7 @@
             });
 
             if (isDouble) {
-                visualEntities.push(new HeartCloud(x, y));
+                visualEntities.push(new HeartCloud(x, y, cloudPayload || {}));
                 pendingAudioEvents.push({
                     type: 'chord',
                     baseIdx: idx
@@ -958,8 +1081,9 @@
             }
         }
 
-        function spawnRemoteDrag(x, y, trail) {
-            visualEntities.push(new TrailBase(x, y, trail || config.currentTrail));
+        function spawnRemoteDrag(x, y, trail, trailPayload) {
+            const resolvedType = trailPayload?.type || trail || config.currentTrail;
+            visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
             if (Date.now() - lastRemoteDragSound > 60) {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 pendingAudioEvents.push({
@@ -971,9 +1095,70 @@
             }
         }
 
+        function buildSyncState() {
+            return {
+                themeIndex: config.currentThemeIndex,
+                useGradient: config.useGradient,
+                backgroundImage: config.backgroundImage?.src || null,
+                customWords: config.customWords || []
+            };
+        }
+
+        function applySyncState(state, stateTs = Date.now()) {
+            if (!state) return;
+            if (stateTs && stateTs <= syncState.lastStateTs) return;
+            syncState.lastStateTs = stateTs;
+
+            if (typeof state.themeIndex === 'number') {
+                config.currentThemeIndex = state.themeIndex % themes.length;
+            }
+
+            if (Array.isArray(state.customWords)) {
+                const customWordsInput = document.getElementById('custom-words');
+                config.customWords = state.customWords.filter(Boolean);
+                if (customWordsInput) {
+                    customWordsInput.value = config.customWords.join(', ');
+                    localStorage.setItem('garden_words', customWordsInput.value);
+                }
+            }
+
+            if (state.backgroundImage) {
+                const img = new Image();
+                img.onload = () => {
+                    config.backgroundImage = img;
+                    config.useGradient = false;
+                    try {
+                        localStorage.setItem('garden_bg', state.backgroundImage);
+                    } catch (err) {
+                        console.warn("Remote background image too large to persist.");
+                    }
+                };
+                img.src = state.backgroundImage;
+            } else if (state.useGradient !== undefined) {
+                config.useGradient = state.useGradient;
+                if (state.useGradient) {
+                    config.backgroundImage = null;
+                    localStorage.removeItem('garden_bg');
+                }
+            }
+        }
+
+        function sendSyncState(reason = 'update') {
+            if (reason === 'init' && syncState.initialSent) return;
+            const stateTs = Date.now();
+            const state = buildSyncState();
+            sendRelayMessage({ type: 'state', state, stateTs, reason });
+            syncState.initialSent = true;
+        }
+
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
+
+            if (message.type === 'state') {
+                applySyncState(message.state, message.stateTs || message.ts);
+                return;
+            }
 
             const x = Math.max(0, Math.min(1, message.x ?? 0.5)) * width;
             const y = Math.max(0, Math.min(1, message.y ?? 0.5)) * height;
@@ -982,10 +1167,15 @@
             if (message.type === 'tap') {
                 spawnRemoteTap(x, y, {
                     entType: message.entType || 'Bloom',
-                    isDouble: Boolean(message.double)
+                    isDouble: Boolean(message.double),
+                    wordText: message.word,
+                    wordColor: message.wordColor,
+                    bloomPayload: message.bloomPayload,
+                    heartPayload: message.heartPayload,
+                    cloudPayload: message.cloudPayload
                 });
             } else if (message.type === 'drag') {
-                spawnRemoteDrag(x, y, message.trail);
+                spawnRemoteDrag(x, y, message.trail, message.trailPayload);
             }
         }
 
@@ -998,8 +1188,10 @@
             };
             if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
                 relayState.ws.send(JSON.stringify(message));
+                updateSyncIndicator('live');
                 return;
             }
+            updateSyncIndicator('polling');
             fetch(RELAY_SIGNAL_HTTP_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1036,6 +1228,11 @@
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
             relayState.ws = new WebSocket(url.toString());
+            updateSyncIndicator('connecting');
+            relayState.ws.onopen = () => {
+                updateSyncIndicator('live');
+                sendSyncState('init');
+            };
             relayState.ws.onmessage = event => {
                 try {
                     handleRelayMessage(JSON.parse(event.data));
@@ -1043,6 +1240,7 @@
             };
             relayState.ws.onclose = () => {
                 relayState.ws = null;
+                updateSyncIndicator('polling');
                 scheduleRelayPoll();
             };
             relayState.ws.onerror = () => {
@@ -1152,7 +1350,7 @@
                 }
                 
                 const i=new Image(); 
-                i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; 
+                i.onload=()=>{config.backgroundImage=i;config.useGradient=false;sendSyncState('background');}; 
                 i.src=e.target.result; 
                 appendSessionLog('background', 'Applied custom background.');
             }; 
@@ -1164,6 +1362,7 @@
             config.useGradient=true; 
             config.backgroundImage=null; 
             appendSessionLog('background', 'Background reset to gradient.');
+            sendSyncState('background-reset');
         });
         if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
 
@@ -1185,12 +1384,22 @@
         };
         document.getElementById('speed-slider').oninput=e=>config.speedMultiplier=0.2+(e.target.value/100)*1.8;
         
-        document.getElementById('theme-btn').onclick=()=>config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
+        document.getElementById('theme-btn').onclick=()=>{
+            config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
+            sendSyncState('theme');
+        };
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
         const cBox=document.getElementById('custom-words');
         cBox.value=localStorage.getItem('garden_words')||"";
-        cBox.onblur=e=>{localStorage.setItem('garden_words',e.target.value);if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];else config.customWords=e.target.value.split(',').filter(s=>s.trim());};
+        if (cBox.value === '6969') config.customWords=[...config.defaultWords,...secretWords];
+        else config.customWords=cBox.value.split(',').filter(s=>s.trim());
+        cBox.onblur=e=>{
+            localStorage.setItem('garden_words',e.target.value);
+            if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];
+            else config.customWords=e.target.value.split(',').filter(s=>s.trim());
+            sendSyncState('words');
+        };
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),
@@ -1353,6 +1562,7 @@
         }
 
         connectRelay();
+        sendSyncState('init');
         requestAnimationFrame(loop);
     </script>
 

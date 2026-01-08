@@ -59,6 +59,13 @@
         <div id="custom-message-container" class="mt-4 hidden bg-black/30 p-4 rounded-lg backdrop-blur-sm max-w-lg text-sm text-left"></div>
     </div>
 
+    <div class="fixed inset-0 flex items-end justify-center pb-16 z-20 opacity-0 pointer-events-none transition-opacity duration-500" id="share-overlay">
+        <button class="pointer-events-auto bg-white/15 text-white text-sm font-semibold tracking-wide px-5 py-3 rounded-full backdrop-blur-md shadow-lg border border-white/30 hover:bg-white/25 active:scale-95 transition flex items-center gap-2" id="share-overlay-btn">
+            <span class="material-symbols-outlined text-base">share</span>
+            <span id="share-overlay-text">Share by clicking here</span>
+        </button>
+    </div>
+
     <div class="fixed top-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="rec-indicator">
         <div class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
         REC
@@ -414,6 +421,15 @@
                 
                 this.bgSource.connect(this.bgGain);
                 this.bgSource.start(0);
+            },
+
+            softenEntry: function() {
+                if (!this.ctx || !this.masterGain || !this.enabled) return;
+                const now = this.ctx.currentTime;
+                const startGain = Math.min(this.masterGain.gain.value || 0.3, 0.12);
+                this.masterGain.gain.cancelScheduledValues(now);
+                this.masterGain.gain.setValueAtTime(startGain, now);
+                this.masterGain.gain.linearRampToValueAtTime(0.3, now + 1.2);
             },
 
             warmUp: function() {
@@ -838,7 +854,17 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_ID = 'relax-hidden-fixed';
+        const RELAY_SESSION_STORAGE_KEY = 'relax_relay_session_id';
+        const DEFAULT_RELAY_SESSION_ID = 'relax-hidden-fixed';
+        const urlSession = new URLSearchParams(window.location.search).get('session');
+        const RELAY_SESSION_ID = urlSession
+            || localStorage.getItem(RELAY_SESSION_STORAGE_KEY)
+            || DEFAULT_RELAY_SESSION_ID;
+        if (urlSession) {
+            localStorage.setItem(RELAY_SESSION_STORAGE_KEY, urlSession);
+        } else if (!localStorage.getItem(RELAY_SESSION_STORAGE_KEY)) {
+            localStorage.setItem(RELAY_SESSION_STORAGE_KEY, RELAY_SESSION_ID);
+        }
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
@@ -846,6 +872,7 @@
         const RELAY_POLL_MS = 400;
         const RELAY_RECONNECT_BASE_MS = 800;
         const RELAY_RECONNECT_MAX_MS = 10000;
+        const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0 };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
@@ -854,10 +881,15 @@
             lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
         };
         const syncIndicator = document.getElementById('sync-indicator');
+        const shareOverlay = document.getElementById('share-overlay');
+        const shareOverlayBtn = document.getElementById('share-overlay-btn');
+        const shareOverlayText = document.getElementById('share-overlay-text');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         let lastRelayDragSend = 0;
         let lastRemoteDragSound = 0;
+        let remoteEntryDampenUntil = 0;
+        let shareOverlayTimer = null;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
 
@@ -923,6 +955,53 @@
                 return;
             }
             syncIndicator.style.opacity = '1';
+        }
+
+        function showShareOverlay(message = 'Share by clicking here', duration = 6500) {
+            if (!shareOverlay) return;
+            if (shareOverlayText) shareOverlayText.textContent = message;
+            shareOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            shareOverlay.classList.add('opacity-100');
+            if (shareOverlayTimer) clearTimeout(shareOverlayTimer);
+            shareOverlayTimer = setTimeout(() => hideShareOverlay(), duration);
+        }
+
+        function hideShareOverlay() {
+            if (!shareOverlay) return;
+            shareOverlay.classList.add('opacity-0', 'pointer-events-none');
+            shareOverlay.classList.remove('opacity-100');
+        }
+
+        function buildShareUrl() {
+            const url = new URL(window.location.href);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            return url.toString();
+        }
+
+        async function shareSession() {
+            const shareUrl = buildShareUrl();
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: document.title,
+                        text: 'Join me in A Time to Relax',
+                        url: shareUrl
+                    });
+                    return;
+                } catch (err) {
+                    if (err?.name !== 'AbortError') {
+                        console.warn('Share failed, falling back to clipboard.', err);
+                    }
+                }
+            }
+            if (navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showShareOverlay('Link copied. Share it to invite.', 3500);
+                } catch (err) {
+                    console.warn('Clipboard copy failed.', err);
+                }
+            }
         }
         
         function wakeAudio() {
@@ -1113,10 +1192,12 @@
             wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
 
             const idx = ZenAudio.getFreqIndex(y, height);
+            const baseVolume = 0.3;
+            const volume = Date.now() < remoteEntryDampenUntil ? baseVolume * 0.45 : baseVolume;
             pendingAudioEvents.push({
                 type: 'pluck',
                 freq: ZenAudio.scale[idx],
-                volume: 0.3
+                volume
             });
 
             if (isDouble) {
@@ -1133,10 +1214,12 @@
             visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
             if (Date.now() - lastRemoteDragSound > 60) {
                 const idx = ZenAudio.getFreqIndex(y, height);
+                const baseVolume = 0.1;
+                const volume = Date.now() < remoteEntryDampenUntil ? baseVolume * 0.6 : baseVolume;
                 pendingAudioEvents.push({
                     type: 'pluck',
                     freq: ZenAudio.scale[idx],
-                    volume: 0.1
+                    volume
                 });
                 lastRemoteDragSound = Date.now();
             }
@@ -1215,6 +1298,9 @@
             if (message.from && message.from === RELAY_CLIENT_ID) return;
 
             if (message.type === 'hello') {
+                remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
+                ZenAudio.softenEntry();
+                showShareOverlay();
                 sendSyncState('hello');
                 return;
             }
@@ -1674,10 +1760,23 @@
 
         connectRelay();
         scheduleRelayPoll();
+        if (shareOverlayBtn) {
+            shareOverlayBtn.addEventListener('click', () => {
+                shareSession();
+            });
+        }
         window.addEventListener('online', () => {
             if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
                 scheduleRelayReconnect();
             }
+        });
+        window.addEventListener('focus', () => {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                connectRelay();
+                scheduleRelayPoll();
+                return;
+            }
+            sendRelayMessage({ type: 'hello', reason: 'focus' });
         });
         requestAnimationFrame(loop);
     </script>
@@ -1915,15 +2014,6 @@
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
 
         window.addEventListener('beforeunload', () => requestSessionEnd('beforeunload', true));
-        window.addEventListener('pagehide', () => requestSessionEnd('pagehide', true));
-        window.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                requestSessionEnd('visibility-hidden', false);
-            } else {
-                cancelSessionEnd('visible');
-                appendSessionLog('session-lifecycle', 'Resumed (visible).');
-            }
-        });
 
         ['pointerdown','touchstart','keydown','mousemove'].forEach(evt => {
             window.addEventListener(evt, () => cancelSessionEnd('activity'));

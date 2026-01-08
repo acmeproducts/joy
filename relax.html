@@ -189,12 +189,6 @@
                     <span class="material-symbols-outlined">key</span> Open Secrets
                 </button>
 
-                 <button class="col-span-1 mt-2 py-3 bg-blue-50 text-blue-700 text-sm font-bold rounded-xl hover:bg-blue-100 transition text-center flex items-center justify-center gap-2 border border-blue-200" id="info-btn">
-                    <span class="material-symbols-outlined text-sm">code</span> Code
-                </button>
-                <button class="col-span-1 mt-2 py-3 bg-purple-50 text-purple-700 text-sm font-bold rounded-xl hover:bg-purple-100 transition text-center flex items-center justify-center gap-2 border border-purple-200" id="req-btn">
-                    <span class="material-symbols-outlined text-sm">list</span> Reqs
-                </button>
             </div>
         </div>
     </aside>
@@ -247,50 +241,6 @@
                         <span class="material-symbols-outlined">play_circle</span> Play Example
                     </button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="code-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-4xl h-[80vh] p-6 transform scale-out modal-content flex flex-col">
-            <div class="flex justify-between items-center mb-4 border-b pb-2 shrink-0">
-                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-blue-500">code</span> Source Code
-                </h3>
-                <button id="close-code" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="flex-1 overflow-auto bg-gray-50 p-4 rounded border border-gray-200 font-mono text-xs">
-                <pre id="source-code-display">Loading...</pre>
-            </div>
-            <div class="mt-4 flex justify-end shrink-0">
-                <button id="copy-code-btn" class="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 transition flex items-center gap-2">
-                    <span class="material-symbols-outlined text-sm">content_copy</span> Copy to Clipboard
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="req-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-lg p-6 transform scale-out modal-content">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-purple-500">checklist</span> Changes & Requirements
-                </h3>
-                <button id="close-req" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="overflow-y-auto max-h-[60vh] space-y-3 text-sm text-gray-700">
-                <p class="font-bold text-gray-900">v13.3 Changelog (Frame-Perfect Sync):</p>
-                <ul class="list-decimal pl-5 space-y-1">
-                    <li><strong>Pre-Generated Buffers:</strong> All pluck sounds pre-generated at startup (zero generation overhead).</li>
-                    <li><strong>Event Queue System:</strong> User interactions queue audio events instead of playing immediately.</li>
-                    <li><strong>Frame Synchronization:</strong> Audio queue processed at exact start of each render frame.</li>
-                    <li><strong>Scheduled Playback:</strong> All audio scheduled using AudioContext.currentTime for precise timing.</li>
-                    <li><strong>Zero Drift:</strong> Audio and visuals locked to same animation frame timeline.</li>
-                </ul>
             </div>
         </div>
     </div>
@@ -1923,9 +1873,7 @@
         }
 
         const modals = {
-            secrets: document.getElementById('secrets-modal'),
-            code: document.getElementById('code-modal'),
-            req: document.getElementById('req-modal')
+            secrets: document.getElementById('secrets-modal')
         };
 
         function toggleModal(id, show) {
@@ -2016,18 +1964,6 @@
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
-        document.getElementById('info-btn').onclick=()=>{
-            document.getElementById('source-code-display').textContent = document.documentElement.outerHTML;
-            toggleModal('code', true);
-        };
-        document.getElementById('close-code').onclick=()=>toggleModal('code', false);
-        document.getElementById('req-btn').onclick=()=>toggleModal('req', true);
-        document.getElementById('close-req').onclick=()=>toggleModal('req', false);
-        document.getElementById('copy-code-btn').onclick=()=>{
-            navigator.clipboard.writeText(document.documentElement.outerHTML).then(() => {
-                alert("Code copied to clipboard!");
-            });
-        };
         document.getElementById('back-to-grid').onclick=()=>{
             document.getElementById('secrets-detail-view').classList.add('hidden');
             document.getElementById('secrets-grid-view').classList.remove('hidden');

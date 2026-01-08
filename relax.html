@@ -96,6 +96,19 @@
                 </label>
             </div>
 
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Musical Scale</span>
+                <select id="scale-selector" class="w-full px-4 py-2.5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 cursor-pointer">
+                    <option value="extended_pentatonic">Extended Pentatonic (18 notes)</option>
+                    <option value="original">Original Scale (13 notes)</option>
+                    <option value="major_pentatonic">Major Pentatonic</option>
+                    <option value="minor_pentatonic">Minor Pentatonic</option>
+                    <option value="chromatic">Chromatic</option>
+                    <option value="whole_tone">Whole Tone</option>
+                    <option value="blues">Blues Scale</option>
+                </select>
+            </div>
+
             <div class="space-y-3">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Background</span>
                 <div class="space-y-2">
@@ -276,7 +289,8 @@
             useGradient: true,
             backgroundImage: null,
             currentTrail: '♥',
-            lastTrailSwitch: Date.now()
+            lastTrailSwitch: Date.now(),
+            currentScale: 'original'
         };
 
         const themes = [
@@ -291,6 +305,16 @@
             "I Love You", "You are my Sunshine", "I Love You My Sweetheart", "❤️❤️❤️", "🥰❤️♥️🧡🫰","whereever you go that's where I want to be", "Forever Yours", "My One and Only", "Soulmate", "Endless Love","My Heart is Yours", "Together Always", "You Complete Me", "My Happy Place", "Love of My Life", "Dream Come True","My Everything", "Cherished", "Adored", "My Rock", "Purest Love", "Only You", "Sweetheart", "Darling",
             "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
         ];
+
+        const scales = {
+            extended_pentatonic: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            original: [329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99, 880.00, 987.77, 1174.66, 1318.51],
+            major_pentatonic: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            minor_pentatonic: [220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50],
+            chromatic: [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88],
+            whole_tone: [261.63, 293.66, 329.63, 369.99, 415.30, 466.16, 523.25, 587.33, 659.25, 739.99, 830.61, 932.33],
+            blues: [261.63, 311.13, 349.23, 369.99, 392.00, 466.16, 523.25, 622.25, 698.46, 739.99, 783.99, 932.33]
+        };
         
         let visualEntities = [];
         let wordEntities = [];
@@ -308,7 +332,8 @@
             bgSource: null,
             bgGain: null,
             pluckBuffers: {},
-            scale: [329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99, 880.00, 987.77, 1174.66, 1318.51],
+            scale: scales.original,
+            hasUserInteracted: false,
             
             init: function() {
                 if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
@@ -326,7 +351,8 @@
 
             generatePluckBuffers: function() {
                 if (!this.ctx) return;
-                
+                this.pluckBuffers = {};
+
                 this.scale.forEach(freq => {
                     const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2.0, this.ctx.sampleRate);
                     const data = buffer.getChannelData(0);
@@ -343,8 +369,15 @@
                         idx = (idx + 1) % delayLength;
                     }
                     
-                    this.pluckBuffers[freq] = buffer;
-                });
+                this.pluckBuffers[freq] = buffer;
+            });
+            },
+
+            changeScale: function(scaleName) {
+                if (scales[scaleName]) {
+                    this.scale = scales[scaleName];
+                    this.generatePluckBuffers();
+                }
             },
 
             loadBackground: async function(url) {
@@ -411,6 +444,13 @@
 
                 const buffer = this.pluckBuffers[freq];
                 if (!buffer) return;
+
+                if (!this.hasUserInteracted) {
+                    this.hasUserInteracted = true;
+                    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+                    this.masterGain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                    this.masterGain.gain.linearRampToValueAtTime(0.3, this.ctx.currentTime + 0.2);
+                }
 
                 const src = this.ctx.createBufferSource();
                 const gain = this.ctx.createGain();
@@ -804,8 +844,15 @@
         const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
         const RELAY_DRAG_THROTTLE_MS = 40;
         const RELAY_POLL_MS = 400;
-        const relayState = { ws: null, pollTimer: null, pollSince: 0 };
-        const syncState = { lastStateTs: 0, initialSent: false };
+        const RELAY_RECONNECT_BASE_MS = 800;
+        const RELAY_RECONNECT_MAX_MS = 10000;
+        const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0 };
+        const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
+        const syncState = {
+            lastStateTs: 0,
+            initialSent: false,
+            lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
+        };
         const syncIndicator = document.getElementById('sync-indicator');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
@@ -1100,14 +1147,18 @@
                 themeIndex: config.currentThemeIndex,
                 useGradient: config.useGradient,
                 backgroundImage: config.backgroundImage?.src || null,
-                customWords: config.customWords || []
+                customWords: config.customWords || [],
+                currentScale: config.currentScale
             };
         }
 
         function applySyncState(state, stateTs = Date.now()) {
             if (!state) return;
             if (stateTs && stateTs <= syncState.lastStateTs) return;
+            if (stateTs && syncState.lastLocalStateTs && stateTs < syncState.lastLocalStateTs) return;
             syncState.lastStateTs = stateTs;
+            syncState.lastLocalStateTs = Math.max(syncState.lastLocalStateTs, stateTs);
+            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
 
             if (typeof state.themeIndex === 'number') {
                 config.currentThemeIndex = state.themeIndex % themes.length;
@@ -1141,11 +1192,19 @@
                     localStorage.removeItem('garden_bg');
                 }
             }
+
+            if (state.currentScale && scales[state.currentScale]) {
+                config.currentScale = state.currentScale;
+                const scaleSelector = document.getElementById('scale-selector');
+                if (scaleSelector) scaleSelector.value = config.currentScale;
+                ZenAudio.changeScale(config.currentScale);
+                localStorage.setItem('garden_scale', config.currentScale);
+            }
         }
 
         function sendSyncState(reason = 'update') {
             if (reason === 'init' && syncState.initialSent) return;
-            const stateTs = Date.now();
+            const stateTs = syncState.lastLocalStateTs || Date.now();
             const state = buildSyncState();
             sendRelayMessage({ type: 'state', state, stateTs, reason });
             syncState.initialSent = true;
@@ -1154,6 +1213,11 @@
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
+
+            if (message.type === 'hello') {
+                sendSyncState('hello');
+                return;
+            }
 
             if (message.type === 'state') {
                 applySyncState(message.state, message.stateTs || message.ts);
@@ -1200,12 +1264,26 @@
             }).catch(() => {});
         }
 
+        function scheduleRelayReconnect() {
+            if (relayState.reconnectTimer) return;
+            const delay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** relayState.reconnectAttempts));
+            relayState.reconnectAttempts += 1;
+            relayState.reconnectTimer = setTimeout(() => {
+                relayState.reconnectTimer = null;
+                connectRelay();
+            }, delay);
+        }
+
         function scheduleRelayPoll() {
             clearTimeout(relayState.pollTimer);
             relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
         }
 
         async function pollRelayMessages() {
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                scheduleRelayPoll();
+                return;
+            }
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
@@ -1224,6 +1302,9 @@
         }
 
         function connectRelay() {
+            if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
             const url = new URL(RELAY_SIGNAL_WS_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
@@ -1231,7 +1312,9 @@
             updateSyncIndicator('connecting');
             relayState.ws.onopen = () => {
                 updateSyncIndicator('live');
-                sendSyncState('init');
+                relayState.reconnectAttempts = 0;
+                clearTimeout(relayState.pollTimer);
+                sendRelayMessage({ type: 'hello' });
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -1242,6 +1325,7 @@
                 relayState.ws = null;
                 updateSyncIndicator('polling');
                 scheduleRelayPoll();
+                scheduleRelayReconnect();
             };
             relayState.ws.onerror = () => {
                 if (relayState.ws) relayState.ws.close();
@@ -1350,7 +1434,12 @@
                 }
                 
                 const i=new Image(); 
-                i.onload=()=>{config.backgroundImage=i;config.useGradient=false;sendSyncState('background');}; 
+                i.onload=()=>{
+                    config.backgroundImage=i;
+                    config.useGradient=false;
+                    markLocalStateChanged();
+                    sendSyncState('background');
+                }; 
                 i.src=e.target.result; 
                 appendSessionLog('background', 'Applied custom background.');
             }; 
@@ -1362,6 +1451,7 @@
             config.useGradient=true; 
             config.backgroundImage=null; 
             appendSessionLog('background', 'Background reset to gradient.');
+            markLocalStateChanged();
             sendSyncState('background-reset');
         });
         if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
@@ -1386,6 +1476,7 @@
         
         document.getElementById('theme-btn').onclick=()=>{
             config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
+            markLocalStateChanged();
             sendSyncState('theme');
         };
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
@@ -1398,8 +1489,28 @@
             localStorage.setItem('garden_words',e.target.value);
             if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];
             else config.customWords=e.target.value.split(',').filter(s=>s.trim());
+            markLocalStateChanged();
             sendSyncState('words');
         };
+
+        const scaleSelector = document.getElementById('scale-selector');
+        if (localStorage.getItem('garden_scale')) {
+            config.currentScale = localStorage.getItem('garden_scale');
+            scaleSelector.value = config.currentScale;
+            ZenAudio.changeScale(config.currentScale);
+        }
+        scaleSelector.onchange = (e) => {
+            config.currentScale = e.target.value;
+            localStorage.setItem('garden_scale', config.currentScale);
+            ZenAudio.changeScale(config.currentScale);
+            markLocalStateChanged();
+            sendSyncState('scale');
+        };
+
+        function markLocalStateChanged() {
+            syncState.lastLocalStateTs = Date.now();
+            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+        }
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),
@@ -1562,7 +1673,12 @@
         }
 
         connectRelay();
-        sendSyncState('init');
+        scheduleRelayPoll();
+        window.addEventListener('online', () => {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                scheduleRelayReconnect();
+            }
+        });
         requestAnimationFrame(loop);
     </script>
 

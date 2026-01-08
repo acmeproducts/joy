@@ -777,11 +777,13 @@
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+        const RELAY_DRAG_THROTTLE_MS = 40;
+        const RELAY_POLL_MS = 400;
         const relayState = { ws: null, pollTimer: null, pollSince: 0 };
-        const RELAY_DRAG_THROTTLE_MS = 70;
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         let lastRelayDragSend = 0;
+        let lastRemoteDragSound = 0;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         
@@ -837,6 +839,7 @@
                     window.telemetryStats.drags++;
                 }
             }
+            return ent;
         }
 
         function spawnDrag(x, y, options = {}) {
@@ -867,7 +870,7 @@
                 const idx = ZenAudio.getFreqIndex(y, height);
                 spawnDrag(x, y, { trailType: config.currentTrail, idx });
 
-                if(Date.now()-lastDragSound > 60) { 
+                if(Date.now()-lastDragSound > 40) { 
                     pendingAudioEvents.push({
                         type: 'pluck',
                         freq: ZenAudio.scale[idx],
@@ -881,8 +884,7 @@
                         type: 'drag',
                         x: x / width,
                         y: y / height,
-                        trail: config.currentTrail,
-                        idx
+                        trail: config.currentTrail
                     });
                     lastRelayDragSend = Date.now();
                 }
@@ -909,14 +911,13 @@
                 const isNearLastTap = lastTapX !== null && lastTapY !== null && Math.hypot(x - lastTapX, y - lastTapY) <= DOUBLE_TAP_DISTANCE;
                 const isDoubleTap = (now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap;
 
-                spawnTap(x, y, { entType, idx, isDouble: isDoubleTap, trackTelemetry: true });
+                const ent = spawnTap(x, y, { entType, idx, isDouble: isDoubleTap, trackTelemetry: true });
                 sendRelayMessage({
                     type: 'tap',
                     x: x / width,
                     y: y / height,
-                    entType,
-                    idx,
-                    double: isDoubleTap
+                    double: isDoubleTap,
+                    entType: ent?.constructor?.name || 'Bloom'
                 });
                 lastTap = now;
                 lastTapX = x;
@@ -932,6 +933,44 @@
         canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
 
+        function spawnRemoteTap(x, y, options = {}) {
+            const { entType = 'Bloom', isDouble = false } = options;
+            let ent;
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y);
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y);
+            else ent = new Bloom(x, y);
+            visualEntities.push(ent);
+            wordEntities.push(new Word(x, y - 30));
+
+            const idx = ZenAudio.getFreqIndex(y, height);
+            pendingAudioEvents.push({
+                type: 'pluck',
+                freq: ZenAudio.scale[idx],
+                volume: 0.3
+            });
+
+            if (isDouble) {
+                visualEntities.push(new HeartCloud(x, y));
+                pendingAudioEvents.push({
+                    type: 'chord',
+                    baseIdx: idx
+                });
+            }
+        }
+
+        function spawnRemoteDrag(x, y, trail) {
+            visualEntities.push(new TrailBase(x, y, trail || config.currentTrail));
+            if (Date.now() - lastRemoteDragSound > 60) {
+                const idx = ZenAudio.getFreqIndex(y, height);
+                pendingAudioEvents.push({
+                    type: 'pluck',
+                    freq: ZenAudio.scale[idx],
+                    volume: 0.1
+                });
+                lastRemoteDragSound = Date.now();
+            }
+        }
+
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
@@ -941,20 +980,12 @@
             document.getElementById('overlay').style.opacity='0';
 
             if (message.type === 'tap') {
-                spawnTap(x, y, {
-                    entType: message.entType || 'bloom',
-                    idx: typeof message.idx === 'number' ? message.idx : ZenAudio.getFreqIndex(y, height),
-                    isDouble: Boolean(message.double),
-                    trackTelemetry: false
+                spawnRemoteTap(x, y, {
+                    entType: message.entType || 'Bloom',
+                    isDouble: Boolean(message.double)
                 });
-            }
-
-            if (message.type === 'drag') {
-                const idx = typeof message.idx === 'number' ? message.idx : ZenAudio.getFreqIndex(y, height);
-                spawnDrag(x, y, {
-                    trailType: message.trail || config.currentTrail,
-                    idx
-                });
+            } else if (message.type === 'drag') {
+                spawnRemoteDrag(x, y, message.trail);
             }
         }
 
@@ -979,7 +1010,7 @@
 
         function scheduleRelayPoll() {
             clearTimeout(relayState.pollTimer);
-            relayState.pollTimer = setTimeout(pollRelayMessages, 1200);
+            relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
         }
 
         async function pollRelayMessages() {
@@ -1001,7 +1032,6 @@
         }
 
         function connectRelay() {
-            if (!RELAY_SIGNAL_WS_URL) return;
             const url = new URL(RELAY_SIGNAL_WS_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);

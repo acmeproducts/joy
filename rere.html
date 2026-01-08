@@ -103,13 +103,6 @@
                 </button>
                 <p class="text-[11px] text-gray-400">Send the active session link to invite another device.</p>
             </div>
-
-            <div class="space-y-2">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Session Status</span>
-                <ul id="session-status-list" class="space-y-2 text-xs text-gray-600">
-                    <li class="text-[11px] text-gray-400">No peers yet.</li>
-                </ul>
-            </div>
             
             <div class="flex justify-between items-center">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sound</span>
@@ -961,7 +954,6 @@
         const submitJoinInfoBtn = document.getElementById('submit-join-info');
         const cancelJoinInfoBtn = document.getElementById('cancel-join-info');
         const closeJoinInfoBtn = document.getElementById('close-join-info');
-        const sessionStatusList = document.getElementById('session-status-list');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -982,13 +974,6 @@
         };
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
-        const RELAY_PRESENCE_INTERVAL_MS = 12000;
-        const RELAY_PRESENCE_STALE_MS = 30000;
-        const SESSION_STATUS_RENDER_MS = 5000;
-        const peerPresence = new Map();
-        let presenceTimer = null;
-        let presenceRenderTimer = null;
-        let localPresenceState = 'active';
 
         function createSeed() {
             if (crypto?.getRandomValues) {
@@ -1408,11 +1393,6 @@
             content.classList.add('scale-out');
         }
 
-        function showJoinToast(request) {
-            const deviceLabel = request.name ? ` (${request.name})` : '';
-            showShareOverlay(`New join request${deviceLabel}.`, 2500);
-        }
-
         function openJoinInfoModal() {
             if (!joinInfoModal) return;
             const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
@@ -1458,15 +1438,11 @@
             const existing = joinState.activeRequest && joinState.activeRequest.from === request.from
                 ? joinState.activeRequest
                 : joinState.requestQueue.find(item => item.from === request.from);
-            const isNewRequest = !existing;
             const merged = {
                 from: request.from,
                 name: request.name || existing?.name || null,
                 ts: request.ts || Date.now()
             };
-            if (isNewRequest) {
-                showJoinToast(merged);
-            }
             if (joinState.activeRequest && joinState.activeRequest.from === merged.from) {
                 joinState.activeRequest = merged;
                 showJoinRequest(merged);
@@ -1500,72 +1476,6 @@
             }, RELAY_KEEPALIVE_MS);
         }
 
-        function getLocalPresenceState() {
-            return (document.visibilityState === 'visible' && document.hasFocus()) ? 'active' : 'suspended';
-        }
-
-        function sendPresence(reason = 'interval') {
-            if (!joinState.approved) return;
-            const state = getLocalPresenceState();
-            localPresenceState = state;
-            sendRelayMessage({
-                type: 'presence',
-                state,
-                name: joinState.name || undefined,
-                reason
-            });
-        }
-
-        function startPresenceUpdates() {
-            if (!presenceTimer) {
-                presenceTimer = setInterval(() => {
-                    sendPresence('interval');
-                }, RELAY_PRESENCE_INTERVAL_MS);
-            }
-            if (!presenceRenderTimer) {
-                presenceRenderTimer = setInterval(renderSessionStatus, SESSION_STATUS_RENDER_MS);
-            }
-            sendPresence('start');
-            renderSessionStatus();
-        }
-
-        function renderSessionStatus() {
-            if (!sessionStatusList) return;
-            const peers = Array.from(peerPresence.values());
-            const now = Date.now();
-            sessionStatusList.innerHTML = '';
-
-            if (peers.length === 0) {
-                const emptyItem = document.createElement('li');
-                emptyItem.className = 'text-[11px] text-gray-400';
-                emptyItem.textContent = 'No peers yet.';
-                sessionStatusList.appendChild(emptyItem);
-                return;
-            }
-
-            peers
-                .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
-                .forEach(peer => {
-                    const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
-                    const status = isStale ? 'suspended' : (peer.state || 'active');
-                    const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
-                    const statusLabel = status === 'active' ? 'Active' : 'Suspended';
-                    const displayName = peer.name?.trim() || peer.id;
-
-                    const row = document.createElement('li');
-                    row.className = 'flex items-center justify-between text-xs text-gray-600';
-                    row.innerHTML = `
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="w-2.5 h-2.5 rounded-full ${dotClass}"></span>
-                            <span class="font-medium text-gray-700 truncate">${displayName}</span>
-                            ${peer.name ? `<span class="text-[10px] text-gray-400 font-mono truncate">${peer.id}</span>` : ''}
-                        </div>
-                        <span class="text-[10px] uppercase tracking-wider text-gray-400">${statusLabel}</span>
-                    `;
-                    sessionStatusList.appendChild(row);
-                });
-        }
-
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
@@ -1579,7 +1489,6 @@
                     showShareOverlay('Access granted. Joining session.', 3000);
                     sendRelayMessage({ type: 'hello', reason: 'approved' });
                     startRelayKeepalive();
-                    startPresenceUpdates();
                 } else if (message.type === 'join-deny') {
                     joinState.denied = true;
                     showShareOverlay('Access denied. Waiting for approval.', 3500);
@@ -1596,18 +1505,6 @@
                     name: message.name,
                     ts: message.ts
                 });
-                return;
-            }
-
-            if (message.type === 'presence') {
-                const existing = peerPresence.get(message.from) || { id: message.from };
-                peerPresence.set(message.from, {
-                    id: message.from,
-                    name: message.name || existing.name || null,
-                    state: message.state || existing.state || 'active',
-                    lastSeen: message.ts || Date.now()
-                });
-                renderSessionStatus();
                 return;
             }
 
@@ -1721,7 +1618,6 @@
                 if (joinState.approved) {
                     sendRelayMessage({ type: 'hello' });
                     startRelayKeepalive();
-                    startPresenceUpdates();
                 } else {
                     sendJoinRequest();
                 }
@@ -1970,7 +1866,6 @@
             }
             pendingJoinInfoRequest = null;
             closeJoinInfoModal();
-            sendPresence('name-update');
         }
 
         if (submitJoinInfoBtn) {
@@ -1996,23 +1891,6 @@
                 }
             });
         }
-
-        localPresenceState = getLocalPresenceState();
-        document.addEventListener('visibilitychange', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('visibility');
-            renderSessionStatus();
-        });
-        window.addEventListener('focus', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('focus');
-            renderSessionStatus();
-        });
-        window.addEventListener('blur', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('blur');
-            renderSessionStatus();
-        });
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
@@ -2175,7 +2053,6 @@
             if (joinState.approved) {
                 sendRelayMessage({ type: 'hello', reason: 'focus' });
             } else {
-                joinState.denied = false;
                 sendJoinRequest();
             }
         });

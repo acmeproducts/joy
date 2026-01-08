@@ -60,10 +60,10 @@
     </div>
 
     <div class="fixed inset-0 flex items-end justify-center pb-16 z-20 opacity-0 pointer-events-none transition-opacity duration-500" id="share-overlay">
-        <button class="pointer-events-auto bg-white/15 text-white text-sm font-semibold tracking-wide px-5 py-3 rounded-full backdrop-blur-md shadow-lg border border-white/30 hover:bg-white/25 active:scale-95 transition flex items-center gap-2" id="share-overlay-btn">
-            <span class="material-symbols-outlined text-base">share</span>
-            <span id="share-overlay-text">Share by clicking here</span>
-        </button>
+        <div class="bg-black/50 text-white text-xs font-semibold tracking-wide px-4 py-2 rounded-full backdrop-blur-md shadow-lg border border-white/20 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">link</span>
+            <span id="share-overlay-text">Link copied.</span>
+        </div>
     </div>
 
     <div class="fixed top-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="rec-indicator">
@@ -94,6 +94,15 @@
         </div>
 
         <div class="p-6 space-y-8 flex-1">
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Share Session</span>
+                <button class="w-full px-4 py-3 bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl hover:bg-blue-100 transition flex items-center justify-center gap-2 border border-blue-200" id="share-panel-btn">
+                    <span class="material-symbols-outlined text-sm">share</span>
+                    Share This Session
+                </button>
+                <p class="text-[11px] text-gray-400">Send the active session link to invite another device.</p>
+            </div>
             
             <div class="flex justify-between items-center">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sound</span>
@@ -275,6 +284,56 @@
                     <li><strong>Scheduled Playback:</strong> All audio scheduled using AudioContext.currentTime for precise timing.</li>
                     <li><strong>Zero Drift:</strong> Audio and visuals locked to same animation frame timeline.</li>
                 </ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="join-approval-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-blue-500">devices</span> New Device Request
+                </h3>
+                <button id="close-join-approval" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p id="join-request-message" class="text-sm text-gray-600 mb-4">
+                A new device wants to join this session.
+            </p>
+            <div class="flex gap-2">
+                <button id="approve-join-btn" class="flex-1 py-2.5 bg-green-50 text-green-700 text-sm font-semibold rounded-lg hover:bg-green-100 transition">
+                    Allow
+                </button>
+                <button id="deny-join-btn" class="flex-1 py-2.5 bg-red-50 text-red-700 text-sm font-semibold rounded-lg hover:bg-red-100 transition">
+                    No
+                </button>
+                <button id="ask-info-btn" class="flex-1 py-2.5 bg-amber-50 text-amber-700 text-sm font-semibold rounded-lg hover:bg-amber-100 transition">
+                    Ask Info
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="join-info-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500">badge</span> Identify Yourself
+                </h3>
+                <button id="close-join-info" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2" for="join-name-input">Username</label>
+            <input id="join-name-input" type="text" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. Device C">
+            <div class="mt-4 flex gap-2">
+                <button id="submit-join-info" class="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
+                    Send Info
+                </button>
+                <button id="cancel-join-info" class="flex-1 py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">
+                    Cancel
+                </button>
             </div>
         </div>
     </div>
@@ -882,14 +941,37 @@
         };
         const syncIndicator = document.getElementById('sync-indicator');
         const shareOverlay = document.getElementById('share-overlay');
-        const shareOverlayBtn = document.getElementById('share-overlay-btn');
         const shareOverlayText = document.getElementById('share-overlay-text');
+        const sharePanelBtn = document.getElementById('share-panel-btn');
+        const joinApprovalModal = document.getElementById('join-approval-modal');
+        const joinRequestMessage = document.getElementById('join-request-message');
+        const approveJoinBtn = document.getElementById('approve-join-btn');
+        const denyJoinBtn = document.getElementById('deny-join-btn');
+        const askInfoBtn = document.getElementById('ask-info-btn');
+        const closeJoinApprovalBtn = document.getElementById('close-join-approval');
+        const joinInfoModal = document.getElementById('join-info-modal');
+        const joinNameInput = document.getElementById('join-name-input');
+        const submitJoinInfoBtn = document.getElementById('submit-join-info');
+        const cancelJoinInfoBtn = document.getElementById('cancel-join-info');
+        const closeJoinInfoBtn = document.getElementById('close-join-info');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
         let lastRelayDragSend = 0;
         let lastRemoteDragSound = 0;
         let remoteEntryDampenUntil = 0;
         let shareOverlayTimer = null;
+        let relayKeepaliveTimer = null;
+        let pendingJoinInfoRequest = null;
+        const JOIN_APPROVAL_STORAGE_KEY = `relax_join_approved_${RELAY_SESSION_ID}`;
+        const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
+        const RELAY_KEEPALIVE_MS = 20000;
+        const joinState = {
+            approved: localStorage.getItem(JOIN_APPROVAL_STORAGE_KEY) === 'true',
+            denied: false,
+            activeRequest: null,
+            requestQueue: [],
+            name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || ''
+        };
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
 
@@ -957,7 +1039,7 @@
             syncIndicator.style.opacity = '1';
         }
 
-        function showShareOverlay(message = 'Share by clicking here', duration = 6500) {
+        function showShareOverlay(message = 'Link copied.', duration = 3000) {
             if (!shareOverlay) return;
             if (shareOverlayText) shareOverlayText.textContent = message;
             shareOverlay.classList.remove('opacity-0', 'pointer-events-none');
@@ -1293,20 +1375,151 @@
             syncState.initialSent = true;
         }
 
+        function openJoinApprovalModal() {
+            if (!joinApprovalModal) return;
+            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
+            joinApprovalModal.classList.remove('invisible');
+            joinApprovalModal.classList.add('visible');
+            content.classList.remove('scale-out');
+            content.classList.add('scale-in');
+        }
+
+        function closeJoinApprovalModal() {
+            if (!joinApprovalModal) return;
+            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
+            joinApprovalModal.classList.remove('visible');
+            joinApprovalModal.classList.add('invisible');
+            content.classList.remove('scale-in');
+            content.classList.add('scale-out');
+        }
+
+        function openJoinInfoModal() {
+            if (!joinInfoModal) return;
+            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
+            joinInfoModal.classList.remove('invisible');
+            joinInfoModal.classList.add('visible');
+            content.classList.remove('scale-out');
+            content.classList.add('scale-in');
+            if (joinNameInput) {
+                joinNameInput.value = joinState.name || '';
+                joinNameInput.focus();
+            }
+        }
+
+        function closeJoinInfoModal() {
+            if (!joinInfoModal) return;
+            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
+            joinInfoModal.classList.remove('visible');
+            joinInfoModal.classList.add('invisible');
+            content.classList.remove('scale-in');
+            content.classList.add('scale-out');
+        }
+
+        function showJoinRequest(request) {
+            joinState.activeRequest = request;
+            const deviceLabel = request.name ? ` (${request.name})` : '';
+            if (joinRequestMessage) {
+                joinRequestMessage.textContent = `A new device wants to join this session${deviceLabel}. Allow access?`;
+            }
+            openJoinApprovalModal();
+        }
+
+        function dequeueJoinRequest() {
+            const next = joinState.requestQueue.shift();
+            if (next) {
+                showJoinRequest(next);
+            } else {
+                joinState.activeRequest = null;
+                closeJoinApprovalModal();
+            }
+        }
+
+        function enqueueJoinRequest(request) {
+            const existing = joinState.activeRequest && joinState.activeRequest.from === request.from
+                ? joinState.activeRequest
+                : joinState.requestQueue.find(item => item.from === request.from);
+            const merged = {
+                from: request.from,
+                name: request.name || existing?.name || null,
+                ts: request.ts || Date.now()
+            };
+            if (joinState.activeRequest && joinState.activeRequest.from === merged.from) {
+                joinState.activeRequest = merged;
+                showJoinRequest(merged);
+                return;
+            }
+            const queuedIndex = joinState.requestQueue.findIndex(item => item.from === merged.from);
+            if (queuedIndex >= 0) {
+                joinState.requestQueue[queuedIndex] = merged;
+                return;
+            }
+            if (!joinState.activeRequest) {
+                showJoinRequest(merged);
+            } else {
+                joinState.requestQueue.push(merged);
+            }
+        }
+
+        function sendJoinRequest() {
+            sendRelayMessage({
+                type: 'join-request',
+                name: joinState.name || undefined
+            });
+        }
+
+        function startRelayKeepalive() {
+            if (relayKeepaliveTimer) return;
+            relayKeepaliveTimer = setInterval(() => {
+                if (joinState.approved) {
+                    sendRelayMessage({ type: 'ping' });
+                }
+            }, RELAY_KEEPALIVE_MS);
+        }
+
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
+            if (message.to && message.to !== RELAY_CLIENT_ID) return;
+
+            if (!joinState.approved) {
+                if (message.type === 'join-accept') {
+                    joinState.approved = true;
+                    joinState.denied = false;
+                    localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+                    showShareOverlay('Access granted. Joining session.', 3000);
+                    sendRelayMessage({ type: 'hello', reason: 'approved' });
+                    startRelayKeepalive();
+                } else if (message.type === 'join-deny') {
+                    joinState.denied = true;
+                    showShareOverlay('Access denied. Waiting for approval.', 3500);
+                } else if (message.type === 'join-need-info') {
+                    pendingJoinInfoRequest = message.from;
+                    openJoinInfoModal();
+                }
+                return;
+            }
+
+            if (message.type === 'join-request' || message.type === 'join-info') {
+                enqueueJoinRequest({
+                    from: message.from,
+                    name: message.name,
+                    ts: message.ts
+                });
+                return;
+            }
 
             if (message.type === 'hello') {
                 remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
                 ZenAudio.softenEntry();
-                showShareOverlay();
                 sendSyncState('hello');
                 return;
             }
 
             if (message.type === 'state') {
                 applySyncState(message.state, message.stateTs || message.ts);
+                return;
+            }
+            if (message.type === 'ping') {
                 return;
             }
 
@@ -1330,6 +1543,8 @@
         }
 
         function sendRelayMessage(payload) {
+            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'join-need-info', 'ping'];
+            if (!joinState.approved && !joinTypes.includes(payload.type)) return;
             const message = {
                 session: RELAY_SESSION_ID,
                 from: RELAY_CLIENT_ID,
@@ -1400,7 +1615,12 @@
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
                 clearTimeout(relayState.pollTimer);
-                sendRelayMessage({ type: 'hello' });
+                if (joinState.approved) {
+                    sendRelayMessage({ type: 'hello' });
+                    startRelayKeepalive();
+                } else {
+                    sendJoinRequest();
+                }
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -1618,6 +1838,60 @@
             }
         }
 
+        function respondToJoinRequest(type) {
+            if (!joinState.activeRequest) return;
+            sendRelayMessage({ type, to: joinState.activeRequest.from });
+            dequeueJoinRequest();
+        }
+
+        if (approveJoinBtn) {
+            approveJoinBtn.onclick = () => respondToJoinRequest('join-accept');
+        }
+        if (denyJoinBtn) {
+            denyJoinBtn.onclick = () => respondToJoinRequest('join-deny');
+        }
+        if (askInfoBtn) {
+            askInfoBtn.onclick = () => respondToJoinRequest('join-need-info');
+        }
+        if (closeJoinApprovalBtn) {
+            closeJoinApprovalBtn.onclick = () => respondToJoinRequest('join-deny');
+        }
+
+        function submitJoinInfo() {
+            const name = (joinNameInput?.value || '').trim() || 'Anonymous';
+            joinState.name = name;
+            localStorage.setItem(JOIN_NAME_STORAGE_KEY, name);
+            if (pendingJoinInfoRequest) {
+                sendRelayMessage({ type: 'join-info', name, to: pendingJoinInfoRequest });
+            }
+            pendingJoinInfoRequest = null;
+            closeJoinInfoModal();
+        }
+
+        if (submitJoinInfoBtn) {
+            submitJoinInfoBtn.onclick = submitJoinInfo;
+        }
+        if (cancelJoinInfoBtn) {
+            cancelJoinInfoBtn.onclick = () => {
+                pendingJoinInfoRequest = null;
+                closeJoinInfoModal();
+            };
+        }
+        if (closeJoinInfoBtn) {
+            closeJoinInfoBtn.onclick = () => {
+                pendingJoinInfoRequest = null;
+                closeJoinInfoModal();
+            };
+        }
+        if (joinNameInput) {
+            joinNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitJoinInfo();
+                }
+            });
+        }
+
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('info-btn').onclick=()=>{
@@ -1760,8 +2034,8 @@
 
         connectRelay();
         scheduleRelayPoll();
-        if (shareOverlayBtn) {
-            shareOverlayBtn.addEventListener('click', () => {
+        if (sharePanelBtn) {
+            sharePanelBtn.addEventListener('click', () => {
                 shareSession();
             });
         }
@@ -1776,7 +2050,11 @@
                 scheduleRelayPoll();
                 return;
             }
-            sendRelayMessage({ type: 'hello', reason: 'focus' });
+            if (joinState.approved) {
+                sendRelayMessage({ type: 'hello', reason: 'focus' });
+            } else {
+                sendJoinRequest();
+            }
         });
         requestAnimationFrame(loop);
     </script>

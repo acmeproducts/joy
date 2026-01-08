@@ -1044,7 +1044,7 @@
         const syncClientId = (crypto.randomUUID && crypto.randomUUID()) || `client-${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
         const SESSION_KEY_PARAM = 'session';
         const SIGNAL_KEY_PARAM = 'signal';
-        const DEFAULT_SIGNAL_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
+        const DEFAULT_SIGNAL_URL = 'https://gift-signal.myacctfortracking.workers.dev';
         const p2pStatusEl = document.getElementById('p2p-status');
         const p2pSessionEl = document.getElementById('p2p-session');
         const p2pShareEl = document.getElementById('p2p-share-url');
@@ -1248,12 +1248,42 @@
             addSyncLog('peer', `${payload.type}: ${JSON.stringify(payload.value)} (#${seq})`, latencyMs, channelKey);
         }
 
+        const remoteDragSoundAt = new Map();
+
+        function applyRemoteDragSegment(value = {}, payload = {}) {
+            if (!value) return;
+            const eventId = value.eventId || `${payload.clientId || 'peer'}-drag`;
+            const seededRng = createEventRng(eventId);
+            const trailType = value.trail || config.currentTrail;
+            const x1 = typeof value.x1 === 'number' ? value.x1 : value.x2;
+            const y1 = typeof value.y1 === 'number' ? value.y1 : value.y2;
+            const x2 = typeof value.x2 === 'number' ? value.x2 : x1;
+            const y2 = typeof value.y2 === 'number' ? value.y2 : y1;
+            const steps = 3;
+
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                const x = x1 + (x2 - x1) * t;
+                const y = y1 + (y2 - y1) * t;
+                withSeededRng(seededRng, () => {
+                    visualEntities.push(new TrailBase(x, y, trailType));
+                });
+            }
+
+            const lastSoundAt = remoteDragSoundAt.get(eventId) || 0;
+            if (Date.now() - lastSoundAt > 60) {
+                const idx = ZenAudio.getFreqIndex(y2, height);
+                ZenAudio.playPluck(ZenAudio.scale[idx], 0.1);
+                remoteDragSoundAt.set(eventId, Date.now());
+            }
+        }
+
         function applySyncEvent(payload) {
             const { type, value = {}, clientId } = payload;
             if (type === 'tap') {
                 simulateTap(value.x, value.y, { silentSync: true, sharedWord: value.word, sharedVisual: value.visual, forceDouble: value.double, eventId: value.eventId });
             } else if (type === 'drag') {
-                simulateDrag(value.x1, value.y1, value.x2, value.y2, { silentSync: true, sharedTrail: value.trail, eventId: value.eventId });
+                applyRemoteDragSegment(value, payload);
             } else if (type === 'background') {
                 applyBackgroundStateFromPeer(value);
             } else if (type === 'audio') {

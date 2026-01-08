@@ -1393,6 +1393,11 @@
             content.classList.add('scale-out');
         }
 
+        function showJoinToast(request) {
+            const deviceLabel = request.name ? ` (${request.name})` : '';
+            showShareOverlay(`New join request${deviceLabel}.`, 2500);
+        }
+
         function openJoinInfoModal() {
             if (!joinInfoModal) return;
             const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
@@ -1438,11 +1443,15 @@
             const existing = joinState.activeRequest && joinState.activeRequest.from === request.from
                 ? joinState.activeRequest
                 : joinState.requestQueue.find(item => item.from === request.from);
+            const isNewRequest = !existing;
             const merged = {
                 from: request.from,
                 name: request.name || existing?.name || null,
                 ts: request.ts || Date.now()
             };
+            if (isNewRequest) {
+                showJoinToast(merged);
+            }
             if (joinState.activeRequest && joinState.activeRequest.from === merged.from) {
                 joinState.activeRequest = merged;
                 showJoinRequest(merged);
@@ -2053,6 +2062,7 @@
             if (joinState.approved) {
                 sendRelayMessage({ type: 'hello', reason: 'focus' });
             } else {
+                joinState.denied = false;
                 sendJoinRequest();
             }
         });

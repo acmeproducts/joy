@@ -1,4 +1,5 @@
-const MAX_HISTORY = 500;
+const MAX_HISTORY = 2000;
+const SNAPSHOT_KEY = 'snapshot';
 
 function corsHeaders() {
   return {
@@ -50,10 +51,14 @@ export class SignalSession {
     this.seq = 0;
     this.messages = [];
     this.sessionId = '';
+    this.host = null;
+    this.hostUpdatedAt = 0;
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['seq', 'messages']);
+      const stored = await this.state.storage.get(['seq', 'messages', 'host', 'hostUpdatedAt']);
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
+      this.host = stored.host || null;
+      this.hostUpdatedAt = stored.hostUpdatedAt || 0;
     });
   }
 
@@ -85,10 +90,18 @@ export class SignalSession {
       const sessionId = (url.searchParams.get('session') || '').trim();
       const clientId = (url.searchParams.get('client') || '').trim();
       const since = Number(url.searchParams.get('since') || 0);
+      const wantsSnapshot = url.searchParams.get('snapshot') === '1';
       if (!sessionId) {
         return new Response('Missing session', { status: 400, headers: corsHeaders() });
       }
       this.sessionId = sessionId;
+      if (wantsSnapshot) {
+        const snapshot = await this.state.storage.get(SNAPSHOT_KEY);
+        return new Response(JSON.stringify(snapshot || null), {
+          status: 200,
+          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
+        });
+      }
       const messages = this.messages.filter(msg => {
         if (msg.seq <= since) return false;
         if (msg.to && msg.to !== clientId) return false;
@@ -114,12 +127,27 @@ export class SignalSession {
       }
       this.sessionId = sessionId;
       message.session = sessionId;
-      message.seq = ++this.seq;
-      this.messages.push(message);
-      if (this.messages.length > MAX_HISTORY) {
-        this.messages.splice(0, this.messages.length - MAX_HISTORY);
+      const isTransient = message.transient === true;
+      if (message.type === 'host-claim' && message.from) {
+        await this.handleHostClaim(message.from, message.ts || Date.now());
       }
-      await this.state.storage.put({ seq: this.seq, messages: this.messages });
+      if (this.host && message.from === this.host) {
+        this.hostUpdatedAt = message.ts || Date.now();
+        await this.state.storage.put({ hostUpdatedAt: this.hostUpdatedAt });
+      }
+      if (message.type === 'snapshot') {
+        await this.state.storage.put(SNAPSHOT_KEY, message);
+      }
+      message.seq = ++this.seq;
+      if (!isTransient) {
+        this.messages.push(message);
+        if (this.messages.length > MAX_HISTORY) {
+          this.messages.splice(0, this.messages.length - MAX_HISTORY);
+        }
+        await this.state.storage.put({ seq: this.seq, messages: this.messages });
+      } else {
+        await this.state.storage.put({ seq: this.seq });
+      }
       const payload = JSON.stringify(message);
       for (const [clientId, socket] of this.clients.entries()) {
         if (message.to && message.to !== clientId) continue;
@@ -151,12 +179,27 @@ export class SignalSession {
     if (!clientId || !sessionId) return;
     data.session = data.session || sessionId;
     data.from = data.from || clientId;
-    data.seq = ++this.seq;
-    this.messages.push(data);
-    if (this.messages.length > MAX_HISTORY) {
-      this.messages.splice(0, this.messages.length - MAX_HISTORY);
+    const isTransient = data.transient === true;
+    if (data.type === 'host-claim') {
+      await this.handleHostClaim(data.from, data.ts || Date.now());
     }
-    await this.state.storage.put({ seq: this.seq, messages: this.messages });
+    if (this.host && data.from === this.host) {
+      this.hostUpdatedAt = data.ts || Date.now();
+      await this.state.storage.put({ hostUpdatedAt: this.hostUpdatedAt });
+    }
+    if (data.type === 'snapshot') {
+      await this.state.storage.put(SNAPSHOT_KEY, data);
+    }
+    data.seq = ++this.seq;
+    if (!isTransient) {
+      this.messages.push(data);
+      if (this.messages.length > MAX_HISTORY) {
+        this.messages.splice(0, this.messages.length - MAX_HISTORY);
+      }
+      await this.state.storage.put({ seq: this.seq, messages: this.messages });
+    } else {
+      await this.state.storage.put({ seq: this.seq });
+    }
     const payload = JSON.stringify(data);
     for (const [targetId, socket] of this.clients.entries()) {
       if (data.to && data.to !== targetId) continue;
@@ -174,6 +217,38 @@ export class SignalSession {
     if (clientId) {
       this.clients.delete(clientId);
       this.clientIds.delete(ws);
+    }
+  }
+
+  async handleHostClaim(clientId, ts) {
+    const now = ts || Date.now();
+    const hostStale = !this.host || (now - this.hostUpdatedAt > 45000);
+    if (hostStale || this.host === clientId) {
+      this.host = clientId;
+      this.hostUpdatedAt = now;
+      await this.state.storage.put({ host: this.host, hostUpdatedAt: this.hostUpdatedAt });
+    }
+    const ack = {
+      session: this.sessionId,
+      from: 'server',
+      to: clientId,
+      ts: now,
+      type: 'host-ack',
+      hostId: this.host,
+      granted: this.host === clientId
+    };
+    ack.seq = ++this.seq;
+    this.messages.push(ack);
+    if (this.messages.length > MAX_HISTORY) {
+      this.messages.splice(0, this.messages.length - MAX_HISTORY);
+    }
+    await this.state.storage.put({ seq: this.seq, messages: this.messages });
+    const payload = JSON.stringify(ack);
+    const targetSocket = this.clients.get(clientId);
+    if (targetSocket) {
+      try {
+        targetSocket.send(payload);
+      } catch (_) {}
     }
   }
 }

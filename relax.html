@@ -881,6 +881,7 @@
         const RELAY_RECONNECT_BASE_MS = 800;
         const RELAY_RECONNECT_MAX_MS = 10000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
+        const SNAPSHOT_DEBOUNCE_MS = 1200;
         const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0 };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
@@ -912,6 +913,7 @@
         let relayKeepaliveTimer = null;
         let pendingJoinInfoRequest = null;
         let joinFallbackTimer = null;
+        let snapshotTimer = null;
         const JOIN_APPROVAL_STORAGE_KEY = `relax_join_approved_${RELAY_SESSION_ID}`;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
@@ -1152,7 +1154,8 @@
                         x: x / width,
                         y: y / height,
                         trail: config.currentTrail,
-                        trailPayload
+                        trailPayload,
+                        transient: true
                     });
                     lastRelayDragSend = Date.now();
                 }
@@ -1274,6 +1277,36 @@
                 customWords: config.customWords || [],
                 currentScale: config.currentScale
             };
+        }
+
+        async function fetchSnapshot(reason = 'startup') {
+            const url = new URL(RELAY_SIGNAL_HTTP_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('snapshot', '1');
+            try {
+                const res = await fetch(url.toString());
+                if (!res.ok) return;
+                const snapshot = await res.json();
+                if (snapshot?.state) {
+                    applySyncState(snapshot.state, snapshot.stateTs || snapshot.ts);
+                }
+            } catch (_) {}
+        }
+
+        function sendSnapshot(reason = 'snapshot') {
+            if (!joinState.approved) return;
+            const stateTs = syncState.lastLocalStateTs || Date.now();
+            const state = buildSyncState();
+            sendRelayMessage({ type: 'snapshot', state, stateTs, reason });
+        }
+
+        function queueSnapshot(reason = 'debounced') {
+            if (!joinState.approved) return;
+            if (snapshotTimer) clearTimeout(snapshotTimer);
+            snapshotTimer = setTimeout(() => {
+                snapshotTimer = null;
+                sendSnapshot(reason);
+            }, SNAPSHOT_DEBOUNCE_MS);
         }
 
         function applySyncState(state, stateTs = Date.now()) {
@@ -1579,6 +1612,7 @@
             startPresenceUpdates();
             cancelJoinFallback();
             ensureJoinName();
+            queueSnapshot('approved');
             if (reason) {
                 appendSessionLog('join-approve', reason);
             }
@@ -1657,6 +1691,10 @@
                 applySyncState(message.state, message.stateTs || message.ts);
                 return;
             }
+            if (message.type === 'snapshot') {
+                applySyncState(message.state, message.stateTs || message.ts);
+                return;
+            }
             if (message.type === 'ping') {
                 return;
             }
@@ -1681,7 +1719,7 @@
         }
 
         function sendRelayMessage(payload) {
-            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping'];
+            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping', 'snapshot'];
             if (!joinState.approved && !joinTypes.includes(payload.type)) return;
             const message = {
                 session: RELAY_SESSION_ID,
@@ -1753,10 +1791,12 @@
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
                 clearTimeout(relayState.pollTimer);
+                fetchSnapshot('ws-open');
                 if (joinState.approved) {
                     sendRelayMessage({ type: 'hello' });
                     startRelayKeepalive();
                     startPresenceUpdates();
+                    queueSnapshot('ws-open');
                 } else {
                     sendJoinRequest();
                     scheduleJoinFallback();
@@ -1956,6 +1996,7 @@
         function markLocalStateChanged() {
             syncState.lastLocalStateTs = Date.now();
             localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            queueSnapshot('local-change');
         }
 
         const modals = {
@@ -2190,6 +2231,7 @@
         }
 
         connectRelay();
+        fetchSnapshot('startup');
         scheduleRelayPoll();
         if (sharePanelBtn) {
             sharePanelBtn.addEventListener('click', () => {
@@ -2207,13 +2249,14 @@
                 scheduleRelayPoll();
                 return;
             }
-            if (joinState.approved) {
-                sendRelayMessage({ type: 'hello', reason: 'focus' });
-            } else {
-                joinState.denied = false;
-                sendJoinRequest();
-            }
-        });
+                if (joinState.approved) {
+                    sendRelayMessage({ type: 'hello', reason: 'focus' });
+                    fetchSnapshot('focus');
+                } else {
+                    joinState.denied = false;
+                    sendJoinRequest();
+                }
+            });
         requestAnimationFrame(loop);
     </script>
 

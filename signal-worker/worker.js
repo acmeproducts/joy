@@ -1,5 +1,8 @@
 const MAX_HISTORY = 2000;
 const SNAPSHOT_KEY = 'snapshot';
+const HOST_KEY = 'host';
+const HOST_UPDATED_AT_KEY = 'hostUpdatedAt';
+const HOST_STALE_MS = 45000;
 
 function corsHeaders() {
   return {
@@ -51,11 +54,69 @@ export class SignalSession {
     this.seq = 0;
     this.messages = [];
     this.sessionId = '';
+    this.hostId = null;
+    this.hostUpdatedAt = 0;
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['seq', 'messages']);
+      const stored = await this.state.storage.get(['seq', 'messages', HOST_KEY, HOST_UPDATED_AT_KEY]);
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
+      this.hostId = stored[HOST_KEY] || null;
+      this.hostUpdatedAt = stored[HOST_UPDATED_AT_KEY] || 0;
     });
+  }
+
+  isHostStale(now = Date.now()) {
+    if (!this.hostId) return true;
+    if (!this.hostUpdatedAt) return true;
+    return now - this.hostUpdatedAt > HOST_STALE_MS;
+  }
+
+  async claimHost(clientId, now = Date.now()) {
+    const stale = this.isHostStale(now);
+    if (!this.hostId || stale || this.hostId === clientId) {
+      this.hostId = clientId;
+      this.hostUpdatedAt = now;
+      await this.state.storage.put({
+        [HOST_KEY]: this.hostId,
+        [HOST_UPDATED_AT_KEY]: this.hostUpdatedAt
+      });
+      return { granted: true, hostId: this.hostId };
+    }
+    return { granted: false, hostId: this.hostId };
+  }
+
+  async refreshHostActivity(clientId, now = Date.now()) {
+    if (!clientId || clientId !== this.hostId) return;
+    this.hostUpdatedAt = now;
+    await this.state.storage.put({
+      [HOST_KEY]: this.hostId,
+      [HOST_UPDATED_AT_KEY]: this.hostUpdatedAt
+    });
+  }
+
+  async persistAndBroadcast(message, options = {}) {
+    const { transient = false, skipSenderId } = options;
+    message.seq = ++this.seq;
+    if (!transient) {
+      this.messages.push(message);
+      if (this.messages.length > MAX_HISTORY) {
+        this.messages.splice(0, this.messages.length - MAX_HISTORY);
+      }
+      await this.state.storage.put({ seq: this.seq, messages: this.messages });
+    } else {
+      await this.state.storage.put({ seq: this.seq });
+    }
+    const payload = JSON.stringify(message);
+    for (const [clientId, socket] of this.clients.entries()) {
+      if (message.to && message.to !== clientId) continue;
+      if (skipSenderId && clientId === skipSenderId) continue;
+      if (message.from && message.from === clientId) continue;
+      try {
+        socket.send(payload);
+      } catch (_) {
+        // ignore send errors
+      }
+    }
   }
 
   async fetch(request) {
@@ -127,26 +188,21 @@ export class SignalSession {
       if (message.type === 'snapshot') {
         await this.state.storage.put(SNAPSHOT_KEY, message);
       }
-      message.seq = ++this.seq;
-      if (!isTransient) {
-        this.messages.push(message);
-        if (this.messages.length > MAX_HISTORY) {
-          this.messages.splice(0, this.messages.length - MAX_HISTORY);
-        }
-        await this.state.storage.put({ seq: this.seq, messages: this.messages });
-      } else {
-        await this.state.storage.put({ seq: this.seq });
+      const now = Date.now();
+      if (message.type === 'host-claim' && message.from) {
+        const claim = await this.claimHost(message.from, now);
+        await this.persistAndBroadcast({
+          session: sessionId,
+          type: 'host-ack',
+          to: message.from,
+          hostId: claim.hostId,
+          granted: claim.granted,
+          ts: now,
+          from: 'server'
+        });
       }
-      const payload = JSON.stringify(message);
-      for (const [clientId, socket] of this.clients.entries()) {
-        if (message.to && message.to !== clientId) continue;
-        if (message.from && message.from === clientId) continue;
-        try {
-          socket.send(payload);
-        } catch (_) {
-          // ignore send errors
-        }
-      }
+      await this.refreshHostActivity(message.from, now);
+      await this.persistAndBroadcast(message, { transient: isTransient });
       return new Response(JSON.stringify({ ok: true, seq: message.seq }), {
         status: 200,
         headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
@@ -172,26 +228,21 @@ export class SignalSession {
     if (data.type === 'snapshot') {
       await this.state.storage.put(SNAPSHOT_KEY, data);
     }
-    data.seq = ++this.seq;
-    if (!isTransient) {
-      this.messages.push(data);
-      if (this.messages.length > MAX_HISTORY) {
-        this.messages.splice(0, this.messages.length - MAX_HISTORY);
-      }
-      await this.state.storage.put({ seq: this.seq, messages: this.messages });
-    } else {
-      await this.state.storage.put({ seq: this.seq });
+    const now = Date.now();
+    if (data.type === 'host-claim') {
+      const claim = await this.claimHost(clientId, now);
+      await this.persistAndBroadcast({
+        session: sessionId,
+        type: 'host-ack',
+        to: clientId,
+        hostId: claim.hostId,
+        granted: claim.granted,
+        ts: now,
+        from: 'server'
+      });
     }
-    const payload = JSON.stringify(data);
-    for (const [targetId, socket] of this.clients.entries()) {
-      if (data.to && data.to !== targetId) continue;
-      if (targetId === clientId) continue;
-      try {
-        socket.send(payload);
-      } catch (_) {
-        // ignore send errors
-      }
-    }
+    await this.refreshHostActivity(clientId, now);
+    await this.persistAndBroadcast(data, { transient: isTransient, skipSenderId: clientId });
   }
 
   webSocketClose(ws) {

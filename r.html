@@ -1,0 +1,2466 @@
+<!-- A Time to Relax - v13.3 - 2025-12-13 12:45 AM - PERFECT SYNC -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+    <title>A Time to Relax</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
+    <style>
+        body {
+            touch-action: none;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #000;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%; background: #8ec5fc;
+            cursor: pointer; margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer;
+            background: #e2e8f0; border-radius: 2px;
+        }
+        
+        .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal.invisible { opacity: 0; visibility: hidden; pointer-events: none; }
+        .modal.visible { opacity: 1; visibility: visible; pointer-events: auto; }
+        
+        .modal-content { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .scale-in { transform: scale(1); }
+        .scale-out { transform: scale(0.95); }
+
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        
+        #custom-message-container { pointer-events: auto; }
+        #custom-message-container a { color: #8ec5fc; text-decoration: underline; }
+    </style>
+</head>
+<body class="overflow-hidden h-screen w-screen font-sans text-slate-800">
+
+    <canvas class="block absolute top-0 left-0 w-full h-full z-0" id="gameCanvas"></canvas>
+
+    <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 transition-opacity duration-1000 opacity-100 text-white/90 text-center drop-shadow-md" id="overlay">
+        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">A Time to Relax</h1>
+        <div id="main-subtitle-container">
+            <p class="text-lg md:text-xl font-light leading-relaxed">
+                Tap to Bloom<br>
+                Double Tap for Hearts<br>
+                <span class="text-sm opacity-70 mt-2 block">Drag to Strum</span>
+            </p>
+        </div>
+        <div id="custom-message-container" class="mt-4 hidden bg-black/30 p-4 rounded-lg backdrop-blur-sm max-w-lg text-sm text-left"></div>
+    </div>
+
+    <div class="fixed inset-0 flex items-end justify-center pb-16 z-20 opacity-0 pointer-events-none transition-opacity duration-500" id="share-overlay">
+        <div class="bg-black/50 text-white text-xs font-semibold tracking-wide px-4 py-2 rounded-full backdrop-blur-md shadow-lg border border-white/20 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">link</span>
+            <span id="share-overlay-text">Link copied.</span>
+        </div>
+    </div>
+
+    <div class="fixed top-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="rec-indicator">
+        <div class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
+        REC
+    </div>
+
+    <div class="fixed top-5 left-24 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="sync-indicator">
+        <div class="w-2.5 h-2.5 bg-amber-400 rounded-full animate-pulse"></div>
+        SYNCING
+    </div>
+
+    <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
+      • A Time to Relax • Penang 2025 • <span id="clock">--:--</span>
+    </div>
+
+    <button class="fixed top-5 right-5 w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/30 active:scale-95 transition-all shadow-lg z-50" id="settings-trigger">
+        <span class="material-symbols-outlined">settings</span>
+    </button>
+
+    <aside class="fixed top-0 right-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="settings-panel">
+        
+        <div class="p-6 flex justify-between items-center border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-700 tracking-wide uppercase">Settings</h2>
+            <button class="text-gray-400 hover:text-gray-700 transition-colors" id="close-btn">
+                <span class="material-symbols-outlined text-3xl">close</span>
+            </button>
+        </div>
+
+        <div class="p-6 space-y-8 flex-1">
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Share Session</span>
+                <button class="w-full px-4 py-3 bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl hover:bg-blue-100 transition flex items-center justify-center gap-2 border border-blue-200" id="share-panel-btn">
+                    <span class="material-symbols-outlined text-sm">share</span>
+                    Share This Session
+                </button>
+                <p class="text-[11px] text-gray-400">Send the active session link to invite another device.</p>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Session Status</span>
+                <ul id="session-status-list" class="space-y-2 text-xs text-gray-600">
+                    <li class="text-[11px] text-gray-400">No peers yet.</li>
+                </ul>
+            </div>
+            
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sound</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="audio-toggle" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-300"></div>
+                </label>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Musical Scale</span>
+                <select id="scale-selector" class="w-full px-4 py-2.5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 cursor-pointer">
+                    <option value="extended_pentatonic">Extended Pentatonic (18 notes)</option>
+                    <option value="original">Original Scale (13 notes)</option>
+                    <option value="major_pentatonic">Major Pentatonic</option>
+                    <option value="minor_pentatonic">Minor Pentatonic</option>
+                    <option value="chromatic">Chromatic</option>
+                    <option value="whole_tone">Whole Tone</option>
+                    <option value="blues">Blues Scale</option>
+                </select>
+            </div>
+
+            <div class="space-y-3">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Background</span>
+                <div class="space-y-2">
+                    <input class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" id="bg-upload-input" type="file" accept="image/*">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="w-full py-2 bg-blue-100 text-blue-700 text-xs font-semibold rounded hover:bg-blue-200 transition" id="apply-bg-btn">
+                            Apply Image
+                        </button>
+                        <button class="w-full py-2 bg-gray-100 text-gray-500 text-xs font-medium rounded hover:bg-gray-200 transition" id="reset-bg-btn">
+                            Reset Gradient
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Custom Words</span>
+                <textarea class="w-full p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300 resize-none h-24" id="custom-words" placeholder="e.g. Joy, Peace, Kindness..."></textarea>
+            </div>
+
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Fade Duration (Flowers)</span>
+                    </div>
+                    <input type="range" id="decay-slider" min="0" max="5" step="1" value="2" class="w-full bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Trail Duration & Speed</span>
+                    </div>
+                    <input type="range" id="trail-slider" min="1" max="10" step="1" value="5" class="w-full bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+                        <span>Short/Fast</span>
+                        <span>Long/Slow</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Growth Speed</span>
+                    </div>
+                    <input type="range" id="speed-slider" min="1" max="100" value="50" class="w-full bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
+                <button class="col-span-1 px-4 py-3 bg-orange-50 text-orange-700 text-sm font-semibold rounded-xl hover:bg-orange-100 transition text-center" id="record-btn">Record</button>
+                <button class="col-span-1 px-4 py-3 bg-green-50 text-green-700 text-sm font-semibold rounded-xl hover:bg-green-100 transition text-center" id="save-btn">Snapshot</button>
+                <button class="col-span-1 px-4 py-3 bg-gray-50 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-100 transition text-center" id="theme-btn">Theme</button>
+                <button class="col-span-1 px-4 py-3 bg-red-50 text-red-700 text-sm font-medium rounded-xl hover:bg-red-100 transition text-center" id="clear-btn">Clear</button>
+                
+                <button class="col-span-2 mt-2 py-4 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition text-center flex items-center justify-center gap-2 border border-amber-200 shadow-sm" id="secrets-btn">
+                    <span class="material-symbols-outlined">key</span> Open Secrets
+                </button>
+
+            </div>
+        </div>
+    </aside>
+
+    <div id="secrets-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div id="secrets-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500">auto_awesome</span> 
+                    Discoveries
+                </h3>
+                <button id="close-secrets" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div id="secrets-grid-view">
+                <p class="text-sm text-gray-500 mb-4">
+                    Unlock patterns by experimenting with rhythms (Taps) and flow (Drags). Click a discovery to see its activation code.
+                </p>
+                <div id="secrets-list" class="grid grid-cols-5 gap-2 max-h-60 overflow-y-auto p-1">
+                    </div>
+                <div class="text-center text-xs text-gray-400 mt-4">
+                    Found: <span id="secrets-count">0</span> / 20
+                </div>
+            </div>
+
+            <div id="secrets-detail-view" class="hidden flex flex-col">
+                <button id="back-to-grid" class="text-xs text-blue-500 mb-2 flex items-center hover:underline self-start">
+                    <span class="material-symbols-outlined text-sm mr-1">arrow_back</span> Back
+                </button>
+                
+                <div class="bg-amber-50 rounded-xl p-5 border border-amber-100 text-center space-y-4">
+                    <div id="detail-id" class="w-16 h-16 bg-amber-200 rounded-full flex items-center justify-center mx-auto text-amber-800 font-bold text-2xl shadow-inner">?</div>
+                    
+                    <div>
+                        <h4 id="detail-title" class="text-lg font-bold text-amber-900">Secret Unlocked</h4>
+                        <p id="detail-type" class="text-xs text-amber-700/70 uppercase tracking-wide font-bold mt-1">RHYTHM</p>
+                    </div>
+
+                    <div class="text-left bg-white/60 p-4 rounded-lg text-sm border border-amber-100 shadow-sm">
+                        <p class="mb-2"><span class="font-bold text-gray-600 block text-xs uppercase mb-1">Trigger:</span>
+                        <span id="detail-trigger" class="font-mono text-lg text-amber-600 tracking-wider bg-amber-50 px-2 py-1 rounded">Tap Tap</span></p>
+                        
+                        <p><span class="font-bold text-gray-600 block text-xs uppercase mb-1">Visual Effect:</span>
+                        <span id="detail-reward" class="italic text-gray-700">Blooming Mandala</span></p>
+                    </div>
+
+                    <button id="simulate-btn" class="w-full py-3 bg-gradient-to-r from-amber-400 to-amber-500 text-white rounded-xl font-bold shadow-lg hover:from-amber-500 hover:to-amber-600 active:scale-95 transition flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined">play_circle</span> Play Example
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="join-approval-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-blue-500">devices</span> New Device Request
+                </h3>
+                <button id="close-join-approval" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <p id="join-request-message" class="text-sm text-gray-600 mb-4">
+                A new device wants to join this session.
+            </p>
+            <div class="flex gap-2">
+                <button id="approve-join-btn" class="flex-1 py-2.5 bg-green-50 text-green-700 text-sm font-semibold rounded-lg hover:bg-green-100 transition">
+                    Allow
+                </button>
+                <button id="deny-join-btn" class="flex-1 py-2.5 bg-red-50 text-red-700 text-sm font-semibold rounded-lg hover:bg-red-100 transition">
+                    No
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="join-info-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500">badge</span> Identify Yourself
+                </h3>
+                <button id="close-join-info" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2" for="join-name-input">Username</label>
+            <input id="join-name-input" type="text" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. Device C">
+            <div class="mt-4 flex gap-2">
+                <button id="submit-join-info" class="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
+                    Send Info
+                </button>
+                <button id="cancel-join-info" class="flex-1 py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            currentThemeIndex: 0,
+            defaultWords: [
+                                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
+                "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "❤️❤️❤️", "🪷🪷🪷", "Balance", "Harmony",
+                "Inner Peace", "Radiate", "Stillness", "Presence", "Gratitude", "Acceptance", "Flow", "Healing", "Strength",
+                "Wisdom", "Patience", "Courage", "Hi Joy  :)", "Clarity", "Unity", "☕☕☕"," 😴😴😴","ดีที่สุดอย่างแท้จริง","จอยประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","🪷 Joy 🪷เกี่ยวดองกัน","🏵️ Joy 🏵️","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม","Relax...","Deep Breath","หายใจเข้าลึกๆ"
+            ],
+            customWords: [],
+            speedMultiplier: 1.0,
+            decayValue: 0.005,
+            trailDecay: 0.01,
+            trailSpeed: 1.0,
+            useGradient: true,
+            backgroundImage: null,
+            currentTrail: '♥',
+            lastTrailSwitch: Date.now(),
+            currentScale: 'original'
+        };
+
+        const themes = [
+            { bg: ['#e0c3fc', '#8ec5fc'], text: '#4a148c' },
+            { bg: ['#fad0c4', '#ffd1ff'], text: '#880e4f' },
+            { bg: ['#d299c2', '#fef9d7'], text: '#3e2723' },
+            { bg: ['#a1c4fd', '#c2e9fb'], text: '#01579b' },
+            { bg: ['#d4fc79', '#96e6a1'], text: '#1b5e20' }
+        ];
+
+        const secretWords = [
+            "I Love You", "You are my Sunshine", "I Love You My Sweetheart", "❤️❤️❤️", "🥰❤️♥️🧡🫰","whereever you go that's where I want to be", "Forever Yours", "My One and Only", "Soulmate", "Endless Love","My Heart is Yours", "Together Always", "You Complete Me", "My Happy Place", "Love of My Life", "Dream Come True","My Everything", "Cherished", "Adored", "My Rock", "Purest Love", "Only You", "Sweetheart", "Darling",
+            "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
+        ];
+
+        const scales = {
+            extended_pentatonic: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            original: [329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99, 880.00, 987.77, 1174.66, 1318.51],
+            major_pentatonic: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1174.66, 1318.51],
+            minor_pentatonic: [220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00, 1046.50],
+            chromatic: [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88],
+            whole_tone: [261.63, 293.66, 329.63, 369.99, 415.30, 466.16, 523.25, 587.33, 659.25, 739.99, 830.61, 932.33],
+            blues: [261.63, 311.13, 349.23, 369.99, 392.00, 466.16, 523.25, 622.25, 698.46, 739.99, 783.99, 932.33]
+        };
+        
+        let visualEntities = [];
+        let wordEntities = [];
+        let particles = []; 
+        let foundEggs = JSON.parse(localStorage.getItem('garden_egg_ids') || "[]");
+        let inputBuffer = "";
+        let pendingAudioEvents = [];
+
+        const ZenAudio = {
+            ctx: null, 
+            enabled: true, 
+            masterGain: null, 
+            dest: null, 
+            bgBuffer: null,
+            bgSource: null,
+            bgGain: null,
+            pluckBuffers: {},
+            scale: scales.original,
+            hasUserInteracted: false,
+            
+            init: function() {
+                if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.3;
+                    
+                    this.dest = this.ctx.createMediaStreamDestination();
+                    this.masterGain.connect(this.ctx.destination);
+                    this.masterGain.connect(this.dest);
+                    
+                    this.generatePluckBuffers();
+                }
+            },
+
+            generatePluckBuffers: function() {
+                if (!this.ctx) return;
+                this.pluckBuffers = {};
+
+                this.scale.forEach(freq => {
+                    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2.0, this.ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    const delayLength = Math.floor(this.ctx.sampleRate / freq);
+                    let idx = 0, last = 0;
+                    
+                    const noise = new Float32Array(delayLength).map(() => Math.random()*2-1);
+                    
+                    for (let i = 0; i < buffer.length; i++) {
+                        const sample = (noise[idx] + last) * 0.5 * 0.99; 
+                        last = noise[idx]; 
+                        noise[idx] = sample;
+                        data[i] = sample;
+                        idx = (idx + 1) % delayLength;
+                    }
+                    
+                this.pluckBuffers[freq] = buffer;
+            });
+            },
+
+            changeScale: function(scaleName) {
+                if (scales[scaleName]) {
+                    this.scale = scales[scaleName];
+                    this.generatePluckBuffers();
+                }
+            },
+
+            loadBackground: async function(url) {
+                if (!this.ctx) this.init();
+                try {
+                    const response = await fetch(url);
+                    const arrayBuffer = await response.arrayBuffer();
+                    this.bgBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+                } catch(e) {
+                    console.error("Failed to load background audio:", e);
+                }
+            },
+
+            playBackground: function() {
+                if (!this.bgBuffer || !this.ctx) return;
+                
+                if (this.bgSource) {
+                    try { this.bgSource.stop(); } catch(e) {}
+                }
+                
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                
+                this.bgSource = this.ctx.createBufferSource();
+                this.bgSource.buffer = this.bgBuffer;
+                this.bgSource.loop = true;
+                
+                if (!this.bgGain) {
+                    this.bgGain = this.ctx.createGain();
+                    this.bgGain.connect(this.masterGain);
+                }
+                this.bgGain.gain.value = 0.2;
+                
+                this.bgSource.connect(this.bgGain);
+                this.bgSource.start(0);
+            },
+
+            softenEntry: function() {
+                if (!this.ctx || !this.masterGain || !this.enabled) return;
+                const now = this.ctx.currentTime;
+                const startGain = Math.min(this.masterGain.gain.value || 0.3, 0.12);
+                this.masterGain.gain.cancelScheduledValues(now);
+                this.masterGain.gain.setValueAtTime(startGain, now);
+                this.masterGain.gain.linearRampToValueAtTime(0.3, now + 1.2);
+            },
+
+            warmUp: function() {
+                if (!this.ctx) this.init();
+                if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) {
+                    this.ctx.resume();
+                }
+                
+                if (this.ctx && this.enabled) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    gain.gain.value = 0.001; 
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.01);
+                }
+            },
+
+            getFreqIndex: function(y, height) {
+                const norm = 1 - Math.max(0, Math.min(1, y / height));
+                return Math.floor(norm * (this.scale.length - 1));
+            },
+            
+            playPluckScheduled: function(freq, volume = 0.3, when = 0) {
+                if (!this.ctx || !this.enabled) return;
+                if (this.ctx.state !== 'running') this.ctx.resume().catch(()=>{});
+
+                const buffer = this.pluckBuffers[freq];
+                if (!buffer) return;
+
+                if (!this.hasUserInteracted) {
+                    this.hasUserInteracted = true;
+                    this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+                    this.masterGain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                    this.masterGain.gain.linearRampToValueAtTime(0.3, this.ctx.currentTime + 0.2);
+                }
+
+                const src = this.ctx.createBufferSource();
+                const gain = this.ctx.createGain();
+                gain.gain.value = volume;
+                
+                src.buffer = buffer;
+                src.connect(gain);
+                gain.connect(this.masterGain);
+                
+                const startTime = when > 0 ? when : this.ctx.currentTime;
+                src.start(startTime);
+            },
+            
+            playChord: function(baseIdx, when = 0) {
+                if (!this.ctx || !this.enabled) return;
+                const startTime = when > 0 ? when : this.ctx.currentTime;
+                
+                this.playPluckScheduled(this.scale[baseIdx], 0.2, startTime);
+                
+                const idx2 = Math.min(this.scale.length-1, baseIdx + 2);
+                this.playPluckScheduled(this.scale[idx2], 0.15, startTime + 0.04);
+                
+                const idx3 = Math.min(this.scale.length-1, baseIdx + 4);
+                this.playPluckScheduled(this.scale[idx3], 0.15, startTime + 0.08);
+            },
+            
+            playDiscovery: function() {
+                if (!this.ctx || !this.enabled) return;
+                const startTime = this.ctx.currentTime;
+                [261.63, 329.63, 392.00, 523.25].forEach((f, i) => { 
+                    this.playPluckScheduled(f, 0.2, startTime + (i * 0.15)); 
+                });
+            }
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth;
+            height = window.innerHeight;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            
+            document.getElementById('settings-panel').style.height = `${window.innerHeight}px`;
+        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('orientationchange', () => { setTimeout(resize, 100); });
+        resize();
+
+        const random = (min, max, rng = Math.random) => rng() * (max - min) + min;
+        function createSeededRng(seed) {
+            let t = seed >>> 0;
+            return function() {
+                t += 0x6D2B79F5;
+                let r = Math.imul(t ^ (t >>> 15), 1 | t);
+                r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+                return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+        function getPastelColor(rng = Math.random) { 
+            const hue = random(0, 360, rng);
+            return { hue: hue, str: `hsla(${hue}, 70%, 80%,` };
+        }
+        function getRandomWord(rng = Math.random) {
+            if (config.customWords.length > 0) return config.customWords[Math.floor(rng() * config.customWords.length)];
+            return config.defaultWords[Math.floor(rng() * config.defaultWords.length)];
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y;
+                this.vx = random(-3, 3); this.vy = random(-5, 1);
+                this.life = 1.0; this.decay = random(0.005, 0.02);
+                this.color = color;
+                this.gravity = 0.1;
+                this.sparkleColor = `hsl(${random(0,360)}, 80%, 70%)`;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                this.vy += this.gravity;
+                this.life -= this.decay;
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.sparkleColor;
+                ctx.fillRect(this.x, this.y, 2, 2);
+            }
+            isDead() { return this.life <= 0; }
+        }
+
+        class Word {
+            constructor(x, y, text, options = {}) {
+                this.x = x; this.y = y; this.text = text || getRandomWord();
+                this.velocity = -0.5; this.alpha = 0; this.fadeIn = true;
+                this.color = options.color || themes[config.currentThemeIndex].text; 
+            }
+            update() {
+                this.y += this.velocity * config.speedMultiplier;
+                if (this.fadeIn) { this.alpha += 0.02 * config.speedMultiplier; if (this.alpha>=1) this.fadeIn=false; } 
+                else if (config.decayValue > 0) { this.alpha -= config.decayValue * config.speedMultiplier; }
+            }
+            draw(ctx) {
+                ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = "20px 'Segoe UI', sans-serif"; ctx.fillStyle = this.color;
+                ctx.textAlign = "center"; ctx.shadowBlur = 4; ctx.shadowColor = "rgba(0,0,0,0.5)";
+                ctx.fillText(this.text, this.x, this.y); ctx.restore();
+            }
+            isDead() { return this.alpha <= 0 && !this.fadeIn; }
+        }
+
+        class Bloom {
+            constructor(x, y, size=null, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.size = 0; 
+                this.maxSize = options.maxSize ?? size ?? random(30, 80, rng);
+                const hue = options.hue ?? random(0, 360, rng);
+                this.colorObj = { hue: hue, str: `hsla(${hue}, 70%, 80%,` };
+                this.colorBase = this.colorObj.str;
+                this.petals = options.petals ?? Math.floor(random(5, 9, rng));
+                this.alpha = 1; 
+                this.compColor = `hsla(${(this.colorObj.hue + 180)%360}, 60%, 70%,`;
+                this.rotation = options.rotation ?? random(0, Math.PI*2, rng);
+                if (options.shape) {
+                    this.shape = options.shape;
+                } else {
+                    const shapeRoll = rng();
+                    this.shape = shapeRoll > 0.6 ? 'pointed' : (shapeRoll > 0.3 ? 'round' : 'hybrid');
+                }
+            }
+            update() {
+                this.rotation += 0.002;
+                if (this.size < this.maxSize) this.size += 0.5 * config.speedMultiplier;
+                else if (config.decayValue > 0) this.alpha -= config.decayValue * config.speedMultiplier;
+            }
+            draw(ctx) {
+                ctx.save();
+                
+                if(foundEggs.includes(2)) {
+                    ctx.strokeStyle = `rgba(218, 165, 32, ${this.alpha * 0.6})`;
+                    ctx.lineWidth = 0.5;
+                    for(let i=0; i<5; i++) {
+                        const angle = (i/5) * Math.PI*2 + this.rotation;
+                        const len = this.size * 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.bezierCurveTo(this.x + Math.cos(angle - 0.4) * len * 0.5, this.y + Math.sin(angle - 0.4) * len * 0.5,
+                            this.x + Math.cos(angle + 0.4) * len * 0.8, this.y + Math.sin(angle + 0.4) * len * 0.8,
+                            this.x + Math.cos(angle) * len, this.y + Math.sin(angle) * len);
+                        ctx.stroke(); 
+                    }
+                }
+
+                for(let i=0; i<3; i++) {
+                    ctx.fillStyle = this.colorBase + (this.alpha * 0.7 * (1 - i*0.2)) + ')';
+                    ctx.beginPath();
+                    for (let j = 0; j < this.petals; j++) {
+                        const angle = (j / this.petals) * Math.PI * 2 + (i * 0.1) + this.rotation;
+                        const petalSize = (this.size - (i*5));
+                        if (petalSize <= 0) continue;
+                        
+                        ctx.moveTo(this.x, this.y);
+                        if(this.shape === 'pointed') {
+                            ctx.quadraticCurveTo(
+                                this.x + Math.cos(angle - 0.3) * petalSize, 
+                                this.y + Math.sin(angle - 0.3) * petalSize,
+                                this.x + Math.cos(angle) * petalSize * 1.2,
+                                this.y + Math.sin(angle) * petalSize * 1.2
+                            );
+                            ctx.quadraticCurveTo(
+                                this.x + Math.cos(angle + 0.3) * petalSize,
+                                this.y + Math.sin(angle + 0.3) * petalSize,
+                                this.x, this.y
+                            );
+                        } else {
+                            ctx.ellipse(this.x + Math.cos(angle)*(petalSize*0.5), this.y + Math.sin(angle)*(petalSize*0.5), petalSize*0.4, petalSize*0.2, angle, 0, Math.PI*2);
+                        }
+                    }
+                    ctx.fill();
+                }
+
+                const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 0.25);
+                const centerAlpha = foundEggs.includes(1) ? 0.9 : 0.7; 
+                grad.addColorStop(0, `rgba(255, 255, 255, ${centerAlpha})`); 
+                grad.addColorStop(0.4, this.compColor + (this.alpha * centerAlpha) + ")"); 
+                grad.addColorStop(1, this.compColor + "0)"); 
+                ctx.fillStyle = grad;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 0.25, 0, Math.PI*2); ctx.fill();
+                
+                ctx.strokeStyle = `rgba(255,255,255,${this.alpha*0.6})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size*0.1, 0, Math.PI*2); ctx.stroke();
+                
+                if(this.size > 20) {
+                    ctx.fillStyle = `rgba(255,255,200,${this.alpha})`;
+                    for(let k=0; k<6; k++) {
+                        const dotA = (k/6)*Math.PI*2 + this.rotation;
+                        const dotR = this.size * 0.2;
+                        ctx.beginPath(); ctx.arc(this.x + Math.cos(dotA)*dotR, this.y + Math.sin(dotA)*dotR, 1.5, 0, Math.PI*2); ctx.fill();
+                    }
+                }
+
+                ctx.restore();
+            }
+            isDead() { 
+                if (this.alpha <= 0 && foundEggs.includes(5)) {
+                    for(let k=0; k<15; k++) particles.push(new Particle(this.x, this.y, this.colorBase + '1)'));
+                }
+                return this.alpha <= 0; 
+            }
+        }
+
+        class GrowingHeart {
+            constructor(x, y, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.size = 0; 
+                this.maxSize = options.maxSize ?? random(40, 90, rng);
+                this.hue = options.hue ?? random(0, 360, rng);
+                this.alpha = 1;
+            }
+            update() {
+                if (this.size < this.maxSize) this.size += 0.5 * config.speedMultiplier;
+                else if (config.decayValue > 0) this.alpha -= config.decayValue * config.speedMultiplier;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                const scale = this.size / 30;
+                ctx.scale(scale, scale);
+                ctx.globalAlpha = Math.max(0, this.alpha);
+
+                let grad = ctx.createRadialGradient(-5, -5, 2, 0, 0, 25);
+                grad.addColorStop(0, "white"); 
+                grad.addColorStop(0.3, `hsl(${this.hue}, 100%, 70%)`); 
+                grad.addColorStop(1, `hsl(${this.hue}, 100%, 30%)`); 
+                ctx.fillStyle = grad;
+
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.bezierCurveTo(-10, -10, -20, 0, 0, 20);
+                ctx.bezierCurveTo(20, 0, 10, -10, 0, 0);
+                ctx.fill();
+                
+                ctx.strokeStyle = `rgba(255,255,255,${this.alpha*0.5})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+            isDead() { return this.alpha <= 0; }
+        }
+
+        class HeartBloom extends Bloom {
+            draw(ctx) {
+                ctx.save();
+                const layerCount = foundEggs.includes(3) ? 5 : 3;
+                for(let i=0; i<layerCount; i++) {
+                    const scale = (this.size - (i*4)) / 20;
+                    if (scale <= 0) continue;
+                    const pCount = this.petals + (i%2); 
+                    for (let j = 0; j < pCount; j++) {
+                        ctx.save();
+                        const angle = (j / pCount) * Math.PI * 2 + this.rotation + (i*0.2);
+                        ctx.translate(this.x, this.y);
+                        ctx.rotate(angle + Math.PI/2);
+                        ctx.translate(0, -scale * 15);
+                        ctx.scale(scale, scale);
+                        
+                        let grad = ctx.createRadialGradient(-3, -3, 1, 0, 0, 15);
+                        grad.addColorStop(0, "rgba(255,255,255,0.4)");
+                        grad.addColorStop(1, this.colorBase + (this.alpha * 0.8) + ')');
+                        ctx.fillStyle = grad;
+
+                        ctx.beginPath();
+                        ctx.moveTo(0,0);
+                        ctx.bezierCurveTo(-5, -5, -10, 0, 0, 10);
+                        ctx.bezierCurveTo(10, 0, 5, -5, 0, 0);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+                ctx.fillStyle = this.compColor + this.alpha + ')';
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size * 0.1, 0, Math.PI*2); ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class HeartCloud {
+            constructor(x, y, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.alpha = 1;
+                this.hearts = [];
+                if (options.hearts) {
+                    this.hearts = options.hearts.map(h => ({ ...h }));
+                } else {
+                    const count = Math.floor(random(4, 12, rng));
+                    const colors = ["#ff0000", "#ff7f00", "#ffff00", "#00ff00", "#0000ff", "#4b0082", "#9400d3", "#ff1493"];
+                    for(let i=0; i<count; i++) {
+                        this.hearts.push({
+                            ox: random(-40, 40, rng), oy: random(-40, 40, rng),
+                            size: random(10, 25, rng),
+                            color: colors[Math.floor(rng() * colors.length)],
+                            rot: random(-0.2, 0.2, rng)
+                        });
+                    }
+                }
+            }
+            update() {
+                this.y -= 0.5 * config.speedMultiplier;
+                if (config.decayValue > 0) this.alpha -= config.decayValue * config.speedMultiplier;
+            }
+            draw(ctx) {
+                ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
+                this.hearts.forEach(h => {
+                    ctx.save();
+                    ctx.translate(this.x + h.ox, this.y + h.oy);
+                    ctx.rotate(h.rot);
+                    const scale = h.size / 20;
+                    ctx.scale(scale, scale);
+                    
+                    let grad = ctx.createRadialGradient(-5, -5, 2, 0, 0, 20);
+                    grad.addColorStop(0, "white");
+                    grad.addColorStop(0.3, h.color);
+                    grad.addColorStop(1, "#330000");
+                    ctx.fillStyle = grad;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(0,0);
+                    ctx.bezierCurveTo(-10, -10, -20, 0, 0, 20);
+                    ctx.bezierCurveTo(20, 0, 10, -10, 0, 0);
+                    ctx.fill();
+                    ctx.restore();
+                });
+                ctx.restore();
+            }
+            isDead() { return this.alpha <= 0; }
+        }
+
+        class TrailBase {
+            constructor(x, y, type, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.alpha = 1; 
+                this.size = options.size ?? random(10, 20, rng);
+                this.type = type; 
+                this.hue = options.hue ?? random(0, 360, rng);
+                this.color = options.color ?? `hsl(${this.hue},100%,60%)`; 
+                this.cometColor = options.cometColor ?? `hsl(${random(200,260, rng)},100%,80%)`;
+            }
+            update() {
+                this.y -= config.trailSpeed; 
+                this.alpha -= config.trailDecay; 
+            }
+            draw(ctx) {
+                ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
+                
+                if(this.type === "Comet") {
+                    ctx.fillStyle = this.cometColor;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.size/3, 0, Math.PI*2); ctx.fill();
+                } 
+                else if (this.type === "♥" || this.type === "⭐") {
+                    ctx.translate(this.x, this.y);
+                    
+                    if(this.type === "♥") {
+                        ctx.fillStyle = this.color;
+                        ctx.font = `${this.size}px serif`;
+                        ctx.fillText("♥", 0, 0);
+                    } else {
+                        ctx.fillStyle = this.color;
+                        ctx.font = `${this.size}px serif`;
+                        ctx.fillText("⭐", 0, 0);
+                    }
+                } 
+                else {
+                    ctx.fillStyle = "rgba(255,255,255,0.9)";
+                    ctx.font = `${this.size}px serif`;
+                    ctx.fillText(this.type, this.x, this.y);
+                }
+                ctx.restore();
+            }
+            isDead() { return this.alpha <= 0; }
+        }
+
+        const RELAY_SESSION_ID = 'relax-hidden-fixed';
+        if (window.location.search) {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.search = '';
+            history.replaceState({}, document.title, cleanUrl.toString());
+        }
+        const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
+        const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
+        const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+        const RELAY_DRAG_THROTTLE_MS = 20;
+        const RELAY_POLL_MS = 400;
+        const RELAY_RECONNECT_BASE_MS = 800;
+        const RELAY_RECONNECT_MAX_MS = 10000;
+        const REMOTE_ENTRY_DAMPEN_MS = 5000;
+        const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0 };
+        const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
+        const syncState = {
+            lastStateTs: 0,
+            initialSent: false,
+            lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
+        };
+        const syncIndicator = document.getElementById('sync-indicator');
+        const shareOverlay = document.getElementById('share-overlay');
+        const shareOverlayText = document.getElementById('share-overlay-text');
+        const sharePanelBtn = document.getElementById('share-panel-btn');
+        const joinApprovalModal = document.getElementById('join-approval-modal');
+        const joinRequestMessage = document.getElementById('join-request-message');
+        const approveJoinBtn = document.getElementById('approve-join-btn');
+        const denyJoinBtn = document.getElementById('deny-join-btn');
+        const closeJoinApprovalBtn = document.getElementById('close-join-approval');
+        const joinInfoModal = document.getElementById('join-info-modal');
+        const joinNameInput = document.getElementById('join-name-input');
+        const submitJoinInfoBtn = document.getElementById('submit-join-info');
+        const cancelJoinInfoBtn = document.getElementById('cancel-join-info');
+        const closeJoinInfoBtn = document.getElementById('close-join-info');
+        const sessionStatusList = document.getElementById('session-status-list');
+
+        let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
+        let lastRelayDragSend = 0;
+        let lastRemoteDragSound = 0;
+        let remoteEntryDampenUntil = 0;
+        let shareOverlayTimer = null;
+        let relayKeepaliveTimer = null;
+        let pendingJoinInfoRequest = null;
+        let joinFallbackTimer = null;
+        const JOIN_APPROVAL_STORAGE_KEY = `relax_join_approved_${RELAY_SESSION_ID}`;
+        const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
+        const RELAY_KEEPALIVE_MS = 20000;
+        const JOIN_FALLBACK_MS = 8000;
+        const joinState = {
+            approved: localStorage.getItem(JOIN_APPROVAL_STORAGE_KEY) === 'true',
+            denied: false,
+            activeRequest: null,
+            requestQueue: [],
+            name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || ''
+        };
+        const DOUBLE_TAP_WINDOW = 240;
+        const DOUBLE_TAP_DISTANCE = 40;
+        const RELAY_PRESENCE_INTERVAL_MS = 12000;
+        const RELAY_PRESENCE_STALE_MS = 30000;
+        const SESSION_STATUS_RENDER_MS = 5000;
+        const peerPresence = new Map();
+        let presenceTimer = null;
+        let presenceRenderTimer = null;
+        let localPresenceState = 'active';
+
+        function createSeed() {
+            if (crypto?.getRandomValues) {
+                const arr = new Uint32Array(1);
+                crypto.getRandomValues(arr);
+                return arr[0];
+            }
+            return Math.floor(Math.random() * 2 ** 32);
+        }
+
+        function buildBloomPayload(rng) {
+            const hue = random(0, 360, rng);
+            const shapeRoll = rng();
+            return {
+                maxSize: random(30, 80, rng),
+                hue,
+                petals: Math.floor(random(5, 9, rng)),
+                rotation: random(0, Math.PI * 2, rng),
+                shape: shapeRoll > 0.6 ? 'pointed' : (shapeRoll > 0.3 ? 'round' : 'hybrid')
+            };
+        }
+
+        function buildGrowingHeartPayload(rng) {
+            return {
+                maxSize: random(40, 90, rng),
+                hue: random(0, 360, rng)
+            };
+        }
+
+        function buildHeartCloudPayload(rng) {
+            const colors = ["#ff0000", "#ff7f00", "#ffff00", "#00ff00", "#0000ff", "#4b0082", "#9400d3", "#ff1493"];
+            const count = Math.floor(random(4, 12, rng));
+            const hearts = [];
+            for (let i = 0; i < count; i++) {
+                hearts.push({
+                    ox: random(-40, 40, rng),
+                    oy: random(-40, 40, rng),
+                    size: random(10, 25, rng),
+                    color: colors[Math.floor(rng() * colors.length)],
+                    rot: random(-0.2, 0.2, rng)
+                });
+            }
+            return { hearts };
+        }
+
+        function buildTrailPayload(rng, trailType) {
+            const hue = random(0, 360, rng);
+            return {
+                type: trailType,
+                size: random(10, 20, rng),
+                hue,
+                color: `hsl(${hue},100%,60%)`,
+                cometColor: `hsl(${random(200,260, rng)},100%,80%)`
+            };
+        }
+
+        function updateSyncIndicator(mode) {
+            if (!syncIndicator) return;
+            if (mode === 'live') {
+                syncIndicator.style.opacity = '0';
+                return;
+            }
+            syncIndicator.style.opacity = '1';
+        }
+
+        function showShareOverlay(message = 'Link copied.', duration = 3000) {
+            if (!shareOverlay) return;
+            if (shareOverlayText) shareOverlayText.textContent = message;
+            shareOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            shareOverlay.classList.add('opacity-100');
+            if (shareOverlayTimer) clearTimeout(shareOverlayTimer);
+            shareOverlayTimer = setTimeout(() => hideShareOverlay(), duration);
+        }
+
+        function hideShareOverlay() {
+            if (!shareOverlay) return;
+            shareOverlay.classList.add('opacity-0', 'pointer-events-none');
+            shareOverlay.classList.remove('opacity-100');
+        }
+
+        function buildShareUrl() {
+            const url = new URL(window.location.href);
+            url.search = '';
+            url.hash = '';
+            return url.toString();
+        }
+
+        async function shareSession() {
+            const shareUrl = buildShareUrl();
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: document.title,
+                        text: 'Join me in A Time to Relax',
+                        url: shareUrl
+                    });
+                    return;
+                } catch (err) {
+                    if (err?.name !== 'AbortError') {
+                        console.warn('Share failed, falling back to clipboard.', err);
+                    }
+                }
+            }
+            if (navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showShareOverlay('Link copied. Share it to invite.', 3500);
+                } catch (err) {
+                    console.warn('Clipboard copy failed.', err);
+                }
+            }
+        }
+        
+        function wakeAudio() {
+            ZenAudio.warmUp();
+            document.removeEventListener('touchstart', wakeAudio);
+            document.removeEventListener('mousedown', wakeAudio);
+        }
+        document.addEventListener('touchstart', wakeAudio, {passive: false});
+        document.addEventListener('mousedown', wakeAudio);
+
+        function handleInputStart(x,y) { 
+            ZenAudio.warmUp();
+            document.getElementById('overlay').style.opacity='0'; 
+            startX=x; startY=y; 
+            dragStart=Date.now(); 
+            isDragging=false; 
+        }
+        
+        function spawnTap(x, y, options = {}) {
+            const {
+                entType = 'Bloom',
+                idx = ZenAudio.getFreqIndex(y, height),
+                isDouble = false,
+                trackTelemetry = false,
+                wordText,
+                wordColor,
+                bloomPayload,
+                heartPayload,
+                cloudPayload
+            } = options;
+            let ent;
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
+            else ent = new Bloom(x, y, null, bloomPayload || {});
+
+            visualEntities.push(ent);
+            wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
+
+            pendingAudioEvents.push({
+                type: 'pluck',
+                freq: ZenAudio.scale[idx],
+                volume: 0.3
+            });
+
+            if (trackTelemetry) {
+                window.telemetryStats.taps++;
+                appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)}${isDouble ? ' [double]' : ''}`);
+            }
+
+            if (isDouble) {
+                visualEntities.push(new HeartCloud(x, y, cloudPayload || {}));
+                pendingAudioEvents.push({
+                    type: 'chord',
+                    baseIdx: idx
+                });
+                if (trackTelemetry) {
+                    window.telemetryStats.drags++;
+                }
+            }
+            return ent;
+        }
+
+        function spawnDrag(x, y, options = {}) {
+            const { trailType = config.currentTrail, idx = ZenAudio.getFreqIndex(y, height), trailPayload } = options;
+            const resolvedType = trailPayload?.type || trailType;
+            visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
+            pendingAudioEvents.push({
+                type: 'pluck',
+                freq: ZenAudio.scale[idx],
+                volume: 0.1
+            });
+        }
+
+        function handleInputMove(x,y) {
+            if(!startX) return;
+            if(Math.sqrt((x-startX)**2 + (y-startY)**2) > 10) {
+                isDragging=true;
+                
+                if(Date.now() - config.lastTrailSwitch > 10000) {
+                    const options = ['♥', 'Comet', '☁️', '⭐'];
+                    if (config.currentTrail !== '♥' && Math.random() > 0.4) {
+                        config.currentTrail = '♥';
+                    } else {
+                        config.currentTrail = options[Math.floor(Math.random() * options.length)];
+                    }
+                    config.lastTrailSwitch = Date.now();
+                }
+
+                const idx = ZenAudio.getFreqIndex(y, height);
+                const trailSeed = createSeed();
+                const trailRng = createSeededRng(trailSeed);
+                const trailPayload = buildTrailPayload(trailRng, config.currentTrail);
+                spawnDrag(x, y, { trailType: config.currentTrail, idx, trailPayload });
+
+                if(Date.now()-lastDragSound > 40) { 
+                    pendingAudioEvents.push({
+                        type: 'pluck',
+                        freq: ZenAudio.scale[idx],
+                        volume: 0.1
+                    });
+                    lastDragSound=Date.now(); 
+                }
+
+                if (Date.now() - lastRelayDragSend > RELAY_DRAG_THROTTLE_MS) {
+                    sendRelayMessage({
+                        type: 'drag',
+                        x: x / width,
+                        y: y / height,
+                        trail: config.currentTrail,
+                        trailPayload
+                    });
+                    lastRelayDragSend = Date.now();
+                }
+            }
+        }
+
+        function handleInputEnd(x,y) {
+            const now = Date.now();
+            if(isDragging) { 
+                registerInput('S'); 
+                checkDragUnlock(now-dragStart); 
+                appendSessionLog('drag', `Drag to ${Math.round(x)}, ${Math.round(y)} (${config.currentTrail})`);
+            } else {
+                const idx = ZenAudio.getFreqIndex(y, height);
+                const seed = createSeed();
+                const rng = createSeededRng(seed);
+                const rnd = rng();
+                const entType = (foundEggs.includes(3) && rnd > 0.7)
+                    ? 'GrowingHeart'
+                    : (foundEggs.includes(3) && rnd > 0.5)
+                        ? 'HeartBloom'
+                        : 'Bloom';
+
+                registerInput('T');
+
+                const isNearLastTap = lastTapX !== null && lastTapY !== null && Math.hypot(x - lastTapX, y - lastTapY) <= DOUBLE_TAP_DISTANCE;
+                const isDoubleTap = (now - lastTap) < DOUBLE_TAP_WINDOW && isNearLastTap;
+
+                const wordText = getRandomWord(rng);
+                const wordColor = themes[config.currentThemeIndex].text;
+                const bloomPayload = entType === 'Bloom' || entType === 'HeartBloom' ? buildBloomPayload(rng) : null;
+                const heartPayload = entType === 'GrowingHeart' ? buildGrowingHeartPayload(rng) : null;
+                const cloudPayload = isDoubleTap ? buildHeartCloudPayload(rng) : null;
+
+                const ent = spawnTap(x, y, { entType, idx, isDouble: isDoubleTap, trackTelemetry: true, wordText, wordColor, bloomPayload, heartPayload, cloudPayload });
+                sendRelayMessage({
+                    type: 'tap',
+                    x: x / width,
+                    y: y / height,
+                    double: isDoubleTap,
+                    entType: ent?.constructor?.name || 'Bloom',
+                    word: wordText,
+                    wordColor,
+                    bloomPayload,
+                    heartPayload,
+                    cloudPayload,
+                    seed
+                });
+                lastTap = now;
+                lastTapX = x;
+                lastTapY = y;
+            }
+            startX=null; isDragging=false;
+        }
+        
+        canvas.addEventListener('mousedown',e=>handleInputStart(e.clientX,e.clientY));
+        canvas.addEventListener('mousemove',e=>{if(startX)handleInputMove(e.clientX,e.clientY)});
+        canvas.addEventListener('mouseup',e=>handleInputEnd(e.clientX,e.clientY));
+        canvas.addEventListener('touchstart',e=>{e.preventDefault();handleInputStart(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
+        canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
+        canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
+
+        function spawnRemoteTap(x, y, options = {}) {
+            const {
+                entType = 'Bloom',
+                isDouble = false,
+                wordText,
+                wordColor,
+                bloomPayload,
+                heartPayload,
+                cloudPayload
+            } = options;
+            let ent;
+            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
+            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
+            else ent = new Bloom(x, y, null, bloomPayload || {});
+            visualEntities.push(ent);
+            wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
+
+            const idx = ZenAudio.getFreqIndex(y, height);
+            const baseVolume = 0.3;
+            const volume = Date.now() < remoteEntryDampenUntil ? baseVolume * 0.45 : baseVolume;
+            pendingAudioEvents.push({
+                type: 'pluck',
+                freq: ZenAudio.scale[idx],
+                volume
+            });
+
+            if (isDouble) {
+                visualEntities.push(new HeartCloud(x, y, cloudPayload || {}));
+                pendingAudioEvents.push({
+                    type: 'chord',
+                    baseIdx: idx
+                });
+            }
+        }
+
+        function spawnRemoteDrag(x, y, trail, trailPayload) {
+            const resolvedType = trailPayload?.type || trail || config.currentTrail;
+            visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
+            if (Date.now() - lastRemoteDragSound > 60) {
+                const idx = ZenAudio.getFreqIndex(y, height);
+                const baseVolume = 0.1;
+                const volume = Date.now() < remoteEntryDampenUntil ? baseVolume * 0.6 : baseVolume;
+                pendingAudioEvents.push({
+                    type: 'pluck',
+                    freq: ZenAudio.scale[idx],
+                    volume
+                });
+                lastRemoteDragSound = Date.now();
+            }
+        }
+
+        function buildSyncState() {
+            return {
+                themeIndex: config.currentThemeIndex,
+                useGradient: config.useGradient,
+                backgroundImage: config.backgroundImage?.src || null,
+                customWords: config.customWords || [],
+                currentScale: config.currentScale
+            };
+        }
+
+        function applySyncState(state, stateTs = Date.now()) {
+            if (!state) return;
+            if (stateTs && stateTs <= syncState.lastStateTs) return;
+            if (stateTs && syncState.lastLocalStateTs && stateTs < syncState.lastLocalStateTs) return;
+            syncState.lastStateTs = stateTs;
+            syncState.lastLocalStateTs = Math.max(syncState.lastLocalStateTs, stateTs);
+            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+
+            if (typeof state.themeIndex === 'number') {
+                config.currentThemeIndex = state.themeIndex % themes.length;
+            }
+
+            if (Array.isArray(state.customWords)) {
+                const customWordsInput = document.getElementById('custom-words');
+                config.customWords = state.customWords.filter(Boolean);
+                if (customWordsInput) {
+                    customWordsInput.value = config.customWords.join(', ');
+                    localStorage.setItem('garden_words', customWordsInput.value);
+                }
+            }
+
+            if (state.backgroundImage) {
+                const img = new Image();
+                img.onload = () => {
+                    config.backgroundImage = img;
+                    config.useGradient = false;
+                    try {
+                        localStorage.setItem('garden_bg', state.backgroundImage);
+                    } catch (err) {
+                        console.warn("Remote background image too large to persist.");
+                    }
+                };
+                img.src = state.backgroundImage;
+            } else if (state.useGradient !== undefined) {
+                config.useGradient = state.useGradient;
+                if (state.useGradient) {
+                    config.backgroundImage = null;
+                    localStorage.removeItem('garden_bg');
+                }
+            }
+
+            if (state.currentScale && scales[state.currentScale]) {
+                config.currentScale = state.currentScale;
+                const scaleSelector = document.getElementById('scale-selector');
+                if (scaleSelector) scaleSelector.value = config.currentScale;
+                ZenAudio.changeScale(config.currentScale);
+                localStorage.setItem('garden_scale', config.currentScale);
+            }
+        }
+
+        function sendSyncState(reason = 'update') {
+            if (reason === 'init' && syncState.initialSent) return;
+            const stateTs = syncState.lastLocalStateTs || Date.now();
+            const state = buildSyncState();
+            sendRelayMessage({ type: 'state', state, stateTs, reason });
+            syncState.initialSent = true;
+        }
+
+        function openJoinApprovalModal() {
+            if (!joinApprovalModal) return;
+            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
+            joinApprovalModal.classList.remove('invisible');
+            joinApprovalModal.classList.add('visible');
+            content.classList.remove('scale-out');
+            content.classList.add('scale-in');
+        }
+
+        function closeJoinApprovalModal() {
+            if (!joinApprovalModal) return;
+            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
+            joinApprovalModal.classList.remove('visible');
+            joinApprovalModal.classList.add('invisible');
+            content.classList.remove('scale-in');
+            content.classList.add('scale-out');
+        }
+
+        function showJoinToast(request) {
+            const deviceLabel = request.name ? ` (${request.name})` : '';
+            showShareOverlay(`New join request${deviceLabel}.`, 2500);
+        }
+
+        function openJoinInfoModal() {
+            if (!joinInfoModal) return;
+            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
+            joinInfoModal.classList.remove('invisible');
+            joinInfoModal.classList.add('visible');
+            content.classList.remove('scale-out');
+            content.classList.add('scale-in');
+            if (joinNameInput) {
+                joinNameInput.value = joinState.name || '';
+                joinNameInput.focus();
+            }
+        }
+
+        function closeJoinInfoModal() {
+            if (!joinInfoModal) return;
+            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
+            joinInfoModal.classList.remove('visible');
+            joinInfoModal.classList.add('invisible');
+            content.classList.remove('scale-in');
+            content.classList.add('scale-out');
+        }
+
+        function showJoinRequest(request) {
+            joinState.activeRequest = request;
+            const deviceLabel = request.name ? ` (${request.name})` : '';
+            if (joinRequestMessage) {
+                joinRequestMessage.textContent = `A new device wants to join this session${deviceLabel}. Allow access?`;
+            }
+            openJoinApprovalModal();
+        }
+
+        function dequeueJoinRequest() {
+            const next = joinState.requestQueue.shift();
+            if (next) {
+                showJoinRequest(next);
+            } else {
+                joinState.activeRequest = null;
+                closeJoinApprovalModal();
+            }
+        }
+
+        function enqueueJoinRequest(request) {
+            const existing = joinState.activeRequest && joinState.activeRequest.from === request.from
+                ? joinState.activeRequest
+                : joinState.requestQueue.find(item => item.from === request.from);
+            const isNewRequest = !existing;
+            const merged = {
+                from: request.from,
+                name: request.name || existing?.name || null,
+                ts: request.ts || Date.now()
+            };
+            if (isNewRequest) {
+                showJoinToast(merged);
+            }
+            if (joinState.activeRequest && joinState.activeRequest.from === merged.from) {
+                joinState.activeRequest = merged;
+                showJoinRequest(merged);
+                return;
+            }
+            const queuedIndex = joinState.requestQueue.findIndex(item => item.from === merged.from);
+            if (queuedIndex >= 0) {
+                joinState.requestQueue[queuedIndex] = merged;
+                return;
+            }
+            if (!joinState.activeRequest) {
+                showJoinRequest(merged);
+            } else {
+                joinState.requestQueue.push(merged);
+            }
+        }
+
+        function sendJoinRequest() {
+            sendRelayMessage({
+                type: 'join-request',
+                name: joinState.name || undefined
+            });
+        }
+
+        function scheduleJoinFallback() {
+            if (joinFallbackTimer) return;
+            joinFallbackTimer = setTimeout(() => {
+                joinFallbackTimer = null;
+                if (!joinState.approved && !joinState.denied) {
+                    joinState.approved = true;
+                    localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+                    showShareOverlay('No host found. Starting a new session.', 3500);
+                    sendRelayMessage({ type: 'hello', reason: 'fallback-host' });
+                    startRelayKeepalive();
+                    startPresenceUpdates();
+                    ensureJoinName();
+                }
+            }, JOIN_FALLBACK_MS);
+        }
+
+        function cancelJoinFallback() {
+            if (joinFallbackTimer) {
+                clearTimeout(joinFallbackTimer);
+                joinFallbackTimer = null;
+            }
+        }
+
+        function ensureJoinName() {
+            if (!joinState.approved) return;
+            if (!joinState.name) {
+                openJoinInfoModal();
+                return;
+            }
+            sendPresence('name-ready');
+        }
+
+        function startRelayKeepalive() {
+            if (relayKeepaliveTimer) return;
+            relayKeepaliveTimer = setInterval(() => {
+                if (joinState.approved) {
+                    sendRelayMessage({ type: 'ping' });
+                }
+            }, RELAY_KEEPALIVE_MS);
+        }
+
+        function getLocalPresenceState() {
+            return document.visibilityState === 'visible' ? 'active' : 'suspended';
+        }
+
+        function sendPresence(reason = 'interval') {
+            if (!joinState.approved) return;
+            const state = getLocalPresenceState();
+            localPresenceState = state;
+            sendRelayMessage({
+                type: 'presence',
+                state,
+                name: joinState.name || undefined,
+                reason
+            });
+        }
+
+        function startPresenceUpdates() {
+            if (!presenceTimer) {
+                presenceTimer = setInterval(() => {
+                    sendPresence('interval');
+                }, RELAY_PRESENCE_INTERVAL_MS);
+            }
+            if (!presenceRenderTimer) {
+                presenceRenderTimer = setInterval(renderSessionStatus, SESSION_STATUS_RENDER_MS);
+            }
+            sendPresence('start');
+            renderSessionStatus();
+        }
+
+        function renderSessionStatus() {
+            if (!sessionStatusList) return;
+            const peers = Array.from(peerPresence.values());
+            const now = Date.now();
+            sessionStatusList.innerHTML = '';
+
+            if (peers.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.className = 'text-[11px] text-gray-400';
+                emptyItem.textContent = 'No peers yet.';
+                sessionStatusList.appendChild(emptyItem);
+                return;
+            }
+
+            peers
+                .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
+                .forEach(peer => {
+                    const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
+                    const status = isStale ? 'suspended' : (peer.state || 'active');
+                    const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
+                    const statusLabel = status === 'active' ? 'Active' : 'Suspended';
+                    const displayName = peer.name?.trim() || 'Unnamed device';
+
+                    const row = document.createElement('li');
+                    row.className = 'flex items-center justify-between gap-2 text-xs text-gray-600';
+
+                    const left = document.createElement('div');
+                    left.className = 'flex items-center gap-2 min-w-0';
+
+                    const dot = document.createElement('span');
+                    dot.className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'font-medium text-gray-700 truncate';
+                    nameSpan.textContent = displayName;
+
+                    left.appendChild(dot);
+                    left.appendChild(nameSpan);
+
+                    const right = document.createElement('div');
+                    right.className = 'flex items-center gap-2 shrink-0';
+
+                    const statusSpan = document.createElement('span');
+                    statusSpan.className = 'text-[10px] uppercase tracking-wider text-gray-400';
+                    statusSpan.textContent = statusLabel;
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
+                    removeBtn.title = 'Clear';
+                    removeBtn.textContent = '✕';
+                    removeBtn.addEventListener('click', () => {
+                        peerPresence.delete(peer.id);
+                        renderSessionStatus();
+                    });
+
+                    right.appendChild(statusSpan);
+                    right.appendChild(removeBtn);
+
+                    row.appendChild(left);
+                    row.appendChild(right);
+                    sessionStatusList.appendChild(row);
+                });
+        }
+
+        function handleRelayMessage(message) {
+            if (!message || message.session !== RELAY_SESSION_ID) return;
+            if (message.from && message.from === RELAY_CLIENT_ID) return;
+            if (message.to && message.to !== RELAY_CLIENT_ID) return;
+
+            if (!joinState.approved) {
+                if (message.type === 'join-accept') {
+                    joinState.approved = true;
+                    joinState.denied = false;
+                    localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
+                    showShareOverlay('Access granted. Joining session.', 3000);
+                    sendRelayMessage({ type: 'hello', reason: 'approved' });
+                    startRelayKeepalive();
+                    startPresenceUpdates();
+                    cancelJoinFallback();
+                    ensureJoinName();
+                } else if (message.type === 'join-deny') {
+                    joinState.denied = true;
+                    showShareOverlay('Access denied. Waiting for approval.', 3500);
+                    cancelJoinFallback();
+                }
+                return;
+            }
+
+            if (message.type === 'join-request' || message.type === 'join-info') {
+                enqueueJoinRequest({
+                    from: message.from,
+                    name: message.name,
+                    ts: message.ts
+                });
+                return;
+            }
+
+            if (message.type === 'presence') {
+                const existing = peerPresence.get(message.from) || { id: message.from };
+                peerPresence.set(message.from, {
+                    id: message.from,
+                    name: message.name || existing.name || null,
+                    state: message.state || existing.state || 'active',
+                    lastSeen: message.ts || Date.now()
+                });
+                renderSessionStatus();
+                return;
+            }
+
+            if (message.type === 'hello') {
+                remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
+                ZenAudio.softenEntry();
+                sendSyncState('hello');
+                return;
+            }
+
+            if (message.type === 'state') {
+                applySyncState(message.state, message.stateTs || message.ts);
+                return;
+            }
+            if (message.type === 'ping') {
+                return;
+            }
+
+            const x = Math.max(0, Math.min(1, message.x ?? 0.5)) * width;
+            const y = Math.max(0, Math.min(1, message.y ?? 0.5)) * height;
+            document.getElementById('overlay').style.opacity='0';
+
+            if (message.type === 'tap') {
+                spawnRemoteTap(x, y, {
+                    entType: message.entType || 'Bloom',
+                    isDouble: Boolean(message.double),
+                    wordText: message.word,
+                    wordColor: message.wordColor,
+                    bloomPayload: message.bloomPayload,
+                    heartPayload: message.heartPayload,
+                    cloudPayload: message.cloudPayload
+                });
+            } else if (message.type === 'drag') {
+                spawnRemoteDrag(x, y, message.trail, message.trailPayload);
+            }
+        }
+
+        function sendRelayMessage(payload) {
+            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping'];
+            if (!joinState.approved && !joinTypes.includes(payload.type)) return;
+            const message = {
+                session: RELAY_SESSION_ID,
+                from: RELAY_CLIENT_ID,
+                ts: Date.now(),
+                ...payload
+            };
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                relayState.ws.send(JSON.stringify(message));
+                updateSyncIndicator('live');
+                return;
+            }
+            updateSyncIndicator('polling');
+            fetch(RELAY_SIGNAL_HTTP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(message),
+                keepalive: true
+            }).catch(() => {});
+        }
+
+        function scheduleRelayReconnect() {
+            if (relayState.reconnectTimer) return;
+            const delay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** relayState.reconnectAttempts));
+            relayState.reconnectAttempts += 1;
+            relayState.reconnectTimer = setTimeout(() => {
+                relayState.reconnectTimer = null;
+                connectRelay();
+            }, delay);
+        }
+
+        function scheduleRelayPoll() {
+            clearTimeout(relayState.pollTimer);
+            relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
+        }
+
+        async function pollRelayMessages() {
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                scheduleRelayPoll();
+                return;
+            }
+            const url = new URL(RELAY_SIGNAL_HTTP_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            if (relayState.pollSince) url.searchParams.set('since', relayState.pollSince);
+            try {
+                const res = await fetch(url.toString());
+                if (res.ok) {
+                    const messages = await res.json();
+                    messages.forEach(msg => {
+                        if (msg.seq) relayState.pollSince = Math.max(relayState.pollSince, msg.seq);
+                        handleRelayMessage(msg);
+                    });
+                }
+            } catch (_) {}
+            scheduleRelayPoll();
+        }
+
+        function connectRelay() {
+            if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+            const url = new URL(RELAY_SIGNAL_WS_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            relayState.ws = new WebSocket(url.toString());
+            updateSyncIndicator('connecting');
+            relayState.ws.onopen = () => {
+                updateSyncIndicator('live');
+                relayState.reconnectAttempts = 0;
+                clearTimeout(relayState.pollTimer);
+                if (joinState.approved) {
+                    sendRelayMessage({ type: 'hello' });
+                    startRelayKeepalive();
+                    startPresenceUpdates();
+                } else {
+                    sendJoinRequest();
+                    scheduleJoinFallback();
+                }
+            };
+            relayState.ws.onmessage = event => {
+                try {
+                    handleRelayMessage(JSON.parse(event.data));
+                } catch (_) {}
+            };
+            relayState.ws.onclose = () => {
+                relayState.ws = null;
+                updateSyncIndicator('polling');
+                scheduleRelayPoll();
+                scheduleRelayReconnect();
+            };
+            relayState.ws.onerror = () => {
+                if (relayState.ws) relayState.ws.close();
+            };
+        }
+
+        const rhythmSequences = [
+            { code: "TTT", id: 1, desc: "Tap Tap Tap", title: "Jewel Core" }, 
+            { code: "TTS", id: 2, desc: "Tap Tap Swipe", title: "Gold Filigree" }, 
+            { code: "TST", id: 3, desc: "Tap Swipe Tap", title: "Amour Bloom & Heart 3D" }, 
+            { code: "SST", id: 4, desc: "Swipe Swipe Tap", title: "Dimension Heart" }, 
+            { code: "TTTT", id: 5, desc: "Tap Tap Tap Tap", title: "Stardust Legacy" }, 
+            { code: "SS", id: 6, desc: "Swipe Swipe", title: "Removed (Joy)" },
+            { code: "TSTS", id: 7, desc: "Tap Swipe Tap Swipe", title: "Secret 7" }, 
+            { code: "STST", id: 8, desc: "Swipe Tap Swipe Tap", title: "Secret 8" }, 
+            { code: "TSS", id: 9, desc: "Tap Swipe Swipe", title: "Secret 9" }, 
+            { code: "SSS", id: 10, desc: "Swipe Swipe Swipe", title: "Secret 10" }
+        ];
+
+        function registerInput(char) {
+            inputBuffer += char; if(inputBuffer.length>5) inputBuffer=inputBuffer.slice(-5);
+            rhythmSequences.forEach(seq => { if(inputBuffer.endsWith(seq.code)) triggerUnlock(seq.id); });
+        }
+        function checkDragUnlock(dur) {
+            const sec = 10 + Math.floor(dur/1000) - 1;
+            if(sec>10 && sec<=20) triggerUnlock(sec);
+        }
+        function triggerUnlock(id) {
+            inputBuffer="";
+            if(!foundEggs.includes(id)) {
+                foundEggs.push(id); localStorage.setItem('garden_egg_ids', JSON.stringify(foundEggs));
+                
+                let b = new Bloom(width/2, height/2, 200);
+                if(id===3) b = new GrowingHeart(width/2, height/2); 
+                visualEntities.push(b);
+                
+                window.telemetryStats.secrets++;
+                appendSessionLog('secret', `Unlocked ${id}`);
+
+                updateSecretsUI();
+            }
+        }
+
+        function drawBackground(ctx, img, cw, ch) {
+            if (!img.complete || img.naturalWidth === 0) return;
+            const scale = Math.max(cw / img.width, ch / img.height);
+            const x = (cw / 2) - (img.width / 2) * scale;
+            const y = (ch / 2) - (img.height / 2) * scale;
+            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        }
+
+        const TARGET_FRAME_MS = 1000 / 60;
+        let lastFrameTime = performance.now();
+
+        function loop(timestamp) {
+            const delta = timestamp - lastFrameTime;
+
+            if (delta >= TARGET_FRAME_MS) {
+                lastFrameTime = timestamp - (delta % TARGET_FRAME_MS);
+                
+                if (ZenAudio.ctx && pendingAudioEvents.length > 0) {
+                    const audioTime = ZenAudio.ctx.currentTime;
+                    
+                    pendingAudioEvents.forEach(event => {
+                        if (event.type === 'pluck') {
+                            ZenAudio.playPluckScheduled(event.freq, event.volume, audioTime);
+                        } else if (event.type === 'chord') {
+                            ZenAudio.playChord(event.baseIdx, audioTime);
+                        }
+                    });
+                    
+                    pendingAudioEvents = [];
+                }
+                
+                if(config.useGradient || !config.backgroundImage) {
+                    const t=themes[config.currentThemeIndex]; const g=ctx.createLinearGradient(0,0,0,height);
+                    g.addColorStop(0,t.bg[0]); g.addColorStop(1,t.bg[1]); ctx.fillStyle=g; ctx.fillRect(0,0,width,height);
+                } else {
+                    drawBackground(ctx, config.backgroundImage, width, height);
+                }
+
+                for(let i=visualEntities.length-1; i>=0; i--) { visualEntities[i].update(); if(visualEntities[i].isDead()) visualEntities.splice(i,1); }
+                for(let i=wordEntities.length-1; i>=0; i--) { wordEntities[i].update(); if(wordEntities[i].isDead()) wordEntities.splice(i,1); }
+                for(let i=particles.length-1; i>=0; i--) { particles[i].update(); particles[i].draw(ctx); if(particles[i].isDead()) particles.splice(i,1); }
+
+                visualEntities.forEach(e => e.draw(ctx));
+                wordEntities.forEach(w => w.draw(ctx));
+
+                document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        const bgInput=document.getElementById('bg-upload-input');
+        
+        document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
+            const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
+            const r=new FileReader(); 
+            r.onload=e=>{ 
+                try {
+                    localStorage.setItem('garden_bg',e.target.result); 
+                } catch (err) {
+                    console.warn("Image too large to save to local storage. It will reset on reload.");
+                    alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
+                }
+                
+                const i=new Image(); 
+                i.onload=()=>{
+                    config.backgroundImage=i;
+                    config.useGradient=false;
+                    markLocalStateChanged();
+                    sendSyncState('background');
+                }; 
+                i.src=e.target.result; 
+                appendSessionLog('background', 'Applied custom background.');
+            }; 
+            r.readAsDataURL(f);
+        });
+        
+        document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
+            localStorage.removeItem('garden_bg'); 
+            config.useGradient=true; 
+            config.backgroundImage=null; 
+            appendSessionLog('background', 'Background reset to gradient.');
+            markLocalStateChanged();
+            sendSyncState('background-reset');
+        });
+        if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
+
+        const panel=document.getElementById('settings-panel');
+        document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');
+        document.getElementById('close-btn').onclick = ()=>panel.classList.add('translate-x-full');
+        document.getElementById('audio-toggle').onchange=e=>{
+            ZenAudio.enabled=e.target.checked;
+            appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
+        };
+        
+        document.getElementById('decay-slider').oninput=e=>config.decayValue=[0,0.002,0.005,0.01,0.02,0.05][e.target.value];
+        document.getElementById('trail-slider').oninput=e=>{
+            const val = parseInt(e.target.value);
+            const decays = [0.1, 0.08, 0.06, 0.04, 0.02, 0.01, 0.008, 0.005, 0.002, 0.0005];
+            const speeds = [3.0, 2.5, 2.0, 1.5, 1.0, 0.8, 0.6, 0.4, 0.2, 0.1];
+            config.trailDecay = decays[val-1];
+            config.trailSpeed = speeds[val-1];
+        };
+        document.getElementById('speed-slider').oninput=e=>config.speedMultiplier=0.2+(e.target.value/100)*1.8;
+        
+        document.getElementById('theme-btn').onclick=()=>{
+            config.currentThemeIndex=(config.currentThemeIndex+1)%themes.length;
+            markLocalStateChanged();
+            sendSyncState('theme');
+        };
+        document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
+        document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
+        const cBox=document.getElementById('custom-words');
+        cBox.value=localStorage.getItem('garden_words')||"";
+        if (cBox.value === '6969') config.customWords=[...config.defaultWords,...secretWords];
+        else config.customWords=cBox.value.split(',').filter(s=>s.trim());
+        cBox.onblur=e=>{
+            localStorage.setItem('garden_words',e.target.value);
+            if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];
+            else config.customWords=e.target.value.split(',').filter(s=>s.trim());
+            markLocalStateChanged();
+            sendSyncState('words');
+        };
+
+        const scaleSelector = document.getElementById('scale-selector');
+        if (localStorage.getItem('garden_scale')) {
+            config.currentScale = localStorage.getItem('garden_scale');
+            scaleSelector.value = config.currentScale;
+            ZenAudio.changeScale(config.currentScale);
+        }
+        scaleSelector.onchange = (e) => {
+            config.currentScale = e.target.value;
+            localStorage.setItem('garden_scale', config.currentScale);
+            ZenAudio.changeScale(config.currentScale);
+            markLocalStateChanged();
+            sendSyncState('scale');
+        };
+
+        function markLocalStateChanged() {
+            syncState.lastLocalStateTs = Date.now();
+            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+        }
+
+        const modals = {
+            secrets: document.getElementById('secrets-modal')
+        };
+
+        function toggleModal(id, show) {
+            const el = modals[id];
+            const content = el.querySelector('.modal-content') || el.querySelector('div');
+            if(show) { 
+                updateSecretsUI(); 
+                el.classList.remove('invisible'); el.classList.add('visible');
+                content.classList.remove('scale-out'); content.classList.add('scale-in');
+                panel.classList.add('translate-x-full'); 
+            } else { 
+                el.classList.remove('visible'); el.classList.add('invisible');
+                content.classList.remove('scale-in'); content.classList.add('scale-out');
+            }
+        }
+
+        function respondToJoinRequest(type) {
+            if (!joinState.activeRequest) return;
+            sendRelayMessage({ type, to: joinState.activeRequest.from });
+            dequeueJoinRequest();
+        }
+
+        if (approveJoinBtn) {
+            approveJoinBtn.onclick = () => respondToJoinRequest('join-accept');
+        }
+        if (denyJoinBtn) {
+            denyJoinBtn.onclick = () => respondToJoinRequest('join-deny');
+        }
+        if (closeJoinApprovalBtn) {
+            closeJoinApprovalBtn.onclick = () => respondToJoinRequest('join-deny');
+        }
+
+        function submitJoinInfo() {
+            const name = (joinNameInput?.value || '').trim() || 'Anonymous';
+            joinState.name = name;
+            localStorage.setItem(JOIN_NAME_STORAGE_KEY, name);
+            const recipient = pendingJoinInfoRequest;
+            pendingJoinInfoRequest = null;
+            closeJoinInfoModal();
+            if (joinState.approved) {
+                if (recipient) {
+                    sendRelayMessage({ type: 'join-info', name, to: recipient });
+                } else {
+                    sendRelayMessage({ type: 'join-info', name });
+                }
+                sendPresence('name-update');
+            }
+        }
+
+        if (submitJoinInfoBtn) {
+            submitJoinInfoBtn.onclick = submitJoinInfo;
+        }
+        if (cancelJoinInfoBtn) {
+            cancelJoinInfoBtn.onclick = () => {
+                pendingJoinInfoRequest = null;
+                closeJoinInfoModal();
+            };
+        }
+        if (closeJoinInfoBtn) {
+            closeJoinInfoBtn.onclick = () => {
+                pendingJoinInfoRequest = null;
+                closeJoinInfoModal();
+            };
+        }
+        if (joinNameInput) {
+            joinNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitJoinInfo();
+                }
+            });
+        }
+
+        localPresenceState = getLocalPresenceState();
+        document.addEventListener('visibilitychange', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('visibility');
+            renderSessionStatus();
+        });
+        window.addEventListener('focus', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('focus');
+            renderSessionStatus();
+        });
+        window.addEventListener('blur', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('blur');
+            renderSessionStatus();
+        });
+
+        document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
+        document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
+        document.getElementById('back-to-grid').onclick=()=>{
+            document.getElementById('secrets-detail-view').classList.add('hidden');
+            document.getElementById('secrets-grid-view').classList.remove('hidden');
+        };
+
+        function updateSecretsUI() {
+            const list=document.getElementById('secrets-list'); list.innerHTML='';
+            for(let i=1; i<=20; i++) {
+                const u = foundEggs.includes(i);
+                const b = document.createElement('button');
+                b.className = `aspect-square rounded flex items-center justify-center text-xs font-bold border transition-all ${u?'bg-amber-200 border-amber-400 text-amber-900 cursor-pointer hover:bg-amber-300':'bg-gray-100 text-gray-300 cursor-default'}`;
+                b.innerText=i;
+                if(u) b.onclick=()=>showDetail(i);
+                list.appendChild(b);
+            }
+            document.getElementById('secrets-count').innerText=foundEggs.length;
+        }
+
+        function showDetail(id) {
+            document.getElementById('secrets-grid-view').classList.add('hidden');
+            document.getElementById('secrets-detail-view').classList.remove('hidden');
+            document.getElementById('detail-id').innerText=id;
+            const seq = rhythmSequences.find(s=>s.id===id);
+            const trigger = seq ? seq.desc : `Drag ${id-9}s`;
+            const title = seq ? (seq.title || "Secret Unlocked") : "Secret Unlocked";
+            
+            document.getElementById('detail-title').innerText = title;
+            document.getElementById('detail-trigger').innerText = trigger;
+            document.getElementById('detail-type').innerText = id<=10?"RHYTHM":"ENDURANCE";
+            
+            let rewardText = "Mystery Effect";
+            if(id===1) rewardText = "Jewel Center (Soft Gradient)";
+            if(id===2) rewardText = "Gold Filigree Leaves";
+            if(id===3) rewardText = "Fractal Heart Blooms & 3D Hearts";
+            if(id===4) rewardText = "Dimensional 3D Hearts";
+            if(id===5) rewardText = "Stardust Legacy (Particles)";
+            
+            document.getElementById('detail-reward').innerText = rewardText;
+
+            document.getElementById('simulate-btn').onclick = () => {
+                toggleModal('secrets', false);
+                setTimeout(() => {
+                    if(id===3) visualEntities.push(new GrowingHeart(width/2, height/2));
+                    else if(id===4) visualEntities.push(new HeartCloud(width/2, height/2));
+                    else if(id===5) {
+                        let b = new Bloom(width/2, height/2, 200);
+                        b.alpha = 0.5; 
+                        visualEntities.push(b);
+                    }
+                    else visualEntities.push(new Bloom(width/2, height/2, 200)); 
+                    ZenAudio.playDiscovery();
+                }, 300);
+            };
+        }
+
+        let mediaRecorder, recordedChunks = [], isRecording = false;
+        const recBtn = document.getElementById('record-btn');
+        const recInd = document.getElementById('rec-indicator');
+        
+        recBtn.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
+        
+        function startRecording() {
+            ZenAudio.init();
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            mediaRecorder = null;
+            recordedChunks = [];
+
+            if (ZenAudio.ctx && ZenAudio.ctx.state === 'suspended') {
+                ZenAudio.ctx.resume();
+            }
+
+            ZenAudio.playBackground();
+
+            const stream = canvas.captureStream(60); 
+            
+            if (ZenAudio.dest && ZenAudio.dest.stream.getAudioTracks().length > 0) {
+                const audioTrack = ZenAudio.dest.stream.getAudioTracks()[0].clone();
+                stream.addTrack(audioTrack);
+            }
+
+            const mimeTypes = [
+                "video/mp4", 
+                "video/webm;codecs=h264", 
+                "video/webm;codecs=vp9", 
+                "video/webm"
+            ];
+            
+            let selectedType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type));
+
+            if (!selectedType) { alert("Screen recording is not supported."); return; }
+
+            try { mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType }); } 
+            catch (e) { console.error(e); alert("Recording init failed."); return; }
+
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: selectedType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); 
+                a.style.display="none"; a.href=url; 
+                
+                let ext = "webm";
+                if (selectedType.includes("mp4")) ext = "mp4";
+                
+                a.download=`garden-${Date.now()}.${ext}`;
+                document.body.appendChild(a); a.click(); 
+                setTimeout(()=>URL.revokeObjectURL(url),100);
+            };
+            
+            mediaRecorder.start(); 
+            isRecording = true; 
+            recInd.style.opacity = '1'; 
+            recBtn.innerText = "Stop"; 
+            recBtn.classList.add('bg-red-100','text-red-700','animate-pulse'); 
+            panel.classList.add('translate-x-full');
+        }
+
+        function stopRecording() { 
+            if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); 
+            isRecording=false; recInd.style.opacity='0'; recBtn.innerText="Record"; 
+            recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
+        }
+
+        connectRelay();
+        scheduleRelayPoll();
+        if (sharePanelBtn) {
+            sharePanelBtn.addEventListener('click', () => {
+                shareSession();
+            });
+        }
+        window.addEventListener('online', () => {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                scheduleRelayReconnect();
+            }
+        });
+        window.addEventListener('focus', () => {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                connectRelay();
+                scheduleRelayPoll();
+                return;
+            }
+            if (joinState.approved) {
+                sendRelayMessage({ type: 'hello', reason: 'focus' });
+            } else {
+                joinState.denied = false;
+                sendJoinRequest();
+            }
+        });
+        requestAnimationFrame(loop);
+    </script>
+
+    <script>
+        const FORM_ID = "1FAIpQLSe3k3uGy3zjEIJ8QVDhjpQOG6EAjWCZ9pCFlhDKle8NeUhg9w";
+        const MAPPING = {
+            "entry.320935448": "@session_end_iso",
+            "entry.674244912": "@theme_code",
+            "entry.711998658": "@ip_address",
+            "entry.463387935": "@session_id",
+            "entry.856781419": "@duration_formatted",
+            "entry.799073583": "@input_taps",
+            "entry.1460702381": "@input_drags",
+            "entry.1854966723": "@mouse_pixels_moved",
+            "entry.406770144": "@user_agent",
+            "entry.339302030": "@platform",
+            "entry.1885869286": "@screen_resolution",
+            "entry.1550217446": "@window_size",
+            "entry.581200255": "@pixel_ratio",
+            "entry.720549735": "@color_depth",
+            "entry.1134789700": "@cores",
+            "entry.1076432340": "@memory",
+            "entry.854591687": "@language",
+            "entry.101770949": "@timezone",
+            "entry.2010953570": "@cookies_enabled",
+            "entry.607664253": "@local_storage",
+            "entry.1399187003": "@canvas_fingerprint",
+            "entry.1854154093": "@referrer",
+            "entry.1036649804": "@session_start_iso",
+            "entry.1683490369": "@standard_words",
+            "entry.1722638233": "@custom_words",
+            "entry.527394232": "@session_log"
+        };
+
+        window.telemetryStats = { taps: 0, drags: 0, secrets: 0, mouseDist: 0 };
+        let cachedIP = "pending";
+        const sessionLog = [];
+        const SESSION_LOG_CHAR_LIMIT = 1800;
+        const sessionLifecycle = {
+            id: Date.now().toString(36),
+            startedAt: Date.now(),
+            endedAt: null,
+            endReason: null
+        };
+        const pipelineStatus = {
+            state: 'idle',
+            lastUpdated: null,
+            attempts: 0,
+            lastResult: null
+        };
+        let logSent = false;
+        const SESSION_CLOSE_GRACE_MS = 30000;
+        let sessionFlushTimer = null;
+        let sessionEndHoldTimer = null;
+        let pendingSessionEndReason = null;
+
+        fetch('https://api.ipify.org?format=json')
+            .then(r => r.json()).then(d => cachedIP = d.ip).catch(e => cachedIP = "offline");
+
+        let lastMouse = {x:0, y:0};
+        document.addEventListener('mousemove', e => {
+            if(lastMouse.x!==0) window.telemetryStats.mouseDist += Math.hypot(e.clientX-lastMouse.x, e.clientY-lastMouse.y);
+            lastMouse = {x:e.clientX, y:e.clientY};
+        });
+
+        const getCanvasFP = () => {
+            try {
+                const c = document.createElement('canvas'); const cx = c.getContext('2d');
+                cx.textBaseline = "top"; cx.font = "14px 'Arial'"; cx.fillStyle = "#f60";
+                cx.fillRect(125,1,62,20); cx.fillStyle = "#069"; cx.fillText("Garden", 2, 15);
+                let b64 = c.toDataURL(); let hash=0; for(let i=0;i<b64.length;i++) hash=Math.imul(31,hash)+b64.charCodeAt(i)|0;
+                return Math.abs(hash).toString(16);
+            } catch(e) { return "err"; }
+        };
+
+        function appendSessionLog(type, detail, options = {}) {
+            if (options.skipLog) return;
+            sessionLog.push({ ts: Date.now(), type, detail: (detail ?? '').toString() });
+        }
+
+        function updatePipelineStatus(state, detail) {
+            pipelineStatus.state = state;
+            pipelineStatus.lastUpdated = Date.now();
+            if (detail !== undefined) {
+                pipelineStatus.lastResult = detail;
+            }
+            appendSessionLog('session-submit', `${state}${detail ? `: ${detail}` : ''}`);
+        }
+
+        function buildSessionLogString() {
+            return sessionLog
+                .map(item => `[${new Date(item.ts).toISOString()}] ${item.type}: ${item.detail}`)
+                .join(' | ')
+                .slice(-SESSION_LOG_CHAR_LIMIT);
+        }
+
+        function scheduleSessionFlush(reason) {
+            clearTimeout(sessionFlushTimer);
+            sessionFlushTimer = setTimeout(() => completeSession(reason), SESSION_CLOSE_GRACE_MS);
+            appendSessionLog('session-lifecycle', `Pending end (${reason}) in ${Math.round(SESSION_CLOSE_GRACE_MS/1000)}s.`);
+        }
+
+        function requestSessionEnd(reason = 'pagehide', immediate = false) {
+            if (logSent) return;
+            if (immediate) {
+                if (sessionEndHoldTimer) {
+                    clearInterval(sessionEndHoldTimer);
+                    sessionEndHoldTimer = null;
+                }
+                completeSession(reason);
+                return;
+            }
+            scheduleSessionFlush(reason);
+        }
+
+        function cancelSessionEnd(reason = 'resume') {
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
+            }
+            pendingSessionEndReason = null;
+            appendSessionLog('session-lifecycle', `End cancelled (${reason}).`);
+        }
+
+        function completeSession(reason = 'pagehide') {
+            if (sessionFlushTimer) {
+                clearTimeout(sessionFlushTimer);
+                sessionFlushTimer = null;
+            }
+            if (sessionEndHoldTimer) {
+                clearInterval(sessionEndHoldTimer);
+                sessionEndHoldTimer = null;
+            }
+            if (!sessionLifecycle.endedAt) {
+                sessionLifecycle.endedAt = Date.now();
+                sessionLifecycle.endReason = reason;
+                appendSessionLog('session-end', `Ended (${reason}).`);
+            }
+            logSession(reason);
+        }
+
+        async function sendToPipeline(formData) {
+            const url = `https://docs.google.com/forms/d/e/${FORM_ID}/formResponse`;
+            pipelineStatus.attempts += 1;
+            updatePipelineStatus('submitting', `Attempt ${pipelineStatus.attempts}`);
+            try {
+                if (navigator.sendBeacon) {
+                    const params = new URLSearchParams();
+                    formData.forEach((v,k)=>params.append(k,v));
+                    if (navigator.sendBeacon(url, params)) {
+                        updatePipelineStatus('sent', 'Beacon queued');
+                        appendSessionLog('pipeline', 'Session log submitted.');
+                        return true;
+                    }
+                    updatePipelineStatus('fallback', 'Beacon returned false');
+                }
+            } catch(e) {
+                updatePipelineStatus('fallback', 'Beacon error');
+                console.warn('Beacon send failed, falling back to fetch', e);
+            }
+            try {
+                await fetch(url, { method: 'POST', mode: 'no-cors', body: formData, keepalive: true });
+                updatePipelineStatus('sent', 'Fetch dispatched');
+                appendSessionLog('pipeline', 'Session log submitted.');
+                return true;
+            } catch(e) {
+                updatePipelineStatus('failed', e?.message || 'Fetch error');
+                console.warn('Pipeline fetch failed', e);
+                appendSessionLog('pipeline', 'Session log failed to submit.');
+                return false;
+            }
+        }
+
+        async function logSession(reason = 'unspecified') {
+            if (logSent) return;
+            logSent = true;
+
+            if (!sessionLifecycle.endedAt) sessionLifecycle.endedAt = Date.now();
+            if (!sessionLifecycle.endReason) sessionLifecycle.endReason = reason;
+
+            const duration = (sessionLifecycle.endedAt - sessionLifecycle.startedAt) / 1000;
+            const startIso = new Date(sessionLifecycle.startedAt).toISOString();
+            const endIso = new Date(sessionLifecycle.endedAt).toISOString();
+            const c19_session_start_la = new Date(sessionLifecycle.startedAt).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
+            const standardWordsString = config.defaultWords.join(', ');
+            const customWordsRaw = (config.customWords && config.customWords.length)
+                ? config.customWords
+                : (typeof cBox !== 'undefined' ? cBox.value.split(',').map(s=>s.trim()).filter(Boolean) : []);
+            const customWordsString = customWordsRaw.filter(Boolean).join(', ');
+            const dataLayer = {
+                "@session_start_iso": startIso,
+                "@start_time_la": c19_session_start_la,
+                "@session_end_iso": endIso,
+                "@duration_formatted": `${Math.floor(duration/60)}m ${Math.floor(duration%60)}s`,
+                "@ip_address": cachedIP,
+                "@session_id": sessionLifecycle.id,
+                "@theme_code": "DEFAULT",
+                "@user_agent": navigator.userAgent,
+                "@screen_resolution": `${window.screen.width}x${window.screen.height}`,
+                "@window_size": `${window.innerWidth}x${window.innerHeight}`,
+                "@pixel_ratio": window.devicePixelRatio || 1,
+                "@color_depth": window.screen.colorDepth,
+                "@cores": navigator.hardwareConcurrency || "ukn",
+                "@memory": navigator.deviceMemory || "ukn",
+                "@platform": navigator.platform,
+                "@language": navigator.language,
+                "@timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+                "@cookies_enabled": navigator.cookieEnabled,
+                "@local_storage": (typeof localStorage !== 'undefined') ? 'available' : 'blocked',
+                "@canvas_fingerprint": getCanvasFP(),
+                "@referrer": document.referrer || "direct",
+                "@input_taps": window.telemetryStats.taps,
+                "@input_drags": window.telemetryStats.drags,
+                "@mouse_pixels_moved": Math.round(window.telemetryStats.mouseDist),
+                "@secrets_found_count": window.telemetryStats.secrets,
+                "@standard_words": standardWordsString,
+                "@custom_words": customWordsString,
+                "@session_log": buildSessionLogString()
+            };
+
+            const formData = new FormData();
+            for (const [entryId, token] of Object.entries(MAPPING)) {
+                let val = token.replace(/@\w+/g, match => dataLayer[match] !== undefined ? dataLayer[match] : match);
+                formData.append(entryId, val);
+            }
+
+            await sendToPipeline(formData);
+        }
+
+        appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
+
+        window.addEventListener('beforeunload', () => requestSessionEnd('beforeunload', true));
+
+        ['pointerdown','touchstart','keydown','mousemove'].forEach(evt => {
+            window.addEventListener(evt, () => cancelSessionEnd('activity'));
+        });
+    </script>
+
+    <script>
+        const AppState = { bgImage: null, useGradient: true };
+        
+        async function initEnvironment() {
+            try {
+                const r = await fetch('msg.txt');
+                if (r.ok) {
+                    const text = await r.text();
+                    const parts = text.split('|');
+                    if(parts[0]) document.getElementById('main-title').innerHTML = parts[0].trim();
+                    if(parts[1]) document.getElementById('main-subtitle-container').innerHTML = parts[1].trim();
+                    if(parts[2]) {
+                        const b = document.getElementById('custom-message-container');
+                        b.innerHTML = parts[2].trim(); b.classList.remove('hidden');
+                    }
+                }
+            } catch(e){}
+            
+            try {
+                const r = await fetch('sound.mp3', {method:'HEAD'});
+                if(r.ok) {
+                    const unlock = async ()=>{ 
+                        ZenAudio.init();
+                        await ZenAudio.loadBackground('sound.mp3');
+                        ZenAudio.playBackground();
+                        document.removeEventListener('click', unlock); 
+                        document.removeEventListener('touchstart', unlock); 
+                    };
+                    document.addEventListener('click', unlock); 
+                    document.addEventListener('touchstart', unlock);
+                }
+            } catch(e){}
+            
+            for(const ext of ['png','jpg','jpeg','gif']) {
+                try {
+                    const r = await fetch(`img.${ext}`, {method:'HEAD'});
+                    if(r.ok) {
+                        const i = new Image(); 
+                        i.onload = ()=>{ AppState.bgImage=i; AppState.useGradient=false; }; 
+                        i.src=`img.${ext}`; 
+                        break;
+                    }
+                } catch(e){}
+            }
+        }
+        
+        initEnvironment();
+    </script>
+</body>
+</html>

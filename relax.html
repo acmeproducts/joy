@@ -861,7 +861,7 @@
         const sharePanelBtn = document.getElementById('share-panel-btn');
         const sessionStatusList = document.getElementById('session-status-list');
 
-        let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
+        let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
         let lastRemoteDragSound = 0;
         let remoteEntryDampenUntil = 0;
@@ -1070,7 +1070,7 @@
         }
 
         function handleInputMove(x,y) {
-            if(!startX) return;
+            if(startX === null || startY === null) return;
             if(Math.sqrt((x-startX)**2 + (y-startY)**2) > 10) {
                 isDragging=true;
                 
@@ -1159,14 +1159,14 @@
                 lastTapX = x;
                 lastTapY = y;
             }
-            startX=null; isDragging=false;
+            startX=null; startY=null; isDragging=false;
         }
         
         canvas.addEventListener('mousedown',e=>handleInputStart(e.clientX,e.clientY));
-        canvas.addEventListener('mousemove',e=>{if(startX)handleInputMove(e.clientX,e.clientY)});
+        canvas.addEventListener('mousemove',e=>{if(startX !== null)handleInputMove(e.clientX,e.clientY)});
         canvas.addEventListener('mouseup',e=>handleInputEnd(e.clientX,e.clientY));
         canvas.addEventListener('touchstart',e=>{e.preventDefault();handleInputStart(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
-        canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
+        canvas.addEventListener('touchmove',e=>{e.preventDefault();if(startX !== null)handleInputMove(e.touches[0].clientX,e.touches[0].clientY)},{passive:false});
         canvas.addEventListener('touchend',e=>{e.preventDefault();if(e.changedTouches.length)handleInputEnd(e.changedTouches[0].clientX,e.changedTouches[0].clientY)});
 
         function spawnRemoteTap(x, y, options = {}) {
@@ -1674,12 +1674,12 @@
 
             const r=new FileReader(); 
             r.onload=e=>{ 
+                const dataUrl = e.target.result;
+                config.backgroundImageData = dataUrl;
+                markLocalStateChanged();
+                sendSyncState('background');
                 try {
-                    const dataUrl = e.target.result;
                     localStorage.setItem('garden_bg', dataUrl);
-                    config.backgroundImageData = dataUrl;
-                    markLocalStateChanged();
-                    sendSyncState('background');
                 } catch (err) {
                     console.warn("Image too large to save to local storage. It will reset on reload.");
                     alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");

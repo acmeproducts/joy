@@ -7,6 +7,16 @@ const APPROVED_CLIENTS_KEY = 'approvedClients';
 const SESSION_RESUME_WINDOW_MS = 12 * 60 * 1000;
 const HOST_STALE_MS = SESSION_RESUME_WINDOW_MS;
 
+function generateClientToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let raw = '';
+  for (const value of bytes) {
+    raw += String.fromCharCode(value);
+  }
+  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -61,6 +71,7 @@ export class SignalSession {
     this.hostUpdatedAt = 0;
     this.lastActivity = 0;
     this.approvedClients = new Set();
+    this.clientTokens = new Map();
     this.ready = this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get([
         'seq',
@@ -123,6 +134,7 @@ export class SignalSession {
     this.hostId = null;
     this.hostUpdatedAt = 0;
     this.approvedClients = new Set();
+    this.clientTokens = new Map();
     this.lastActivity = now;
     await this.state.storage.put({
       seq: this.seq,
@@ -152,12 +164,36 @@ export class SignalSession {
     }
     this.clients.set(clientId, socket);
     this.clientIds.set(socket, clientId);
+    this.issueClientToken(clientId, socket);
   }
 
   isClientApproved(clientId) {
     if (!clientId) return false;
     if (clientId === this.hostId) return true;
     return this.approvedClients.has(clientId);
+  }
+
+  issueClientToken(clientId, socket) {
+    if (!clientId || !socket) return;
+    const token = generateClientToken();
+    this.clientTokens.set(clientId, token);
+    try {
+      socket.send(
+        JSON.stringify({
+          type: 'client-token',
+          token,
+          ts: Date.now(),
+          from: 'server'
+        })
+      );
+    } catch (_) {
+      // ignore send errors
+    }
+  }
+
+  isClientTokenValid(clientId, token) {
+    if (!clientId || !token) return false;
+    return this.clientTokens.get(clientId) === token;
   }
 
   async approveClient(clientId) {
@@ -250,6 +286,7 @@ export class SignalSession {
       }
       this.sessionId = sessionId;
       if (wantsSnapshot) {
+        const token = (request.headers.get('X-Client-Token') || '').trim();
         if (!clientId) {
           return new Response('Client id required for snapshot', {
             status: 403,
@@ -258,6 +295,12 @@ export class SignalSession {
         }
         if (!this.isClientApproved(clientId)) {
           return new Response('Client not approved for snapshot', {
+            status: 403,
+            headers: corsHeaders()
+          });
+        }
+        if (!this.isClientTokenValid(clientId, token)) {
+          return new Response('Client token required for snapshot', {
             status: 403,
             headers: corsHeaders()
           });
@@ -369,6 +412,7 @@ export class SignalSession {
       this.clientIds.delete(ws);
       if (this.clients.get(clientId) === ws) {
         this.clients.delete(clientId);
+        this.clientTokens.delete(clientId);
       }
     }
   }

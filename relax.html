@@ -894,7 +894,14 @@
         const RELAY_RECONNECT_MAX_MS = 10000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
-        const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0 };
+        const relayState = {
+            ws: null,
+            pollTimer: null,
+            pollSince: 0,
+            reconnectTimer: null,
+            reconnectAttempts: 0,
+            clientToken: null
+        };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
@@ -1298,12 +1305,15 @@
 
         async function fetchSnapshot(reason = 'startup') {
             if (!joinState.approved) return;
+            if (!relayState.clientToken) return;
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
             url.searchParams.set('snapshot', '1');
             try {
-                const res = await fetch(url.toString());
+                const res = await fetch(url.toString(), {
+                    headers: { 'X-Client-Token': relayState.clientToken }
+                });
                 if (!res.ok) return;
                 const snapshot = await res.json();
                 if (snapshot?.state) {
@@ -1672,6 +1682,11 @@
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
             if (message.to && message.to !== RELAY_CLIENT_ID) return;
+            if (message.type === 'client-token') {
+                relayState.clientToken = message.token || null;
+                fetchSnapshot('client-token');
+                return;
+            }
 
             if (message.type === 'join-request') {
                 enqueueJoinRequest({
@@ -1896,6 +1911,7 @@
             };
             relayState.ws.onclose = () => {
                 relayState.ws = null;
+                relayState.clientToken = null;
                 updateSyncIndicator('polling');
                 scheduleRelayPoll();
                 scheduleRelayReconnect();

@@ -3,6 +3,7 @@ const SNAPSHOT_KEY = 'snapshot';
 const HOST_KEY = 'host';
 const HOST_UPDATED_AT_KEY = 'hostUpdatedAt';
 const LAST_ACTIVITY_KEY = 'lastActivity';
+const APPROVED_CLIENTS_KEY = 'approvedClients';
 const SESSION_RESUME_WINDOW_MS = 12 * 60 * 1000;
 const HOST_STALE_MS = SESSION_RESUME_WINDOW_MS;
 
@@ -59,13 +60,24 @@ export class SignalSession {
     this.hostId = null;
     this.hostUpdatedAt = 0;
     this.lastActivity = 0;
+    this.approvedClients = new Set();
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['seq', 'messages', HOST_KEY, HOST_UPDATED_AT_KEY, LAST_ACTIVITY_KEY]);
+      const stored = await this.state.storage.get([
+        'seq',
+        'messages',
+        HOST_KEY,
+        HOST_UPDATED_AT_KEY,
+        LAST_ACTIVITY_KEY,
+        APPROVED_CLIENTS_KEY
+      ]);
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
       this.hostId = stored[HOST_KEY] || null;
       this.hostUpdatedAt = stored[HOST_UPDATED_AT_KEY] || 0;
       this.lastActivity = stored[LAST_ACTIVITY_KEY] || 0;
+      if (Array.isArray(stored[APPROVED_CLIENTS_KEY])) {
+        this.approvedClients = new Set(stored[APPROVED_CLIENTS_KEY].filter(Boolean));
+      }
     });
   }
 
@@ -84,6 +96,7 @@ export class SignalSession {
         [HOST_KEY]: this.hostId,
         [HOST_UPDATED_AT_KEY]: this.hostUpdatedAt
       });
+      await this.approveClient(clientId);
       return { granted: true, hostId: this.hostId };
     }
     return { granted: false, hostId: this.hostId };
@@ -109,12 +122,14 @@ export class SignalSession {
     this.messages = [];
     this.hostId = null;
     this.hostUpdatedAt = 0;
+    this.approvedClients = new Set();
     this.lastActivity = now;
     await this.state.storage.put({
       seq: this.seq,
       messages: this.messages,
       [HOST_KEY]: this.hostId,
       [HOST_UPDATED_AT_KEY]: this.hostUpdatedAt,
+      [APPROVED_CLIENTS_KEY]: [],
       [LAST_ACTIVITY_KEY]: this.lastActivity
     });
     await this.state.storage.delete(SNAPSHOT_KEY);
@@ -137,6 +152,40 @@ export class SignalSession {
     }
     this.clients.set(clientId, socket);
     this.clientIds.set(socket, clientId);
+  }
+
+  isClientApproved(clientId) {
+    if (!clientId) return false;
+    if (clientId === this.hostId) return true;
+    return this.approvedClients.has(clientId);
+  }
+
+  async approveClient(clientId) {
+    if (!clientId) return;
+    this.approvedClients.add(clientId);
+    await this.state.storage.put({
+      [APPROVED_CLIENTS_KEY]: Array.from(this.approvedClients)
+    });
+  }
+
+  async denyClient(clientId) {
+    if (!clientId) return;
+    this.approvedClients.delete(clientId);
+    await this.state.storage.put({
+      [APPROVED_CLIENTS_KEY]: Array.from(this.approvedClients)
+    });
+  }
+
+  async handleJoinApproval(message, senderId) {
+    if (!message?.type) return;
+    if (!this.hostId || senderId !== this.hostId) return;
+    const targetId = (message.to || '').trim();
+    if (!targetId) return;
+    if (message.type === 'join-accept') {
+      await this.approveClient(targetId);
+    } else if (message.type === 'join-deny') {
+      await this.denyClient(targetId);
+    }
   }
 
   async persistAndBroadcast(message, options = {}) {
@@ -201,6 +250,18 @@ export class SignalSession {
       }
       this.sessionId = sessionId;
       if (wantsSnapshot) {
+        if (!clientId) {
+          return new Response('Client id required for snapshot', {
+            status: 403,
+            headers: corsHeaders()
+          });
+        }
+        if (!this.isClientApproved(clientId)) {
+          return new Response('Client not approved for snapshot', {
+            status: 403,
+            headers: corsHeaders()
+          });
+        }
         const snapshot = await this.state.storage.get(SNAPSHOT_KEY);
         return new Response(JSON.stringify(snapshot || null), {
           status: 200,
@@ -249,6 +310,7 @@ export class SignalSession {
           from: 'server'
         });
       }
+      await this.handleJoinApproval(message, message.from);
       await this.refreshHostActivity(message.from, now);
       await this.persistAndBroadcast(message, { transient: isTransient });
       return new Response(JSON.stringify({ ok: true, seq: message.seq }), {
@@ -296,6 +358,7 @@ export class SignalSession {
         from: 'server'
       });
     }
+    await this.handleJoinApproval(data, clientId);
     await this.refreshHostActivity(clientId, now);
     await this.persistAndBroadcast(data, { transient: isTransient, skipSenderId: clientId });
   }

@@ -1297,8 +1297,10 @@
         }
 
         async function fetchSnapshot(reason = 'startup') {
+            if (!joinState.approved) return;
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
             url.searchParams.set('snapshot', '1');
             try {
                 const res = await fetch(url.toString());
@@ -1659,6 +1661,7 @@
             startPresenceUpdates();
             cancelJoinFallback();
             ensureJoinName();
+            fetchSnapshot('approved');
             queueSnapshot('approved');
             if (reason) {
                 appendSessionLog('join-approve', reason);

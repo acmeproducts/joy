@@ -2,7 +2,9 @@ const MAX_HISTORY = 2000;
 const SNAPSHOT_KEY = 'snapshot';
 const HOST_KEY = 'host';
 const HOST_UPDATED_AT_KEY = 'hostUpdatedAt';
-const HOST_STALE_MS = 45000;
+const LAST_ACTIVITY_KEY = 'lastActivity';
+const SESSION_RESUME_WINDOW_MS = 12 * 60 * 1000;
+const HOST_STALE_MS = SESSION_RESUME_WINDOW_MS;
 
 function corsHeaders() {
   return {
@@ -56,12 +58,14 @@ export class SignalSession {
     this.sessionId = '';
     this.hostId = null;
     this.hostUpdatedAt = 0;
+    this.lastActivity = 0;
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['seq', 'messages', HOST_KEY, HOST_UPDATED_AT_KEY]);
+      const stored = await this.state.storage.get(['seq', 'messages', HOST_KEY, HOST_UPDATED_AT_KEY, LAST_ACTIVITY_KEY]);
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
       this.hostId = stored[HOST_KEY] || null;
       this.hostUpdatedAt = stored[HOST_UPDATED_AT_KEY] || 0;
+      this.lastActivity = stored[LAST_ACTIVITY_KEY] || 0;
     });
   }
 
@@ -94,9 +98,51 @@ export class SignalSession {
     });
   }
 
+  async ensureSessionActive(now = Date.now()) {
+    if (!this.lastActivity) {
+      this.lastActivity = now;
+      await this.state.storage.put({ [LAST_ACTIVITY_KEY]: this.lastActivity });
+      return;
+    }
+    if (now - this.lastActivity <= SESSION_RESUME_WINDOW_MS) return;
+    this.seq = 0;
+    this.messages = [];
+    this.hostId = null;
+    this.hostUpdatedAt = 0;
+    this.lastActivity = now;
+    await this.state.storage.put({
+      seq: this.seq,
+      messages: this.messages,
+      [HOST_KEY]: this.hostId,
+      [HOST_UPDATED_AT_KEY]: this.hostUpdatedAt,
+      [LAST_ACTIVITY_KEY]: this.lastActivity
+    });
+    await this.state.storage.delete(SNAPSHOT_KEY);
+  }
+
+  async touchSession(now = Date.now()) {
+    this.lastActivity = now;
+    await this.state.storage.put({ [LAST_ACTIVITY_KEY]: this.lastActivity });
+  }
+
+  attachClient(clientId, socket) {
+    const existing = this.clients.get(clientId);
+    if (existing && existing !== socket) {
+      this.clientIds.delete(existing);
+      try {
+        existing.close(1012, 'Reattached');
+      } catch (_) {
+        // ignore close errors
+      }
+    }
+    this.clients.set(clientId, socket);
+    this.clientIds.set(socket, clientId);
+  }
+
   async persistAndBroadcast(message, options = {}) {
     const { transient = false, skipSenderId } = options;
     message.seq = ++this.seq;
+    await this.touchSession();
     if (!transient) {
       this.messages.push(message);
       if (this.messages.length > MAX_HISTORY) {
@@ -121,6 +167,8 @@ export class SignalSession {
 
   async fetch(request) {
     await this.ready;
+    const now = Date.now();
+    await this.ensureSessionActive(now);
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -138,8 +186,8 @@ export class SignalSession {
       const client = pair[0];
       const server = pair[1];
       this.state.acceptWebSocket(server);
-      this.clients.set(clientId, server);
-      this.clientIds.set(server, clientId);
+      this.attachClient(clientId, server);
+      await this.touchSession(now);
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -229,6 +277,13 @@ export class SignalSession {
       await this.state.storage.put(SNAPSHOT_KEY, data);
     }
     const now = Date.now();
+    await this.ensureSessionActive(now);
+    if (data.type === 'reattach') {
+      this.attachClient(clientId, ws);
+      await this.refreshHostActivity(clientId, now);
+      await this.touchSession(now);
+      return;
+    }
     if (data.type === 'host-claim') {
       const claim = await this.claimHost(clientId, now);
       await this.persistAndBroadcast({
@@ -248,8 +303,10 @@ export class SignalSession {
   webSocketClose(ws) {
     const clientId = this.clientIds.get(ws);
     if (clientId) {
-      this.clients.delete(clientId);
       this.clientIds.delete(ws);
+      if (this.clients.get(clientId) === ws) {
+        this.clients.delete(clientId);
+      }
     }
   }
 }

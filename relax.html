@@ -875,7 +875,19 @@
         }
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
-        const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+        const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
+        let storedClientId = null;
+        try {
+            storedClientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+        } catch (_) {}
+        let resolvedClientId = storedClientId;
+        if (!resolvedClientId) {
+            resolvedClientId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+            try {
+                localStorage.setItem(CLIENT_ID_STORAGE_KEY, resolvedClientId);
+            } catch (_) {}
+        }
+        const RELAY_CLIENT_ID = resolvedClientId;
         const RELAY_DRAG_THROTTLE_MS = 20;
         const RELAY_POLL_MS = 400;
         const RELAY_RECONNECT_BASE_MS = 800;
@@ -918,7 +930,8 @@
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
         const JOIN_FALLBACK_MS = 8000;
-        const HOST_STALE_MS = 45000;
+        const SESSION_RESUME_WINDOW_MS = 12 * 60 * 1000;
+        const HOST_STALE_MS = SESSION_RESUME_WINDOW_MS;
         const joinState = {
             approved: localStorage.getItem(JOIN_APPROVAL_STORAGE_KEY) === 'true',
             denied: false,
@@ -1547,11 +1560,27 @@
             renderSessionStatus();
         }
 
-        function refreshHostStaleness(now = Date.now()) {
-            if (joinState.hostId && joinState.hostUpdatedAt && (now - joinState.hostUpdatedAt) > HOST_STALE_MS) {
-                joinState.hostId = null;
-                joinState.hostUpdatedAt = 0;
-                joinState.isHost = false;
+        function isHostStale(now = Date.now()) {
+            if (!joinState.hostId || !joinState.hostUpdatedAt) return true;
+            return (now - joinState.hostUpdatedAt) > HOST_STALE_MS;
+        }
+
+        function refreshHostStaleness(now = Date.now(), reason = 'host-stale') {
+            if (!joinState.hostId) return false;
+            if (!isHostStale(now)) return false;
+            joinState.hostId = null;
+            joinState.hostUpdatedAt = 0;
+            joinState.isHost = false;
+            if (joinState.approved) {
+                requestHostClaim(reason);
+            }
+            return true;
+        }
+
+        function ensureHostClaim(reason = 'host-check') {
+            const now = Date.now();
+            if (joinState.approved && (!joinState.hostId || isHostStale(now))) {
+                requestHostClaim(reason);
             }
         }
 
@@ -1772,7 +1801,7 @@
         }
 
         function sendRelayMessage(payload) {
-            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping', 'snapshot', 'host-claim'];
+            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping', 'snapshot', 'host-claim', 'reattach'];
             if (!joinState.approved && !joinTypes.includes(payload.type)) return;
             const message = {
                 session: RELAY_SESSION_ID,
@@ -1845,7 +1874,9 @@
                 relayState.reconnectAttempts = 0;
                 clearTimeout(relayState.pollTimer);
                 fetchSnapshot('ws-open');
+                sendRelayMessage({ type: 'reattach', reason: 'ws-open', transient: true });
                 if (joinState.approved) {
+                    ensureHostClaim('reconnect');
                     sendRelayMessage({ type: 'hello' });
                     startRelayKeepalive();
                     startPresenceUpdates();

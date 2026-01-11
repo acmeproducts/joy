@@ -53,12 +53,20 @@ export class SignalSession {
     this.sessionId = '';
     this.host = null;
     this.hostUpdatedAt = 0;
+    this.approvedClients = new Set();
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get(['seq', 'messages', 'host', 'hostUpdatedAt']);
+      const stored = await this.state.storage.get([
+        'seq',
+        'messages',
+        'host',
+        'hostUpdatedAt',
+        'approvedClients'
+      ]);
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
       this.host = stored.host || null;
       this.hostUpdatedAt = stored.hostUpdatedAt || 0;
+      this.approvedClients = new Set(stored.approvedClients || []);
     });
   }
 
@@ -96,6 +104,12 @@ export class SignalSession {
       }
       this.sessionId = sessionId;
       if (wantsSnapshot) {
+        if (!clientId) {
+          return new Response('Missing client', { status: 400, headers: corsHeaders() });
+        }
+        if (!this.isClientApproved(clientId)) {
+          return new Response('Join approval required', { status: 403, headers: corsHeaders() });
+        }
         const snapshot = await this.state.storage.get(SNAPSHOT_KEY);
         return new Response(JSON.stringify(snapshot || null), {
           status: 200,
@@ -130,6 +144,9 @@ export class SignalSession {
       const isTransient = message.transient === true;
       if (message.type === 'host-claim' && message.from) {
         await this.handleHostClaim(message.from, message.ts || Date.now());
+      }
+      if (message.type === 'join-accept' || message.type === 'join-deny') {
+        await this.handleJoinApproval(message);
       }
       if (this.host && message.from === this.host) {
         this.hostUpdatedAt = message.ts || Date.now();
@@ -183,6 +200,9 @@ export class SignalSession {
     if (data.type === 'host-claim') {
       await this.handleHostClaim(data.from, data.ts || Date.now());
     }
+    if (data.type === 'join-accept' || data.type === 'join-deny') {
+      await this.handleJoinApproval(data);
+    }
     if (this.host && data.from === this.host) {
       this.hostUpdatedAt = data.ts || Date.now();
       await this.state.storage.put({ hostUpdatedAt: this.hostUpdatedAt });
@@ -226,7 +246,9 @@ export class SignalSession {
     if (hostStale || this.host === clientId) {
       this.host = clientId;
       this.hostUpdatedAt = now;
+      this.approvedClients.add(clientId);
       await this.state.storage.put({ host: this.host, hostUpdatedAt: this.hostUpdatedAt });
+      await this.persistApprovedClients();
     }
     const ack = {
       session: this.sessionId,
@@ -250,5 +272,27 @@ export class SignalSession {
         targetSocket.send(payload);
       } catch (_) {}
     }
+  }
+
+  isClientApproved(clientId) {
+    if (!clientId) return false;
+    if (this.host && clientId === this.host) return true;
+    return this.approvedClients.has(clientId);
+  }
+
+  async handleJoinApproval(message) {
+    const targetId = (message.to || '').trim();
+    if (!targetId) return;
+    if (this.host && message.from && message.from !== this.host) return;
+    if (message.type === 'join-accept') {
+      this.approvedClients.add(targetId);
+    } else if (message.type === 'join-deny') {
+      this.approvedClients.delete(targetId);
+    }
+    await this.persistApprovedClients();
+  }
+
+  async persistApprovedClients() {
+    await this.state.storage.put({ approvedClients: Array.from(this.approvedClients) });
   }
 }

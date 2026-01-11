@@ -1288,6 +1288,7 @@
         async function fetchSnapshot(reason = 'startup') {
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
             url.searchParams.set('snapshot', '1');
             try {
                 const res = await fetch(url.toString());
@@ -1620,6 +1621,7 @@
             cancelJoinFallback();
             ensureJoinName();
             queueSnapshot('approved');
+            fetchSnapshot('approved');
             if (reason) {
                 appendSessionLog('join-approve', reason);
             }

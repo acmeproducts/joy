@@ -308,6 +308,7 @@
             trailSpeed: 1.0,
             useGradient: true,
             backgroundImage: null,
+            backgroundImageData: null,
             currentTrail: '♥',
             lastTrailSwitch: Date.now(),
             currentScale: 'original'
@@ -1290,15 +1291,17 @@
             return {
                 themeIndex: config.currentThemeIndex,
                 useGradient: config.useGradient,
-                backgroundImage: config.backgroundImage?.src || null,
+                backgroundImage: config.backgroundImageData || null,
                 customWords: config.customWords || [],
                 currentScale: config.currentScale
             };
         }
 
         async function fetchSnapshot(reason = 'startup') {
+            if (!joinState.approved) return;
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
             url.searchParams.set('snapshot', '1');
             try {
                 const res = await fetch(url.toString());
@@ -1352,6 +1355,7 @@
                 img.onload = () => {
                     config.backgroundImage = img;
                     config.useGradient = false;
+                    config.backgroundImageData = state.backgroundImage;
                     try {
                         localStorage.setItem('garden_bg', state.backgroundImage);
                     } catch (err) {
@@ -1363,6 +1367,7 @@
                 config.useGradient = state.useGradient;
                 if (state.useGradient) {
                     config.backgroundImage = null;
+                    config.backgroundImageData = null;
                     localStorage.removeItem('garden_bg');
                 }
             }
@@ -1659,6 +1664,7 @@
             startPresenceUpdates();
             cancelJoinFallback();
             ensureJoinName();
+            fetchSnapshot('approved');
             queueSnapshot('approved');
             if (reason) {
                 appendSessionLog('join-approve', reason);
@@ -1999,9 +2005,8 @@
             i.onload=()=>{
                 config.backgroundImage=i;
                 config.useGradient=false;
+                config.backgroundImageData=null;
                 URL.revokeObjectURL(objectUrl);
-                markLocalStateChanged();
-                sendSyncState('background');
             };
             i.onerror=()=>URL.revokeObjectURL(objectUrl);
             i.src=objectUrl;
@@ -2010,7 +2015,11 @@
             const r=new FileReader(); 
             r.onload=e=>{ 
                 try {
-                    localStorage.setItem('garden_bg',e.target.result); 
+                    const dataUrl = e.target.result;
+                    localStorage.setItem('garden_bg', dataUrl);
+                    config.backgroundImageData = dataUrl;
+                    markLocalStateChanged();
+                    sendSyncState('background');
                 } catch (err) {
                     console.warn("Image too large to save to local storage. It will reset on reload.");
                     alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
@@ -2023,11 +2032,12 @@
             localStorage.removeItem('garden_bg'); 
             config.useGradient=true; 
             config.backgroundImage=null; 
+            config.backgroundImageData=null;
             appendSessionLog('background', 'Background reset to gradient.');
             markLocalStateChanged();
             sendSyncState('background-reset');
         });
-        if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;}; i.src=localStorage.getItem('garden_bg'); }
+        if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;config.backgroundImageData=i.src;}; i.src=localStorage.getItem('garden_bg'); }
 
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');

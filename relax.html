@@ -245,53 +245,6 @@
         </div>
     </div>
 
-    <div id="join-approval-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-blue-500">devices</span> New Device Request
-                </h3>
-                <button id="close-join-approval" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <p id="join-request-message" class="text-sm text-gray-600 mb-4">
-                A new device wants to join this session.
-            </p>
-            <div class="flex gap-2">
-                <button id="approve-join-btn" class="flex-1 py-2.5 bg-green-50 text-green-700 text-sm font-semibold rounded-lg hover:bg-green-100 transition">
-                    Allow
-                </button>
-                <button id="deny-join-btn" class="flex-1 py-2.5 bg-red-50 text-red-700 text-sm font-semibold rounded-lg hover:bg-red-100 transition">
-                    No
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div id="join-info-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
-        <div class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-sm p-6 transform scale-out modal-content">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-amber-500">badge</span> Identify Yourself
-                </h3>
-                <button id="close-join-info" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2" for="join-name-input">Username</label>
-            <input id="join-name-input" type="text" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. Device C">
-            <div class="mt-4 flex gap-2">
-                <button id="submit-join-info" class="flex-1 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
-                    Send Info
-                </button>
-                <button id="cancel-join-info" class="flex-1 py-2.5 bg-gray-100 text-gray-600 text-sm font-semibold rounded-lg hover:bg-gray-200 transition">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
         const config = {
             currentThemeIndex: 0,
@@ -906,16 +859,6 @@
         const shareOverlay = document.getElementById('share-overlay');
         const shareOverlayText = document.getElementById('share-overlay-text');
         const sharePanelBtn = document.getElementById('share-panel-btn');
-        const joinApprovalModal = document.getElementById('join-approval-modal');
-        const joinRequestMessage = document.getElementById('join-request-message');
-        const approveJoinBtn = document.getElementById('approve-join-btn');
-        const denyJoinBtn = document.getElementById('deny-join-btn');
-        const closeJoinApprovalBtn = document.getElementById('close-join-approval');
-        const joinInfoModal = document.getElementById('join-info-modal');
-        const joinNameInput = document.getElementById('join-name-input');
-        const submitJoinInfoBtn = document.getElementById('submit-join-info');
-        const cancelJoinInfoBtn = document.getElementById('cancel-join-info');
-        const closeJoinInfoBtn = document.getElementById('close-join-info');
         const sessionStatusList = document.getElementById('session-status-list');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX, startY, lastDragSound=0;
@@ -924,25 +867,15 @@
         let remoteEntryDampenUntil = 0;
         let shareOverlayTimer = null;
         let relayKeepaliveTimer = null;
-        let pendingJoinInfoRequest = null;
-        let joinFallbackTimer = null;
         let snapshotTimer = null;
-        const JOIN_APPROVAL_STORAGE_KEY = `relax_join_approved_${RELAY_SESSION_ID}`;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
-        const JOIN_FALLBACK_MS = 8000;
-        const SESSION_RESUME_WINDOW_MS = 12 * 60 * 1000;
-        const HOST_STALE_MS = SESSION_RESUME_WINDOW_MS;
         const joinState = {
-            approved: localStorage.getItem(JOIN_APPROVAL_STORAGE_KEY) === 'true',
-            denied: false,
-            activeRequest: null,
-            requestQueue: [],
-            name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || '',
-            isHost: false,
-            hostId: null,
-            hostUpdatedAt: 0
+            name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || `Guest ${RELAY_CLIENT_ID.slice(0, 4)}`
         };
+        if (!localStorage.getItem(JOIN_NAME_STORAGE_KEY)) {
+            localStorage.setItem(JOIN_NAME_STORAGE_KEY, joinState.name);
+        }
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
@@ -1298,7 +1231,6 @@
         }
 
         async function fetchSnapshot(reason = 'startup') {
-            if (!joinState.approved) return;
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
@@ -1314,14 +1246,12 @@
         }
 
         function sendSnapshot(reason = 'snapshot') {
-            if (!joinState.approved) return;
             const stateTs = syncState.lastLocalStateTs || Date.now();
             const state = buildSyncState();
             sendRelayMessage({ type: 'snapshot', state, stateTs, reason });
         }
 
         function queueSnapshot(reason = 'debounced') {
-            if (!joinState.approved) return;
             if (snapshotTimer) clearTimeout(snapshotTimer);
             snapshotTimer = setTimeout(() => {
                 snapshotTimer = null;
@@ -1389,147 +1319,10 @@
             syncState.initialSent = true;
         }
 
-        function openJoinApprovalModal() {
-            if (!joinApprovalModal) return;
-            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
-            joinApprovalModal.classList.remove('invisible');
-            joinApprovalModal.classList.add('visible');
-            content.classList.remove('scale-out');
-            content.classList.add('scale-in');
-        }
-
-        function closeJoinApprovalModal() {
-            if (!joinApprovalModal) return;
-            const content = joinApprovalModal.querySelector('.modal-content') || joinApprovalModal.querySelector('div');
-            joinApprovalModal.classList.remove('visible');
-            joinApprovalModal.classList.add('invisible');
-            content.classList.remove('scale-in');
-            content.classList.add('scale-out');
-        }
-
-        function showJoinToast(request) {
-            const deviceLabel = request.name ? ` (${request.name})` : '';
-            showShareOverlay(`New join request${deviceLabel}.`, 2500);
-        }
-
-        function openJoinInfoModal() {
-            if (!joinInfoModal) return;
-            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
-            joinInfoModal.classList.remove('invisible');
-            joinInfoModal.classList.add('visible');
-            content.classList.remove('scale-out');
-            content.classList.add('scale-in');
-            if (joinNameInput) {
-                joinNameInput.value = joinState.name || '';
-                joinNameInput.focus();
-            }
-        }
-
-        function closeJoinInfoModal() {
-            if (!joinInfoModal) return;
-            const content = joinInfoModal.querySelector('.modal-content') || joinInfoModal.querySelector('div');
-            joinInfoModal.classList.remove('visible');
-            joinInfoModal.classList.add('invisible');
-            content.classList.remove('scale-in');
-            content.classList.add('scale-out');
-        }
-
-        function showJoinRequest(request) {
-            joinState.activeRequest = request;
-            const deviceLabel = request.name ? ` (${request.name})` : '';
-            if (joinRequestMessage) {
-                joinRequestMessage.textContent = `A new device wants to join this session${deviceLabel}. Allow access?`;
-            }
-            openJoinApprovalModal();
-        }
-
-        function dequeueJoinRequest() {
-            const next = joinState.requestQueue.shift();
-            if (next) {
-                showJoinRequest(next);
-            } else {
-                joinState.activeRequest = null;
-                closeJoinApprovalModal();
-            }
-        }
-
-        function enqueueJoinRequest(request) {
-            const existing = joinState.activeRequest && joinState.activeRequest.from === request.from
-                ? joinState.activeRequest
-                : joinState.requestQueue.find(item => item.from === request.from);
-            const isNewRequest = !existing;
-            const merged = {
-                from: request.from,
-                name: request.name || existing?.name || null,
-                ts: request.ts || Date.now()
-            };
-            if (isNewRequest) {
-                showJoinToast(merged);
-            }
-            if (joinState.activeRequest && joinState.activeRequest.from === merged.from) {
-                joinState.activeRequest = merged;
-                showJoinRequest(merged);
-                return;
-            }
-            const queuedIndex = joinState.requestQueue.findIndex(item => item.from === merged.from);
-            if (queuedIndex >= 0) {
-                joinState.requestQueue[queuedIndex] = merged;
-                return;
-            }
-            if (!joinState.activeRequest) {
-                showJoinRequest(merged);
-            } else {
-                joinState.requestQueue.push(merged);
-            }
-        }
-
-        function sendJoinRequest() {
-            sendRelayMessage({
-                type: 'join-request',
-                name: joinState.name || undefined
-            });
-        }
-
-        function requestHostClaim(reason = 'claim') {
-            sendRelayMessage({
-                type: 'host-claim',
-                reason
-            });
-        }
-
-        function scheduleJoinFallback() {
-            if (joinFallbackTimer) return;
-            joinFallbackTimer = setTimeout(() => {
-                joinFallbackTimer = null;
-                if (!joinState.approved && !joinState.denied) {
-                    showShareOverlay('No host found. Requesting host claim.', 3500);
-                    requestHostClaim('fallback-host');
-                }
-            }, JOIN_FALLBACK_MS);
-        }
-
-        function cancelJoinFallback() {
-            if (joinFallbackTimer) {
-                clearTimeout(joinFallbackTimer);
-                joinFallbackTimer = null;
-            }
-        }
-
-        function ensureJoinName() {
-            if (!joinState.approved) return;
-            if (!joinState.name) {
-                openJoinInfoModal();
-                return;
-            }
-            sendPresence('name-ready');
-        }
-
         function startRelayKeepalive() {
             if (relayKeepaliveTimer) return;
             relayKeepaliveTimer = setInterval(() => {
-                if (joinState.approved) {
-                    sendRelayMessage({ type: 'ping' });
-                }
+                sendRelayMessage({ type: 'ping' });
             }, RELAY_KEEPALIVE_MS);
         }
 
@@ -1538,12 +1331,8 @@
         }
 
         function sendPresence(reason = 'interval') {
-            if (!joinState.approved) return;
             const state = getLocalPresenceState();
             localPresenceState = state;
-            if (joinState.isHost || joinState.hostId === RELAY_CLIENT_ID) {
-                joinState.hostUpdatedAt = Date.now();
-            }
             sendRelayMessage({
                 type: 'presence',
                 state,
@@ -1565,35 +1354,10 @@
             renderSessionStatus();
         }
 
-        function isHostStale(now = Date.now()) {
-            if (!joinState.hostId || !joinState.hostUpdatedAt) return true;
-            return (now - joinState.hostUpdatedAt) > HOST_STALE_MS;
-        }
-
-        function refreshHostStaleness(now = Date.now(), reason = 'host-stale') {
-            if (!joinState.hostId) return false;
-            if (!isHostStale(now)) return false;
-            joinState.hostId = null;
-            joinState.hostUpdatedAt = 0;
-            joinState.isHost = false;
-            if (joinState.approved) {
-                requestHostClaim(reason);
-            }
-            return true;
-        }
-
-        function ensureHostClaim(reason = 'host-check') {
-            const now = Date.now();
-            if (joinState.approved && (!joinState.hostId || isHostStale(now))) {
-                requestHostClaim(reason);
-            }
-        }
-
         function renderSessionStatus() {
             if (!sessionStatusList) return;
             const peers = Array.from(peerPresence.values());
             const now = Date.now();
-            refreshHostStaleness(now);
             sessionStatusList.innerHTML = '';
 
             if (peers.length === 0) {
@@ -1655,102 +1419,10 @@
                 });
         }
 
-        function setJoinApproved(reason = 'approved') {
-            if (joinState.approved) return;
-            joinState.approved = true;
-            joinState.denied = false;
-            localStorage.setItem(JOIN_APPROVAL_STORAGE_KEY, 'true');
-            startRelayKeepalive();
-            startPresenceUpdates();
-            cancelJoinFallback();
-            ensureJoinName();
-            fetchSnapshot('approved');
-            queueSnapshot('approved');
-            if (reason) {
-                appendSessionLog('join-approve', reason);
-            }
-        }
-
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
             if (message.to && message.to !== RELAY_CLIENT_ID) return;
-
-            if (message.type === 'join-request') {
-                enqueueJoinRequest({
-                    from: message.from,
-                    name: message.name,
-                    ts: message.ts
-                });
-                return;
-            }
-
-            if (message.type === 'host-ack') {
-                const now = message.ts || Date.now();
-                if (message.hostId) {
-                    joinState.hostId = message.hostId;
-                    joinState.hostUpdatedAt = now;
-                }
-                const granted = Boolean(message.granted);
-                joinState.isHost = granted && message.hostId === RELAY_CLIENT_ID;
-                if (granted) {
-                    setJoinApproved(joinState.isHost ? 'host-claim' : 'host-ack');
-                    if (joinState.isHost) {
-                        showShareOverlay('You are the host. Share the link to invite.', 3500);
-                        sendRelayMessage({ type: 'hello', reason: 'host-claim' });
-                        queueSnapshot('host-claim');
-                    } else {
-                        showShareOverlay('Host assigned. Joining session.', 3000);
-                        sendJoinRequest();
-                    }
-                } else {
-                    showShareOverlay('Host found. Requesting access.', 3000);
-                    if (!joinState.approved) {
-                        sendJoinRequest();
-                    }
-                }
-                return;
-            }
-
-            if (message.type === 'join-info') {
-                const existingActive = joinState.activeRequest && joinState.activeRequest.from === message.from
-                    ? joinState.activeRequest
-                    : null;
-                if (existingActive) {
-                    existingActive.name = message.name || existingActive.name || null;
-                    showJoinRequest(existingActive);
-                }
-                const queuedIndex = joinState.requestQueue.findIndex(item => item.from === message.from);
-                if (queuedIndex >= 0) {
-                    joinState.requestQueue[queuedIndex].name = message.name || joinState.requestQueue[queuedIndex].name || null;
-                }
-                const existingPresence = peerPresence.get(message.from) || { id: message.from };
-                peerPresence.set(message.from, {
-                    id: message.from,
-                    name: message.name || existingPresence.name || null,
-                    state: existingPresence.state || 'active',
-                    lastSeen: message.ts || Date.now()
-                });
-                renderSessionStatus();
-                return;
-            }
-
-            if (!joinState.approved) {
-                if (message.type === 'join-accept') {
-                    if (!joinState.hostId && message.from) {
-                        joinState.hostId = message.from;
-                        joinState.hostUpdatedAt = message.ts || Date.now();
-                    }
-                    setJoinApproved('remote-accept');
-                    showShareOverlay('Access granted. Joining session.', 3000);
-                    sendRelayMessage({ type: 'hello', reason: 'approved' });
-                } else if (message.type === 'join-deny') {
-                    joinState.denied = true;
-                    showShareOverlay('Access denied. Waiting for approval.', 3500);
-                    cancelJoinFallback();
-                }
-                return;
-            }
 
             if (message.type === 'presence') {
                 const existing = peerPresence.get(message.from) || { id: message.from };
@@ -1760,10 +1432,6 @@
                     state: message.state || existing.state || 'active',
                     lastSeen: message.ts || Date.now()
                 });
-                if (message.from && message.from === joinState.hostId) {
-                    joinState.hostUpdatedAt = message.ts || Date.now();
-                }
-                refreshHostStaleness();
                 renderSessionStatus();
                 return;
             }
@@ -1807,8 +1475,6 @@
         }
 
         function sendRelayMessage(payload) {
-            const joinTypes = ['join-request', 'join-info', 'join-accept', 'join-deny', 'ping', 'snapshot', 'host-claim', 'reattach'];
-            if (!joinState.approved && !joinTypes.includes(payload.type)) return;
             const message = {
                 session: RELAY_SESSION_ID,
                 from: RELAY_CLIENT_ID,
@@ -1881,16 +1547,10 @@
                 clearTimeout(relayState.pollTimer);
                 fetchSnapshot('ws-open');
                 sendRelayMessage({ type: 'reattach', reason: 'ws-open', transient: true });
-                if (joinState.approved) {
-                    ensureHostClaim('reconnect');
-                    sendRelayMessage({ type: 'hello' });
-                    startRelayKeepalive();
-                    startPresenceUpdates();
-                    queueSnapshot('ws-open');
-                } else {
-                    sendJoinRequest();
-                    scheduleJoinFallback();
-                }
+                sendRelayMessage({ type: 'hello' });
+                startRelayKeepalive();
+                startPresenceUpdates();
+                queueSnapshot('ws-open');
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -2114,94 +1774,18 @@
             }
         }
 
-        function respondToJoinRequest(type) {
-            if (!joinState.activeRequest) return;
-            const target = joinState.activeRequest.from;
-            sendRelayMessage({ type, to: target });
-            if (type === 'join-accept') {
-                setJoinApproved('host-accept');
-                if (joinState.name) {
-                    sendRelayMessage({ type: 'join-info', name: joinState.name, to: target });
-                    sendPresence('host-accept');
-                } else {
-                    pendingJoinInfoRequest = target;
-                    ensureJoinName();
-                }
-            }
-            dequeueJoinRequest();
-        }
-
-        if (approveJoinBtn) {
-            approveJoinBtn.onclick = () => respondToJoinRequest('join-accept');
-        }
-        if (denyJoinBtn) {
-            denyJoinBtn.onclick = () => respondToJoinRequest('join-deny');
-        }
-        if (closeJoinApprovalBtn) {
-            closeJoinApprovalBtn.onclick = () => respondToJoinRequest('join-deny');
-        }
-
-        function submitJoinInfo() {
-            const name = (joinNameInput?.value || '').trim() || 'Anonymous';
-            joinState.name = name;
-            localStorage.setItem(JOIN_NAME_STORAGE_KEY, name);
-            const recipient = pendingJoinInfoRequest;
-            pendingJoinInfoRequest = null;
-            closeJoinInfoModal();
-            if (joinState.approved) {
-                if (recipient) {
-                    sendRelayMessage({ type: 'join-info', name, to: recipient });
-                } else {
-                    sendRelayMessage({ type: 'join-info', name });
-                }
-                sendPresence('name-update');
-            }
-        }
-
-        if (submitJoinInfoBtn) {
-            submitJoinInfoBtn.onclick = submitJoinInfo;
-        }
-        if (cancelJoinInfoBtn) {
-            cancelJoinInfoBtn.onclick = () => {
-                pendingJoinInfoRequest = null;
-                closeJoinInfoModal();
-            };
-        }
-        if (closeJoinInfoBtn) {
-            closeJoinInfoBtn.onclick = () => {
-                pendingJoinInfoRequest = null;
-                closeJoinInfoModal();
-            };
-        }
-        if (joinNameInput) {
-            joinNameInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    submitJoinInfo();
-                }
-            });
-        }
-
         localPresenceState = getLocalPresenceState();
         document.addEventListener('visibilitychange', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('visibility');
             renderSessionStatus();
             fetchSnapshot('visibility');
-            refreshHostStaleness();
-            if (!joinState.approved) {
-                requestHostClaim('visibility');
-            }
         });
         window.addEventListener('focus', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('focus');
             renderSessionStatus();
             fetchSnapshot('focus');
-            refreshHostStaleness();
-            if (!joinState.approved) {
-                requestHostClaim('focus');
-            }
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();
@@ -2356,15 +1940,9 @@
                 scheduleRelayPoll();
                 return;
             }
-                if (joinState.approved) {
-                    sendRelayMessage({ type: 'hello', reason: 'focus' });
-                    fetchSnapshot('focus');
-                } else {
-                    joinState.denied = false;
-                    requestHostClaim('focus');
-                    sendJoinRequest();
-                }
-            });
+            sendRelayMessage({ type: 'hello', reason: 'focus' });
+            fetchSnapshot('focus');
+        });
         requestAnimationFrame(loop);
     </script>
 

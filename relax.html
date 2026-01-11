@@ -275,6 +275,92 @@
             { bg: ['#d4fc79', '#96e6a1'], text: '#1b5e20' }
         ];
 
+        const BG_DB_NAME = 'garden_assets';
+        const BG_STORE_NAME = 'backgrounds';
+        const BG_STORE_KEY = 'garden_bg';
+        let bgDbPromise = null;
+
+        function openBackgroundDb() {
+            if (!('indexedDB' in window)) return Promise.resolve(null);
+            if (bgDbPromise) return bgDbPromise;
+            bgDbPromise = new Promise(resolve => {
+                const request = indexedDB.open(BG_DB_NAME, 1);
+                request.onupgradeneeded = () => {
+                    const db = request.result;
+                    if (!db.objectStoreNames.contains(BG_STORE_NAME)) {
+                        db.createObjectStore(BG_STORE_NAME);
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => {
+                    console.warn('IndexedDB unavailable for background image.');
+                    resolve(null);
+                };
+            });
+            return bgDbPromise;
+        }
+
+        async function saveBackgroundImage(dataUrl) {
+            const db = await openBackgroundDb();
+            if (!db) return false;
+            return new Promise(resolve => {
+                const tx = db.transaction(BG_STORE_NAME, 'readwrite');
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => {
+                    console.warn('Failed to persist background image.');
+                    resolve(false);
+                };
+                tx.objectStore(BG_STORE_NAME).put(dataUrl, BG_STORE_KEY);
+            });
+        }
+
+        async function loadBackgroundImage() {
+            const db = await openBackgroundDb();
+            if (!db) return null;
+            return new Promise(resolve => {
+                const tx = db.transaction(BG_STORE_NAME, 'readonly');
+                const request = tx.objectStore(BG_STORE_NAME).get(BG_STORE_KEY);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => resolve(null);
+            });
+        }
+
+        async function clearBackgroundImage() {
+            const db = await openBackgroundDb();
+            if (!db) return false;
+            return new Promise(resolve => {
+                const tx = db.transaction(BG_STORE_NAME, 'readwrite');
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.objectStore(BG_STORE_NAME).delete(BG_STORE_KEY);
+            });
+        }
+
+        function compressBackgroundDataUrl(dataUrl, { maxDimension = 1600, quality = 0.85 } = {}) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxSide = Math.max(img.width, img.height);
+                    const scale = maxSide > maxDimension ? (maxDimension / maxSide) : 1;
+                    const targetWidth = Math.max(1, Math.round(img.width * scale));
+                    const targetHeight = Math.max(1, Math.round(img.height * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve(dataUrl);
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                    const compressed = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressed || dataUrl);
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
         const secretWords = [
             "I Love You", "You are my Sunshine", "I Love You My Sweetheart", "❤️❤️❤️", "🥰❤️♥️🧡🫰","whereever you go that's where I want to be", "Forever Yours", "My One and Only", "Soulmate", "Endless Love","My Heart is Yours", "Together Always", "You Complete Me", "My Happy Place", "Love of My Life", "Dream Come True","My Everything", "Cherished", "Adored", "My Rock", "Purest Love", "Only You", "Sweetheart", "Darling",
             "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
@@ -1300,11 +1386,7 @@
                     config.backgroundImage = img;
                     config.useGradient = false;
                     config.backgroundImageData = state.backgroundImage;
-                    try {
-                        localStorage.setItem('garden_bg', state.backgroundImage);
-                    } catch (err) {
-                        console.warn("Remote background image too large to persist.");
-                    }
+                    saveBackgroundImage(state.backgroundImage);
                 };
                 img.src = state.backgroundImage;
             } else if (state.useGradient !== undefined) {
@@ -1312,7 +1394,7 @@
                 if (state.useGradient) {
                     config.backgroundImage = null;
                     config.backgroundImageData = null;
-                    localStorage.removeItem('garden_bg');
+                    clearBackgroundImage();
                 }
             }
 
@@ -1710,21 +1792,18 @@
             const r=new FileReader(); 
             r.onload=e=>{ 
                 const dataUrl = e.target.result;
-                config.backgroundImageData = dataUrl;
-                markLocalStateChanged();
-                sendSyncState('background');
-                try {
-                    localStorage.setItem('garden_bg', dataUrl);
-                } catch (err) {
-                    console.warn("Image too large to save to local storage. It will reset on reload.");
-                    alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
-                }
+                compressBackgroundDataUrl(dataUrl).then(compressedDataUrl => {
+                    config.backgroundImageData = compressedDataUrl;
+                    markLocalStateChanged();
+                    sendSyncState('background');
+                    saveBackgroundImage(compressedDataUrl);
+                });
             }; 
             r.readAsDataURL(f);
         });
         
         document.getElementById('reset-bg-btn').addEventListener('click', ()=>{ 
-            localStorage.removeItem('garden_bg'); 
+            clearBackgroundImage(); 
             config.useGradient=true; 
             config.backgroundImage=null; 
             config.backgroundImageData=null;
@@ -1732,7 +1811,16 @@
             markLocalStateChanged();
             sendSyncState('background-reset');
         });
-        if(localStorage.getItem('garden_bg')){ const i=new Image(); i.onload=()=>{config.backgroundImage=i;config.useGradient=false;config.backgroundImageData=i.src;}; i.src=localStorage.getItem('garden_bg'); }
+        loadBackgroundImage().then(dataUrl => {
+            if (!dataUrl) return;
+            const i=new Image();
+            i.onload=()=>{
+                config.backgroundImage=i;
+                config.useGradient=false;
+                config.backgroundImageData=dataUrl;
+            };
+            i.src=dataUrl;
+        });
 
         const panel=document.getElementById('settings-panel');
         document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');

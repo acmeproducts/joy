@@ -1230,6 +1230,10 @@
             };
         }
 
+        function shouldRelaxRemoteClock(reason) {
+            return ['focus', 'visibility', 'reconnect', 'hello', 'startup', 'snapshot'].includes(reason);
+        }
+
         async function fetchSnapshot(reason = 'startup') {
             const url = new URL(RELAY_SIGNAL_HTTP_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
@@ -1240,7 +1244,10 @@
                 if (!res.ok) return;
                 const snapshot = await res.json();
                 if (snapshot?.state) {
-                    applySyncState(snapshot.state, snapshot.stateTs || snapshot.ts);
+                    applySyncState(snapshot.state, snapshot.stateTs || snapshot.ts, {
+                        relaxLocalClock: true,
+                        source: reason
+                    });
                 }
             } catch (_) {}
         }
@@ -1259,13 +1266,19 @@
             }, SNAPSHOT_DEBOUNCE_MS);
         }
 
-        function applySyncState(state, stateTs = Date.now()) {
+        function applySyncState(state, stateTs = Date.now(), options = {}) {
             if (!state) return;
-            if (stateTs && stateTs <= syncState.lastStateTs) return;
-            if (stateTs && syncState.lastLocalStateTs && stateTs < syncState.lastLocalStateTs) return;
-            syncState.lastStateTs = stateTs;
-            syncState.lastLocalStateTs = Math.max(syncState.lastLocalStateTs, stateTs);
-            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            const relaxLocalClock = Boolean(options.relaxLocalClock);
+            const effectiveStateTs = Number.isFinite(stateTs) ? stateTs : Date.now();
+            if (effectiveStateTs && effectiveStateTs <= syncState.lastStateTs) return;
+            if (!relaxLocalClock && effectiveStateTs && syncState.lastLocalStateTs && effectiveStateTs < syncState.lastLocalStateTs) return;
+            syncState.lastStateTs = effectiveStateTs;
+            if (effectiveStateTs) {
+                syncState.lastLocalStateTs = relaxLocalClock
+                    ? effectiveStateTs
+                    : Math.max(syncState.lastLocalStateTs, effectiveStateTs);
+                localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            }
 
             if (typeof state.themeIndex === 'number') {
                 config.currentThemeIndex = state.themeIndex % themes.length;
@@ -1448,7 +1461,8 @@
                 return;
             }
             if (message.type === 'snapshot') {
-                applySyncState(message.state, message.stateTs || message.ts);
+                const relaxLocalClock = shouldRelaxRemoteClock(message.reason || 'snapshot');
+                applySyncState(message.state, message.stateTs || message.ts, { relaxLocalClock, source: message.reason });
                 return;
             }
             if (message.type === 'ping') {

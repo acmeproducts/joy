@@ -1994,6 +1994,19 @@
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
+            const objectUrl = URL.createObjectURL(f);
+            const i=new Image(); 
+            i.onload=()=>{
+                config.backgroundImage=i;
+                config.useGradient=false;
+                URL.revokeObjectURL(objectUrl);
+                markLocalStateChanged();
+                sendSyncState('background');
+            };
+            i.onerror=()=>URL.revokeObjectURL(objectUrl);
+            i.src=objectUrl;
+            appendSessionLog('background', 'Applied custom background.');
+
             const r=new FileReader(); 
             r.onload=e=>{ 
                 try {
@@ -2002,16 +2015,6 @@
                     console.warn("Image too large to save to local storage. It will reset on reload.");
                     alert("Image applied! Note: This image is too large to save permanently, so it will reset if you refresh the page.");
                 }
-                
-                const i=new Image(); 
-                i.onload=()=>{
-                    config.backgroundImage=i;
-                    config.useGradient=false;
-                    markLocalStateChanged();
-                    sendSyncState('background');
-                }; 
-                i.src=e.target.result; 
-                appendSessionLog('background', 'Applied custom background.');
             }; 
             r.readAsDataURL(f);
         });

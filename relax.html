@@ -941,6 +941,7 @@
         const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
+        const relayHandshake = { active: false, snapshotApplied: false, reason: null, timeoutTimer: null };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
@@ -1394,6 +1395,7 @@
                         relaxLocalClock: true,
                         source: reason
                     });
+                    completeRelayHandshake('snapshot');
                 }
             } catch (_) {}
         }
@@ -1416,7 +1418,7 @@
             if (!state) return;
             const relaxLocalClock = Boolean(options.relaxLocalClock);
             const effectiveStateTs = Number.isFinite(stateTs) ? stateTs : Date.now();
-            if (effectiveStateTs && effectiveStateTs <= syncState.lastStateTs) return;
+            if (!relaxLocalClock && effectiveStateTs && effectiveStateTs <= syncState.lastStateTs) return;
             if (!relaxLocalClock && effectiveStateTs && syncState.lastLocalStateTs && effectiveStateTs < syncState.lastLocalStateTs) return;
             syncState.lastStateTs = effectiveStateTs;
             if (effectiveStateTs) {
@@ -1607,6 +1609,7 @@
             if (message.type === 'snapshot') {
                 const relaxLocalClock = shouldRelaxRemoteClock(message.reason || 'snapshot');
                 applySyncState(message.state, message.stateTs || message.ts, { relaxLocalClock, source: message.reason });
+                completeRelayHandshake('snapshot');
                 return;
             }
             if (message.type === 'ping') {
@@ -1660,7 +1663,7 @@
             relayState.reconnectAttempts += 1;
             relayState.reconnectTimer = setTimeout(() => {
                 relayState.reconnectTimer = null;
-                connectRelay();
+                startRelayHandshake('reconnect');
             }, delay);
         }
 
@@ -1730,12 +1733,6 @@
                 relayState.reconnectAttempts = 0;
                 clearTimeout(relayState.pollTimer);
                 clearTimeout(relayState.connectTimeoutTimer);
-                fetchSnapshot('ws-open');
-                sendRelayMessage({ type: 'reattach', reason: 'ws-open', transient: true });
-                sendRelayMessage({ type: 'hello' });
-                startRelayKeepalive();
-                startPresenceUpdates();
-                queueSnapshot('ws-open');
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -1757,6 +1754,36 @@
             relayState.ws.onerror = () => {
                 if (relayState.ws) relayState.ws.close();
             };
+        }
+        
+        function startRelayHandshake(reason = 'startup') {
+            relayHandshake.reason = reason;
+            if (!relayHandshake.active) {
+                relayHandshake.active = true;
+                relayHandshake.snapshotApplied = false;
+            }
+            if (document.hidden) return;
+            closeNonOpenRelaySocket(reason);
+            connectRelay();
+            fetchSnapshot(reason);
+            clearTimeout(relayHandshake.timeoutTimer);
+            relayHandshake.timeoutTimer = setTimeout(() => {
+                completeRelayHandshake('timeout');
+            }, 5000);
+        }
+
+        function completeRelayHandshake(source = 'snapshot') {
+            if (!relayHandshake.active) return;
+            relayHandshake.active = false;
+            relayHandshake.snapshotApplied = source === 'snapshot';
+            clearTimeout(relayHandshake.timeoutTimer);
+            startRelayKeepalive();
+            startPresenceUpdates();
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                sendRelayMessage({ type: 'reattach', reason: source, transient: true });
+                sendRelayMessage({ type: 'hello', reason: source });
+            }
+            queueSnapshot('handshake');
         }
 
         const rhythmSequences = [
@@ -1981,22 +2008,13 @@
                 relayState.pollTimer = null;
                 return;
             }
-            closeNonOpenRelaySocket('visibility');
-            connectRelay();
-            fetchSnapshot('visibility');
+            startRelayHandshake('visibility');
         });
         window.addEventListener('focus', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('focus');
             renderSessionStatus();
-            closeNonOpenRelaySocket('focus');
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
-                connectRelay();
-            }
-            fetchSnapshot('focus');
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
-                sendRelayMessage({ type: 'hello', reason: 'focus' });
-            }
+            startRelayHandshake('focus');
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();
@@ -2132,8 +2150,7 @@
             recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
         }
 
-        connectRelay();
-        fetchSnapshot('startup');
+        startRelayHandshake('startup');
         if (!document.hidden) {
             scheduleRelayPoll();
         }
@@ -2143,9 +2160,7 @@
             });
         }
         window.addEventListener('online', () => {
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
-                connectRelay();
-            }
+            startRelayHandshake('online');
         });
         requestAnimationFrame(loop);
     </script>

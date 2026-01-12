@@ -935,6 +935,11 @@
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
+        const RELAY_LOG_SLOT_COUNT = 15;
+        const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
+        const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
+        const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
+        const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
@@ -972,6 +977,60 @@
         let presenceTimer = null;
         let presenceRenderTimer = null;
         let localPresenceState = 'active';
+
+        function getRelayLogSlotKey(index) {
+            return `${RELAY_LOG_SLOT_PREFIX}${index}`;
+        }
+
+        function readRelayLogSlot(index) {
+            const key = getRelayLogSlotKey(index);
+            try {
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function writeRelayLogSlot(index, slot) {
+            const key = getRelayLogSlotKey(index);
+            try {
+                localStorage.setItem(key, JSON.stringify(slot));
+            } catch (_) {}
+        }
+
+        function updateRelayLogMeta(lastEventTs) {
+            try {
+                const meta = {
+                    updatedAt: Date.now(),
+                    lastEventTs,
+                    slotCount: RELAY_LOG_SLOT_COUNT,
+                    slotDurationMs: RELAY_LOG_SLOT_DURATION_MS
+                };
+                localStorage.setItem(RELAY_LOG_META_KEY, JSON.stringify(meta));
+            } catch (_) {}
+        }
+
+        function recordRelayEvent(rawEvent) {
+            if (!rawEvent || !RELAY_LOGGABLE_TYPES.has(rawEvent.type)) return;
+            let event;
+            try {
+                event = { ...rawEvent };
+            } catch (_) {
+                event = rawEvent;
+            }
+            const ts = Number.isFinite(event.ts) ? event.ts : Date.now();
+            event.ts = ts;
+            const slotStart = Math.floor(ts / RELAY_LOG_SLOT_DURATION_MS) * RELAY_LOG_SLOT_DURATION_MS;
+            const slotIndex = Math.floor(ts / RELAY_LOG_SLOT_DURATION_MS) % RELAY_LOG_SLOT_COUNT;
+            const slot = readRelayLogSlot(slotIndex);
+            const nextSlot = (!slot || slot.start !== slotStart)
+                ? { start: slotStart, events: [] }
+                : slot;
+            nextSlot.events.push(event);
+            writeRelayLogSlot(slotIndex, nextSlot);
+            updateRelayLogMeta(ts);
+        }
 
         function createSeed() {
             if (crypto?.getRandomValues) {
@@ -1520,6 +1579,8 @@
             if (message.from && message.from === RELAY_CLIENT_ID) return;
             if (message.to && message.to !== RELAY_CLIENT_ID) return;
 
+            recordRelayEvent(message);
+
             if (message.type === 'presence') {
                 const existing = peerPresence.get(message.from) || { id: message.from };
                 peerPresence.set(message.from, {
@@ -1578,6 +1639,7 @@
                 ts: Date.now(),
                 ...payload
             };
+            recordRelayEvent(message);
             if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
                 relayState.ws.send(JSON.stringify(message));
                 updateSyncIndicator('live');

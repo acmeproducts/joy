@@ -1604,6 +1604,8 @@
 
         function scheduleRelayPoll() {
             clearTimeout(relayState.pollTimer);
+            relayState.pollTimer = null;
+            if (document.hidden) return;
             relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
         }
 
@@ -1625,6 +1627,11 @@
         }
 
         async function pollRelayMessages() {
+            if (document.hidden) {
+                clearTimeout(relayState.pollTimer);
+                relayState.pollTimer = null;
+                return;
+            }
             if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
                 scheduleRelayPoll();
                 return;
@@ -1677,8 +1684,13 @@
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 updateSyncIndicator('polling');
-                scheduleRelayPoll();
-                scheduleRelayReconnect();
+                if (!document.hidden) {
+                    scheduleRelayPoll();
+                    scheduleRelayReconnect();
+                } else {
+                    clearTimeout(relayState.pollTimer);
+                    relayState.pollTimer = null;
+                }
             };
             relayState.ws.onerror = () => {
                 if (relayState.ws) relayState.ws.close();
@@ -1902,19 +1914,27 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('visibility');
             renderSessionStatus();
-            fetchSnapshot('visibility');
+            if (document.hidden) {
+                clearTimeout(relayState.pollTimer);
+                relayState.pollTimer = null;
+                return;
+            }
             closeNonOpenRelaySocket('visibility');
             connectRelay();
-            scheduleRelayPoll();
+            fetchSnapshot('visibility');
         });
         window.addEventListener('focus', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('focus');
             renderSessionStatus();
-            fetchSnapshot('focus');
             closeNonOpenRelaySocket('focus');
-            connectRelay();
-            scheduleRelayPoll();
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                connectRelay();
+            }
+            fetchSnapshot('focus');
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                sendRelayMessage({ type: 'hello', reason: 'focus' });
+            }
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();
@@ -2052,7 +2072,9 @@
 
         connectRelay();
         fetchSnapshot('startup');
-        scheduleRelayPoll();
+        if (!document.hidden) {
+            scheduleRelayPoll();
+        }
         if (sharePanelBtn) {
             sharePanelBtn.addEventListener('click', () => {
                 shareSession();
@@ -2060,18 +2082,8 @@
         }
         window.addEventListener('online', () => {
             if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
-                scheduleRelayReconnect();
-            }
-        });
-        window.addEventListener('focus', () => {
-            closeNonOpenRelaySocket('focus');
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
                 connectRelay();
-                scheduleRelayPoll();
-                return;
             }
-            sendRelayMessage({ type: 'hello', reason: 'focus' });
-            fetchSnapshot('focus');
         });
         requestAnimationFrame(loop);
     </script>

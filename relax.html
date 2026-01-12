@@ -59,13 +59,6 @@
         <div id="custom-message-container" class="mt-4 hidden bg-black/30 p-4 rounded-lg backdrop-blur-sm max-w-lg text-sm text-left"></div>
     </div>
 
-    <div class="fixed inset-0 flex items-end justify-center pb-16 z-20 opacity-0 pointer-events-none transition-opacity duration-500" id="share-overlay">
-        <div class="bg-black/50 text-white text-xs font-semibold tracking-wide px-4 py-2 rounded-full backdrop-blur-md shadow-lg border border-white/20 flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm">link</span>
-            <span id="share-overlay-text">Link copied.</span>
-        </div>
-    </div>
-
     <div class="fixed top-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-bold tracking-wide opacity-0 transition-opacity z-50 pointer-events-none" id="rec-indicator">
         <div class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
         REC
@@ -94,15 +87,6 @@
         </div>
 
         <div class="p-6 space-y-8 flex-1">
-
-            <div class="space-y-2">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Share Session</span>
-                <button class="w-full px-4 py-3 bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl hover:bg-blue-100 transition flex items-center justify-center gap-2 border border-blue-200" id="share-panel-btn">
-                    <span class="material-symbols-outlined text-sm">share</span>
-                    Share This Session
-                </button>
-                <p class="text-[11px] text-gray-400">Send the active session link to invite another device.</p>
-            </div>
 
             <div class="space-y-2">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Session Status</span>
@@ -249,10 +233,10 @@
         const config = {
             currentThemeIndex: 0,
             defaultWords: [
-                                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
-                "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "❤️❤️❤️", "🪷🪷🪷", "Balance", "Harmony",
+                "Peace", "Gentle", "Warmth", "Love", "Hope", "Empathy", "Calm", "Grace", "Kindness", "Light", "Joy", "Bliss",
+                "Serenity", "Breathe Deep", "Be Here", "Soften", "Let Go", "🪷🪷🪷", "Balance", "Harmony",
                 "Inner Peace", "Radiate", "Stillness", "Presence", "Gratitude", "Acceptance", "Flow", "Healing", "Strength",
-                "Wisdom", "Patience", "Courage", "Hi Joy  :)", "Clarity", "Unity", "☕☕☕"," 😴😴😴","ดีที่สุดอย่างแท้จริง","จอยประสบความสำเร็จ","ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง","❤️❤️❤️","🪷 Joy 🪷เกี่ยวดองกัน","🏵️ Joy 🏵️","อาทร 🌼","อาทร","จิตวิญญาณที่งดงาม","Relax...","Deep Breath","หายใจเข้าลึกๆ"
+                "Wisdom", "Patience", "Courage", "☕☕☕", " 😴😴😴", "ดีที่สุดอย่างแท้จริง", "Relax...", "Deep Breath", "หายใจเข้าลึกๆ"
             ],
             customWords: [],
             speedMultiplier: 1.0,
@@ -362,8 +346,18 @@
         }
 
         const secretWords = [
-            "I Love You", "You are my Sunshine", "I Love You My Sweetheart", "❤️❤️❤️", "🥰❤️♥️🧡🫰","whereever you go that's where I want to be", "Forever Yours", "My One and Only", "Soulmate", "Endless Love","My Heart is Yours", "Together Always", "You Complete Me", "My Happy Place", "Love of My Life", "Dream Come True","My Everything", "Cherished", "Adored", "My Rock", "Purest Love", "Only You", "Sweetheart", "Darling",
-            "Beloved", "My Angel", "Home is You", "Infinite Love", "Unconditional", "My Better Half", "Twin Flame"
+            "Hi Joy  :)",
+            "Clarity",
+            "Unity",
+            "Wholeness",
+            "จอยประสบความสำเร็จ",
+            "ความสุขย่อมคู่ควรกับความสงบสุขและความเจริญรุ่งเรือง",
+            "❤️❤️❤️",
+            "Joy 🪷เกี่ยวดองกัน",
+            "Joy 🏵️",
+            "อาทร 🌼",
+            "อาทร",
+            "จิตวิญญาณที่งดงาม"
         ];
 
         const scales = {
@@ -941,24 +935,29 @@
         const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
-        const relayHandshake = { active: false, snapshotApplied: false, reason: null, timeoutTimer: null };
+        const relayHandshake = {
+            active: false,
+            snapshotApplied: false,
+            reason: null,
+            timeoutTimer: null,
+            snapshotFound: false,
+            snapshotFetched: false
+        };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
             initialSent: false,
             lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
         };
+        let localStateDirty = false;
         const syncIndicator = document.getElementById('sync-indicator');
-        const shareOverlay = document.getElementById('share-overlay');
-        const shareOverlayText = document.getElementById('share-overlay-text');
-        const sharePanelBtn = document.getElementById('share-panel-btn');
         const sessionStatusList = document.getElementById('session-status-list');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
         let lastRemoteDragSound = 0;
         let remoteEntryDampenUntil = 0;
-        let shareOverlayTimer = null;
+        
         let relayKeepaliveTimer = null;
         let snapshotTimer = null;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
@@ -1097,53 +1096,7 @@
             syncIndicator.style.opacity = '1';
         }
 
-        function showShareOverlay(message = 'Link copied.', duration = 3000) {
-            if (!shareOverlay) return;
-            if (shareOverlayText) shareOverlayText.textContent = message;
-            shareOverlay.classList.remove('opacity-0', 'pointer-events-none');
-            shareOverlay.classList.add('opacity-100');
-            if (shareOverlayTimer) clearTimeout(shareOverlayTimer);
-            shareOverlayTimer = setTimeout(() => hideShareOverlay(), duration);
-        }
-
-        function hideShareOverlay() {
-            if (!shareOverlay) return;
-            shareOverlay.classList.add('opacity-0', 'pointer-events-none');
-            shareOverlay.classList.remove('opacity-100');
-        }
-
-        function buildShareUrl() {
-            const url = new URL(window.location.href);
-            url.search = '';
-            url.hash = '';
-            return url.toString();
-        }
-
-        async function shareSession() {
-            const shareUrl = buildShareUrl();
-            if (navigator.share) {
-                try {
-                    await navigator.share({
-                        title: document.title,
-                        text: 'Join me in A Time to Relax',
-                        url: shareUrl
-                    });
-                    return;
-                } catch (err) {
-                    if (err?.name !== 'AbortError') {
-                        console.warn('Share failed, falling back to clipboard.', err);
-                    }
-                }
-            }
-            if (navigator.clipboard?.writeText) {
-                try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    showShareOverlay('Link copied. Share it to invite.', 3500);
-                } catch (err) {
-                    console.warn('Clipboard copy failed.', err);
-                }
-            }
-        }
+        
         
         function wakeAudio() {
             ZenAudio.warmUp();
@@ -1388,9 +1341,11 @@
             url.searchParams.set('snapshot', '1');
             try {
                 const res = await fetch(url.toString());
+                relayHandshake.snapshotFetched = true;
                 if (!res.ok) return;
                 const snapshot = await res.json();
                 if (snapshot?.state) {
+                    relayHandshake.snapshotFound = true;
                     applySyncState(snapshot.state, snapshot.stateTs || snapshot.ts, {
                         relaxLocalClock: true,
                         source: reason
@@ -1426,6 +1381,9 @@
                     ? effectiveStateTs
                     : Math.max(syncState.lastLocalStateTs, effectiveStateTs);
                 localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            }
+            if (options.source) {
+                localStateDirty = false;
             }
 
             if (typeof state.themeIndex === 'number') {
@@ -1761,6 +1719,8 @@
             if (!relayHandshake.active) {
                 relayHandshake.active = true;
                 relayHandshake.snapshotApplied = false;
+                relayHandshake.snapshotFound = false;
+                relayHandshake.snapshotFetched = false;
             }
             if (document.hidden) return;
             closeNonOpenRelaySocket(reason);
@@ -1783,7 +1743,9 @@
                 sendRelayMessage({ type: 'reattach', reason: source, transient: true });
                 sendRelayMessage({ type: 'hello', reason: source });
             }
-            queueSnapshot('handshake');
+            if (localStateDirty || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
+                queueSnapshot('handshake');
+            }
         }
 
         const rhythmSequences = [
@@ -1950,11 +1912,11 @@
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
         const cBox=document.getElementById('custom-words');
         cBox.value=localStorage.getItem('garden_words')||"";
-        if (cBox.value === '6969') config.customWords=[...config.defaultWords,...secretWords];
+        if (cBox.value === '555') config.customWords=[...config.defaultWords,...secretWords];
         else config.customWords=cBox.value.split(',').filter(s=>s.trim());
         cBox.onblur=e=>{
             localStorage.setItem('garden_words',e.target.value);
-            if(e.target.value==='6969')config.customWords=[...config.defaultWords,...secretWords];
+            if(e.target.value==='555')config.customWords=[...config.defaultWords,...secretWords];
             else config.customWords=e.target.value.split(',').filter(s=>s.trim());
             markLocalStateChanged();
             sendSyncState('words');
@@ -1977,6 +1939,7 @@
         function markLocalStateChanged() {
             syncState.lastLocalStateTs = Date.now();
             localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            localStateDirty = true;
             queueSnapshot('local-change');
         }
 
@@ -2153,11 +2116,6 @@
         startRelayHandshake('startup');
         if (!document.hidden) {
             scheduleRelayPoll();
-        }
-        if (sharePanelBtn) {
-            sharePanelBtn.addEventListener('click', () => {
-                shareSession();
-            });
         }
         window.addEventListener('online', () => {
             startRelayHandshake('online');
@@ -2406,18 +2364,77 @@
 
     <script>
         const AppState = { bgImage: null, useGradient: true };
+        const SHEET_ID = '1lSxTIZbtXWdxCUWqdqan-hCV1f5_aWQCoV-HXSRHxng';
+        const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+
+        function parseCsvRowValue(row) {
+            const trimmed = row.trim();
+            if (!trimmed) return '';
+            if (trimmed.startsWith('"')) {
+                let result = '';
+                let i = 1;
+                while (i < trimmed.length) {
+                    const char = trimmed[i];
+                    if (char === '"') {
+                        if (trimmed[i + 1] === '"') {
+                            result += '"';
+                            i += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    result += char;
+                    i += 1;
+                }
+                return result.trim();
+            }
+            const commaIndex = trimmed.indexOf(',');
+            return (commaIndex === -1 ? trimmed : trimmed.slice(0, commaIndex)).trim();
+        }
+
+        function setFooterText(text) {
+            if (!text) return;
+            const footer = document.getElementById('master-footer');
+            if (!footer) return;
+            footer.innerHTML = `${text} • <span id="clock">--:--</span>`;
+        }
+
+        async function loadSplashCopyFromSheet() {
+            try {
+                const response = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+                if (!response.ok) return false;
+                const csvText = await response.text();
+                const rows = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+                if (rows.length === 0) return false;
+                const values = rows.slice(0, 4).map(parseCsvRowValue);
+                if (values[0]) document.getElementById('main-title').textContent = values[0];
+                if (values[1]) document.getElementById('main-subtitle-container').innerHTML = values[1];
+                if (values[2]) setFooterText(values[2]);
+                if (values[3]) {
+                    const b = document.getElementById('custom-message-container');
+                    b.innerHTML = values[3];
+                    b.classList.remove('hidden');
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
         
         async function initEnvironment() {
+            const sheetLoaded = await loadSplashCopyFromSheet();
             try {
-                const r = await fetch('msg.txt');
-                if (r.ok) {
-                    const text = await r.text();
-                    const parts = text.split('|');
-                    if(parts[0]) document.getElementById('main-title').innerHTML = parts[0].trim();
-                    if(parts[1]) document.getElementById('main-subtitle-container').innerHTML = parts[1].trim();
-                    if(parts[2]) {
-                        const b = document.getElementById('custom-message-container');
-                        b.innerHTML = parts[2].trim(); b.classList.remove('hidden');
+                if (!sheetLoaded) {
+                    const r = await fetch('msg.txt');
+                    if (r.ok) {
+                        const text = await r.text();
+                        const parts = text.split('|');
+                        if(parts[0]) document.getElementById('main-title').innerHTML = parts[0].trim();
+                        if(parts[1]) document.getElementById('main-subtitle-container').innerHTML = parts[1].trim();
+                        if(parts[2]) {
+                            const b = document.getElementById('custom-message-container');
+                            b.innerHTML = parts[2].trim(); b.classList.remove('hidden');
+                        }
                     }
                 }
             } catch(e){}

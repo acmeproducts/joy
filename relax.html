@@ -1804,7 +1804,11 @@
             }
 
             if (message.type === 'state') {
-                applySyncState(message.state, message.stateTs || message.ts);
+                const relaxLocalClock = shouldRelaxRemoteClock(message.reason || 'state');
+                applySyncState(message.state, message.stateTs || message.ts, {
+                    relaxLocalClock,
+                    source: message.reason
+                });
                 return;
             }
             if (message.type === 'snapshot') {

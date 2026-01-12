@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Relax Log Playback</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 16px 24px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #f8fafc;
+        }
+        main {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+            gap: 16px;
+            padding: 16px 24px 24px;
+            flex: 1;
+        }
+        .panel {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        button, input[type="file"]::file-selector-button {
+            background: #1e293b;
+            color: #e2e8f0;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: transform 0.1s ease, background 0.2s ease;
+        }
+        button:hover, input[type="file"]::file-selector-button:hover {
+            background: #334155;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button.primary {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            color: #0f172a;
+            font-weight: 600;
+        }
+        button.primary:hover {
+            background: #60a5fa;
+        }
+        .stack {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        label {
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            background: #0f172a;
+            color: #e2e8f0;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            padding: 10px;
+            font-size: 0.85rem;
+        }
+        .playback-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        canvas {
+            width: 100%;
+            height: 480px;
+            border-radius: 16px;
+            background: #020617;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .event-list {
+            max-height: 320px;
+            overflow-y: auto;
+            display: grid;
+            gap: 6px;
+            font-size: 0.8rem;
+        }
+        .event-item {
+            padding: 6px 8px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .event-item:hover {
+            border-color: rgba(148, 163, 184, 0.3);
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.2);
+            color: #bfdbfe;
+            font-size: 0.75rem;
+        }
+        .muted {
+            color: #94a3b8;
+            font-size: 0.75rem;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .status {
+            font-size: 0.8rem;
+            color: #e2e8f0;
+        }
+        .divider {
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+            margin: 12px 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Relax Playback</h1>
+        <div class="row">
+            <span class="pill" id="session-pill">No session loaded</span>
+            <span class="muted" id="session-meta">—</span>
+        </div>
+    </header>
+    <main>
+        <section class="playback-area">
+            <div class="panel stack">
+                <div class="controls">
+                    <button id="load-log">Load Rolling Log</button>
+                    <button id="load-workspace">Load Workspace</button>
+                    <button id="save-workspace" class="primary">Save Workspace</button>
+                    <button id="clear-workspace">Clear Workspace</button>
+                </div>
+                <div class="row status">
+                    <span id="event-count">Events: 0</span>
+                    <span id="range-status">Range: --</span>
+                </div>
+            </div>
+            <canvas id="playback-canvas"></canvas>
+            <div class="panel stack">
+                <div class="row">
+                    <button id="play-toggle" class="primary">Play</button>
+                    <button id="step-back">Step -</button>
+                    <button id="step-forward">Step +</button>
+                    <span class="pill" id="time-display">00:00 / 00:00</span>
+                    <label class="row">
+                        <input type="checkbox" id="audio-enabled" checked>
+                        Audio
+                    </label>
+                </div>
+                <input type="range" id="seek-slider" min="0" max="100" value="0">
+                <div class="grid-3">
+                    <button id="set-loop-start">Set Loop Start</button>
+                    <button id="set-loop-end">Set Loop End</button>
+                    <button id="toggle-loop">Loop: Off</button>
+                </div>
+            </div>
+            <div class="panel stack">
+                <div class="grid-2">
+                    <button id="set-range-start">Set Range Start</button>
+                    <button id="set-range-end">Set Range End</button>
+                </div>
+                <div class="grid-3">
+                    <button id="copy-range">Copy Range</button>
+                    <button id="delete-range">Delete Range</button>
+                    <button id="snip-range">Snip to Range</button>
+                </div>
+                <div class="divider"></div>
+                <label for="export-box">Export / Import JSON</label>
+                <textarea id="export-box" placeholder="Exported JSON appears here. Paste JSON here to import."></textarea>
+                <div class="grid-2">
+                    <button id="export-range">Export Range</button>
+                    <button id="import-range">Import + Merge</button>
+                </div>
+                <input type="file" id="import-file" accept="application/json">
+            </div>
+        </section>
+        <aside class="panel stack">
+            <h2 class="muted">Event Timeline</h2>
+            <div class="event-list" id="event-list"></div>
+        </aside>
+    </main>
+    <script>
+        const RELAY_LOG_SLOT_COUNT = 15;
+        const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
+        const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
+        const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
+        const WORKSPACE_KEY = 'relax_relay_log_workspace';
+        const LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
+        const themes = [
+            { bg: ['#e0c3fc', '#8ec5fc'] },
+            { bg: ['#fad0c4', '#ffd1ff'] },
+            { bg: ['#d299c2', '#fef9d7'] },
+            { bg: ['#a1c4fd', '#c2e9fb'] },
+            { bg: ['#d4fc79', '#96e6a1'] }
+        ];
+
+        const canvas = document.getElementById('playback-canvas');
+        const ctx = canvas.getContext('2d');
+        const sessionPill = document.getElementById('session-pill');
+        const sessionMeta = document.getElementById('session-meta');
+        const eventCount = document.getElementById('event-count');
+        const rangeStatus = document.getElementById('range-status');
+        const timeDisplay = document.getElementById('time-display');
+        const seekSlider = document.getElementById('seek-slider');
+        const playToggle = document.getElementById('play-toggle');
+        const audioToggle = document.getElementById('audio-enabled');
+        const eventList = document.getElementById('event-list');
+        const exportBox = document.getElementById('export-box');
+        const importFile = document.getElementById('import-file');
+
+        let workspaceEvents = [];
+        let sessionStartTs = 0;
+        let sessionEndTs = 0;
+        let currentTimeMs = 0;
+        let playIndex = 0;
+        let isPlaying = false;
+        let loopEnabled = false;
+        let loopStartMs = 0;
+        let loopEndMs = 0;
+        let rangeStartMs = null;
+        let rangeEndMs = null;
+        let lastFrame = null;
+        let visuals = [];
+        let playbackState = {
+            themeIndex: 0,
+            useGradient: true,
+            backgroundImage: null,
+            backgroundImageData: null
+        };
+
+        let audioCtx = null;
+
+        function ensureAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioCtx;
+        }
+
+        function playTone(frequency, duration, volume) {
+            if (!audioToggle.checked) return;
+            const ctx = ensureAudio();
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.value = frequency;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(volume, now);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        function formatTime(ms) {
+            const total = Math.max(0, Math.round(ms / 1000));
+            const minutes = String(Math.floor(total / 60)).padStart(2, '0');
+            const seconds = String(total % 60).padStart(2, '0');
+            return `${minutes}:${seconds}`;
+        }
+
+        function updateTimeDisplay() {
+            const duration = Math.max(0, sessionEndTs - sessionStartTs);
+            timeDisplay.textContent = `${formatTime(currentTimeMs)} / ${formatTime(duration)}`;
+            seekSlider.max = duration || 0;
+            seekSlider.value = Math.min(currentTimeMs, duration);
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function eventKey(event) {
+            const parts = [
+                event.ts,
+                event.type,
+                event.from || '',
+                event.x ?? '',
+                event.y ?? '',
+                event.seed ?? ''
+            ];
+            return parts.join('|');
+        }
+
+        function loadLogSlots() {
+            const events = [];
+            for (let i = 0; i < RELAY_LOG_SLOT_COUNT; i += 1) {
+                const raw = localStorage.getItem(`${RELAY_LOG_SLOT_PREFIX}${i}`);
+                if (!raw) continue;
+                try {
+                    const slot = JSON.parse(raw);
+                    if (slot && Array.isArray(slot.events)) {
+                        events.push(...slot.events);
+                    }
+                } catch (_) {}
+            }
+            return events;
+        }
+
+        function loadWorkspace() {
+            const raw = localStorage.getItem(WORKSPACE_KEY);
+            if (!raw) return null;
+            try {
+                const data = JSON.parse(raw);
+                return Array.isArray(data) ? data : data.events || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function saveWorkspace() {
+            const payload = {
+                savedAt: Date.now(),
+                events: workspaceEvents
+            };
+            localStorage.setItem(WORKSPACE_KEY, JSON.stringify(payload));
+        }
+
+        function normalizeEvents(events) {
+            const deduped = new Map();
+            events
+                .filter(event => event && LOGGABLE_TYPES.has(event.type))
+                .forEach(event => {
+                    const key = eventKey(event);
+                    if (!deduped.has(key)) deduped.set(key, event);
+                });
+            return Array.from(deduped.values()).sort((a, b) => a.ts - b.ts);
+        }
+
+        function refreshWorkspace(events) {
+            workspaceEvents = normalizeEvents(events);
+            sessionStartTs = workspaceEvents.length ? workspaceEvents[0].ts : 0;
+            sessionEndTs = workspaceEvents.length ? workspaceEvents[workspaceEvents.length - 1].ts : 0;
+            sessionPill.textContent = workspaceEvents.length ? 'Session Loaded' : 'No session loaded';
+            sessionMeta.textContent = workspaceEvents.length
+                ? `${new Date(sessionStartTs).toLocaleString()} → ${new Date(sessionEndTs).toLocaleString()}`
+                : '—';
+            eventCount.textContent = `Events: ${workspaceEvents.length}`;
+            setRangeStatus();
+            seekTo(0);
+            renderEventList();
+        }
+
+        function renderEventList() {
+            eventList.innerHTML = '';
+            if (!workspaceEvents.length) return;
+            workspaceEvents.slice(0, 300).forEach(event => {
+                const item = document.createElement('div');
+                item.className = 'event-item';
+                const relative = event.ts - sessionStartTs;
+                item.textContent = `[${formatTime(relative)}] ${event.type}`;
+                item.addEventListener('click', () => {
+                    seekTo(relative);
+                });
+                eventList.appendChild(item);
+            });
+        }
+
+        function setRangeStatus() {
+            if (rangeStartMs === null || rangeEndMs === null) {
+                rangeStatus.textContent = 'Range: --';
+                return;
+            }
+            rangeStatus.textContent = `Range: ${formatTime(rangeStartMs)} → ${formatTime(rangeEndMs)}`;
+        }
+
+        function applyState(state) {
+            if (!state) return;
+            if (typeof state.themeIndex === 'number') {
+                playbackState.themeIndex = state.themeIndex % themes.length;
+            }
+            if (state.useGradient !== undefined) {
+                playbackState.useGradient = Boolean(state.useGradient);
+            }
+            if (state.backgroundImage) {
+                const img = new Image();
+                img.onload = () => {
+                    playbackState.backgroundImage = img;
+                    playbackState.backgroundImageData = state.backgroundImage;
+                };
+                img.src = state.backgroundImage;
+                playbackState.useGradient = false;
+            } else if (state.useGradient) {
+                playbackState.backgroundImage = null;
+                playbackState.backgroundImageData = null;
+            }
+        }
+
+        function applyEvent(event) {
+            if (!event) return;
+            if (event.type === 'tap') {
+                visuals.push({
+                    type: 'tap',
+                    x: event.x,
+                    y: event.y,
+                    word: event.word,
+                    color: event.wordColor || '#ffffff',
+                    createdAt: currentTimeMs
+                });
+                const freq = 220 + (1 - (event.y ?? 0.5)) * 440;
+                playTone(freq, 0.3, 0.2);
+            } else if (event.type === 'drag') {
+                visuals.push({
+                    type: 'drag',
+                    x: event.x,
+                    y: event.y,
+                    createdAt: currentTimeMs
+                });
+                const freq = 180 + (1 - (event.y ?? 0.5)) * 220;
+                playTone(freq, 0.15, 0.08);
+            } else if (event.type === 'state' || event.type === 'snapshot') {
+                applyState(event.state);
+            }
+        }
+
+        function resetPlaybackState() {
+            visuals = [];
+            playbackState = {
+                themeIndex: 0,
+                useGradient: true,
+                backgroundImage: null,
+                backgroundImageData: null
+            };
+        }
+
+        function seekTo(ms) {
+            currentTimeMs = Math.max(0, ms);
+            playIndex = 0;
+            resetPlaybackState();
+            for (let i = 0; i < workspaceEvents.length; i += 1) {
+                const event = workspaceEvents[i];
+                if (event.ts <= sessionStartTs + currentTimeMs) {
+                    if (event.type === 'state' || event.type === 'snapshot') {
+                        applyState(event.state);
+                    }
+                    playIndex = i + 1;
+                } else {
+                    break;
+                }
+            }
+            updateTimeDisplay();
+        }
+
+        function stepEvent(direction) {
+            if (!workspaceEvents.length) return;
+            const targetIndex = Math.min(
+                workspaceEvents.length - 1,
+                Math.max(0, playIndex + direction)
+            );
+            const event = workspaceEvents[targetIndex];
+            const newTime = event.ts - sessionStartTs;
+            seekTo(newTime);
+            applyEvent(event);
+        }
+
+        function renderFrame(timestamp) {
+            if (!lastFrame) lastFrame = timestamp;
+            const delta = timestamp - lastFrame;
+            lastFrame = timestamp;
+
+            if (isPlaying) {
+                currentTimeMs += delta;
+                const duration = sessionEndTs - sessionStartTs;
+                if (loopEnabled && loopEndMs > loopStartMs && currentTimeMs > loopEndMs) {
+                    seekTo(loopStartMs);
+                } else if (currentTimeMs > duration) {
+                    currentTimeMs = duration;
+                    isPlaying = false;
+                    playToggle.textContent = 'Play';
+                }
+
+                while (playIndex < workspaceEvents.length) {
+                    const event = workspaceEvents[playIndex];
+                    if (event.ts <= sessionStartTs + currentTimeMs) {
+                        applyEvent(event);
+                        playIndex += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            updateTimeDisplay();
+            drawScene();
+            requestAnimationFrame(renderFrame);
+        }
+
+        function drawScene() {
+            const width = canvas.clientWidth;
+            const height = canvas.clientHeight;
+            ctx.clearRect(0, 0, width, height);
+            if (playbackState.useGradient || !playbackState.backgroundImage) {
+                const theme = themes[playbackState.themeIndex] || themes[0];
+                const gradient = ctx.createLinearGradient(0, 0, 0, height);
+                gradient.addColorStop(0, theme.bg[0]);
+                gradient.addColorStop(1, theme.bg[1]);
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, width, height);
+            } else if (playbackState.backgroundImage) {
+                const img = playbackState.backgroundImage;
+                const scale = Math.max(width / img.width, height / img.height);
+                const x = (width / 2) - (img.width / 2) * scale;
+                const y = (height / 2) - (img.height / 2) * scale;
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            }
+
+            const now = currentTimeMs;
+            visuals = visuals.filter(visual => now - visual.createdAt < 2000);
+            visuals.forEach(visual => {
+                const x = (visual.x ?? 0.5) * width;
+                const y = (visual.y ?? 0.5) * height;
+                const age = now - visual.createdAt;
+                const alpha = Math.max(0, 1 - age / 2000);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                if (visual.type === 'tap') {
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 18, 0, Math.PI * 2);
+                    ctx.fill();
+                    if (visual.word) {
+                        ctx.fillStyle = visual.color;
+                        ctx.font = '16px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(visual.word, x, y - 24);
+                    }
+                } else if (visual.type === 'drag') {
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+        }
+
+        function exportSelectedRange() {
+            if (rangeStartMs === null || rangeEndMs === null) return [];
+            const startTs = sessionStartTs + Math.min(rangeStartMs, rangeEndMs);
+            const endTs = sessionStartTs + Math.max(rangeStartMs, rangeEndMs);
+            return workspaceEvents.filter(event => event.ts >= startTs && event.ts <= endTs);
+        }
+
+        function setRangeFromCurrent(type) {
+            if (!workspaceEvents.length) return;
+            if (type === 'start') {
+                rangeStartMs = currentTimeMs;
+            } else {
+                rangeEndMs = currentTimeMs;
+            }
+            setRangeStatus();
+        }
+
+        function deleteRange() {
+            if (rangeStartMs === null || rangeEndMs === null) return;
+            const startTs = sessionStartTs + Math.min(rangeStartMs, rangeEndMs);
+            const endTs = sessionStartTs + Math.max(rangeStartMs, rangeEndMs);
+            refreshWorkspace(workspaceEvents.filter(event => event.ts < startTs || event.ts > endTs));
+        }
+
+        function snipRange() {
+            if (rangeStartMs === null || rangeEndMs === null) return;
+            refreshWorkspace(exportSelectedRange());
+        }
+
+        function copyRangeToClipboard() {
+            const selected = exportSelectedRange();
+            const json = JSON.stringify({ events: selected }, null, 2);
+            exportBox.value = json;
+            navigator.clipboard?.writeText(json).catch(() => {});
+        }
+
+        function importJson(json) {
+            let data;
+            try {
+                data = JSON.parse(json);
+            } catch (_) {
+                alert('Invalid JSON.');
+                return;
+            }
+            const importedEvents = Array.isArray(data) ? data : data.events;
+            if (!Array.isArray(importedEvents)) {
+                alert('JSON must be an array or { events: [...] }.');
+                return;
+            }
+            refreshWorkspace([...workspaceEvents, ...importedEvents]);
+            saveWorkspace();
+        }
+
+        document.getElementById('load-log').addEventListener('click', () => {
+            refreshWorkspace(loadLogSlots());
+        });
+
+        document.getElementById('load-workspace').addEventListener('click', () => {
+            const data = loadWorkspace();
+            if (data) {
+                refreshWorkspace(data);
+            } else {
+                alert('No workspace saved yet.');
+            }
+        });
+
+        document.getElementById('save-workspace').addEventListener('click', () => {
+            saveWorkspace();
+            alert('Workspace saved to localStorage.');
+        });
+
+        document.getElementById('clear-workspace').addEventListener('click', () => {
+            refreshWorkspace([]);
+            localStorage.removeItem(WORKSPACE_KEY);
+        });
+
+        playToggle.addEventListener('click', () => {
+            if (!workspaceEvents.length) return;
+            isPlaying = !isPlaying;
+            playToggle.textContent = isPlaying ? 'Pause' : 'Play';
+        });
+
+        document.getElementById('step-back').addEventListener('click', () => stepEvent(-1));
+        document.getElementById('step-forward').addEventListener('click', () => stepEvent(1));
+
+        seekSlider.addEventListener('input', event => {
+            seekTo(Number(event.target.value));
+        });
+
+        document.getElementById('set-loop-start').addEventListener('click', () => {
+            loopStartMs = currentTimeMs;
+        });
+
+        document.getElementById('set-loop-end').addEventListener('click', () => {
+            loopEndMs = currentTimeMs;
+        });
+
+        document.getElementById('toggle-loop').addEventListener('click', event => {
+            loopEnabled = !loopEnabled;
+            event.target.textContent = `Loop: ${loopEnabled ? 'On' : 'Off'}`;
+        });
+
+        document.getElementById('set-range-start').addEventListener('click', () => setRangeFromCurrent('start'));
+        document.getElementById('set-range-end').addEventListener('click', () => setRangeFromCurrent('end'));
+        document.getElementById('copy-range').addEventListener('click', copyRangeToClipboard);
+        document.getElementById('delete-range').addEventListener('click', deleteRange);
+        document.getElementById('snip-range').addEventListener('click', snipRange);
+
+        document.getElementById('export-range').addEventListener('click', () => {
+            const selected = exportSelectedRange();
+            exportBox.value = JSON.stringify({ events: selected }, null, 2);
+        });
+
+        document.getElementById('import-range').addEventListener('click', () => {
+            if (!exportBox.value.trim()) return;
+            importJson(exportBox.value.trim());
+        });
+
+        importFile.addEventListener('change', event => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                importJson(reader.result);
+            };
+            reader.readAsText(file);
+        });
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+
+        resizeCanvas();
+        requestAnimationFrame(renderFrame);
+
+        const metaRaw = localStorage.getItem(RELAY_LOG_META_KEY);
+        if (metaRaw) {
+            try {
+                const meta = JSON.parse(metaRaw);
+                sessionMeta.textContent = `Last update: ${new Date(meta.lastEventTs || meta.updatedAt).toLocaleString()}`;
+            } catch (_) {}
+        }
+    </script>
+</body>
+</html>

@@ -2134,18 +2134,6 @@
         };
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
-        const cBox=document.getElementById('custom-words');
-        cBox.value=localStorage.getItem('garden_words')||"";
-        if (cBox.value === '555') config.customWords=[...config.defaultWords,...secretWords];
-        else config.customWords=cBox.value.split(',').filter(s=>s.trim());
-        cBox.onblur=e=>{
-            localStorage.setItem('garden_words',e.target.value);
-            if(e.target.value==='555')config.customWords=[...config.defaultWords,...secretWords];
-            else config.customWords=e.target.value.split(',').filter(s=>s.trim());
-            markLocalStateChanged();
-            sendSyncState('words');
-        };
-
         const scaleSelector = document.getElementById('scale-selector');
         if (localStorage.getItem('garden_scale')) {
             config.currentScale = localStorage.getItem('garden_scale');
@@ -2668,25 +2656,25 @@
             return (temp.textContent || '').trim();
         }
 
-        function parseCustomWordsPayload(raw) {
+        function parseCustomWordsEntries(raw) {
             const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-            const entries = [];
-            const words = [];
-
-            lines.forEach((line) => {
+            return lines.map((line) => {
                 const pipeIndex = line.indexOf('|');
                 const hasCode = pipeIndex !== -1;
                 const code = hasCode ? line.slice(0, pipeIndex).trim() : '';
                 const wordsHtml = hasCode ? line.slice(pipeIndex + 1).trim() : line;
-                const wordItems = wordsHtml.split(',').map(item => item.trim()).filter(Boolean);
-                wordItems.forEach((word) => {
-                    const cleaned = stripHtmlTags(word);
-                    if (cleaned) words.push(cleaned);
-                });
-                entries.push({ code, wordsHtml, hasCode });
+                const words = wordsHtml
+                    .split(',')
+                    .map(item => item.trim())
+                    .filter(Boolean)
+                    .map(item => stripHtmlTags(item))
+                    .filter(Boolean);
+                return { code, wordsHtml, hasCode, words };
             });
+        }
 
-            return { entries, words };
+        function collectWordsFromEntries(entries) {
+            return entries.flatMap(entry => entry.words || []).filter(Boolean);
         }
 
         function buildCustomWordsMarkup(entries) {
@@ -2721,6 +2709,90 @@
             footer.innerHTML = `${text} • <span id="clock">--:--</span>`;
         }
 
+        function renderCustomMessage(entries) {
+            const container = document.getElementById('custom-message-container');
+            if (!container) return;
+            if (!entries || !entries.length) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+            const markup = buildCustomWordsMarkup(entries);
+            if (markup) {
+                container.innerHTML = markup;
+                container.classList.remove('hidden');
+            } else {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+            }
+        }
+
+        let sheetRows = [];
+        let sheetRow4Raw = '';
+
+        function findSheetCodeMatch(code) {
+            if (!code) return null;
+            for (let i = 4; i < sheetRows.length; i += 1) {
+                const raw = sheetRows[i];
+                if (!raw) continue;
+                const entries = parseCustomWordsEntries(raw);
+                const match = entries.find(entry => entry.hasCode && entry.code === code);
+                if (match) {
+                    return match;
+                }
+            }
+            return null;
+        }
+
+        function applyCustomWordsSelection(inputValue, { persist = true } = {}) {
+            const trimmedValue = (inputValue || '').trim();
+            const match = trimmedValue ? findSheetCodeMatch(trimmedValue) : null;
+            let selectedEntries = [];
+            let selectedWords = [];
+
+            if (match) {
+                selectedEntries = [match];
+                selectedWords = match.words;
+            } else if (trimmedValue === '555') {
+                selectedWords = [...config.defaultWords, ...secretWords];
+            } else if (trimmedValue) {
+                selectedWords = trimmedValue
+                    .split(',')
+                    .map(word => word.trim())
+                    .filter(Boolean)
+                    .map(word => stripHtmlTags(word))
+                    .filter(Boolean);
+            } else {
+                const row4Entries = sheetRow4Raw ? parseCustomWordsEntries(sheetRow4Raw) : [];
+                if (row4Entries.length > 0) {
+                    selectedEntries = row4Entries;
+                    selectedWords = collectWordsFromEntries(row4Entries);
+                } else {
+                    selectedWords = [...config.defaultWords];
+                }
+            }
+
+            config.customWords = selectedWords;
+            renderCustomMessage(selectedEntries);
+
+            const customWordsInput = document.getElementById('custom-words');
+            if (customWordsInput) {
+                customWordsInput.value = selectedWords.join(', ');
+                if (persist) {
+                    localStorage.setItem('garden_words', customWordsInput.value);
+                }
+            }
+        }
+
+        const cBox=document.getElementById('custom-words');
+        cBox.value=localStorage.getItem('garden_words')||"";
+        applyCustomWordsSelection(cBox.value, { persist: false });
+        cBox.onblur=e=>{
+            applyCustomWordsSelection(e.target.value);
+            markLocalStateChanged();
+            sendSyncState('words');
+        };
+
         async function loadSplashCopyFromSheet() {
             try {
                 const response = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
@@ -2728,30 +2800,13 @@
                 const csvText = await response.text();
                 const rows = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
                 if (rows.length === 0) return false;
-                const values = rows.slice(0, 4).map(parseCsvRowValue);
+                sheetRows = rows.map(parseCsvRowValue);
+                const values = sheetRows.slice(0, 4);
                 if (values[0]) document.getElementById('main-title').innerHTML = values[0];
                 if (values[1]) document.getElementById('main-subtitle-container').innerHTML = values[1];
                 if (values[2]) setFooterText(values[2]);
-                if (values[3]) {
-                    const parsedCustom = parseCustomWordsPayload(values[3]);
-                    const b = document.getElementById('custom-message-container');
-                    const markup = buildCustomWordsMarkup(parsedCustom.entries);
-                    if (markup) {
-                        b.innerHTML = markup;
-                        b.classList.remove('hidden');
-                    } else {
-                        b.innerHTML = values[3];
-                        b.classList.remove('hidden');
-                    }
-                    if (parsedCustom.words.length > 0) {
-                        config.customWords = parsedCustom.words;
-                        const customWordsInput = document.getElementById('custom-words');
-                        if (customWordsInput) {
-                            customWordsInput.value = parsedCustom.words.join(', ');
-                            localStorage.setItem('garden_words', customWordsInput.value);
-                        }
-                    }
-                }
+                sheetRow4Raw = values[3] || '';
+                applyCustomWordsSelection(document.getElementById('custom-words')?.value || '', { persist: false });
                 return true;
             } catch (e) {
                 return false;

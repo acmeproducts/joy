@@ -1369,6 +1369,16 @@
             }, SNAPSHOT_DEBOUNCE_MS);
         }
 
+        function flushSnapshot(reason = 'pagehide') {
+            if (!localStateDirty && !snapshotTimer) return;
+            if (snapshotTimer) {
+                clearTimeout(snapshotTimer);
+                snapshotTimer = null;
+            }
+            sendSnapshot(reason);
+            localStateDirty = false;
+        }
+
         function applySyncState(state, stateTs = Date.now(), options = {}) {
             if (!state) return;
             const relaxLocalClock = Boolean(options.relaxLocalClock);
@@ -2120,6 +2130,22 @@
         window.addEventListener('online', () => {
             startRelayHandshake('online');
         });
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted || !document.hidden) {
+                localPresenceState = getLocalPresenceState();
+                sendPresence('pageshow');
+                renderSessionStatus();
+                startRelayHandshake('pageshow');
+                if (!document.hidden) {
+                    scheduleRelayPoll();
+                }
+            }
+        });
+        window.addEventListener('pagehide', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('pagehide');
+            flushSnapshot('pagehide');
+        });
         requestAnimationFrame(loop);
     </script>
 
@@ -2355,7 +2381,10 @@
 
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
 
-        window.addEventListener('beforeunload', () => requestSessionEnd('beforeunload', true));
+        window.addEventListener('beforeunload', () => {
+            flushSnapshot('beforeunload');
+            requestSessionEnd('beforeunload', true);
+        });
 
         ['pointerdown','touchstart','keydown','mousemove'].forEach(evt => {
             window.addEventListener(evt, () => cancelSessionEnd('activity'));

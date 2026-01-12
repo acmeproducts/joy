@@ -985,6 +985,7 @@
             initialSent: false,
             lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
         };
+        let remoteStateApplied = false;
         let localStateDirty = false;
         const syncIndicator = document.getElementById('sync-indicator');
         const sessionStatusList = document.getElementById('session-status-list');
@@ -1576,6 +1577,7 @@
             if (!relaxLocalClock && effectiveStateTs && effectiveStateTs <= syncState.lastStateTs) return;
             if (!relaxLocalClock && effectiveStateTs && syncState.lastLocalStateTs && effectiveStateTs < syncState.lastLocalStateTs) return;
             syncState.lastStateTs = effectiveStateTs;
+            remoteStateApplied = true;
             if (effectiveStateTs) {
                 syncState.lastLocalStateTs = relaxLocalClock
                     ? effectiveStateTs
@@ -2104,11 +2106,14 @@
         });
         loadBackgroundImage().then(dataUrl => {
             if (!dataUrl) return;
+            if (remoteStateApplied) return;
             const i=new Image();
             i.onload=()=>{
                 config.backgroundImage=i;
                 config.useGradient=false;
                 config.backgroundImageData=dataUrl;
+                sendSyncState('background-load');
+                queueSnapshot('background-load');
             };
             i.src=dataUrl;
         });

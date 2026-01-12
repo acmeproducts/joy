@@ -929,13 +929,12 @@
         }
         const RELAY_CLIENT_ID = resolvedClientId;
         const RELAY_DRAG_THROTTLE_MS = 20;
-        const RELAY_POLL_MS = 400;
         const RELAY_RECONNECT_BASE_MS = 800;
         const RELAY_RECONNECT_MAX_MS = 10000;
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
-        const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
+        const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
@@ -1532,13 +1531,6 @@
                 return;
             }
 
-            if (message.type === 'hello') {
-                remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
-                ZenAudio.softenEntry();
-                sendSyncState('hello');
-                return;
-            }
-
             if (message.type === 'state') {
                 applySyncState(message.state, message.stateTs || message.ts);
                 return;
@@ -1583,7 +1575,7 @@
                 updateSyncIndicator('live');
                 return;
             }
-            updateSyncIndicator('polling');
+            updateSyncIndicator('connecting');
             fetch(RELAY_SIGNAL_HTTP_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1600,13 +1592,6 @@
                 relayState.reconnectTimer = null;
                 connectRelay();
             }, delay);
-        }
-
-        function scheduleRelayPoll() {
-            clearTimeout(relayState.pollTimer);
-            relayState.pollTimer = null;
-            if (document.hidden) return;
-            relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
         }
 
         function closeNonOpenRelaySocket(reason = 'refresh') {
@@ -1626,33 +1611,6 @@
             }, RELAY_CONNECT_TIMEOUT_MS);
         }
 
-        async function pollRelayMessages() {
-            if (document.hidden) {
-                clearTimeout(relayState.pollTimer);
-                relayState.pollTimer = null;
-                return;
-            }
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
-                scheduleRelayPoll();
-                return;
-            }
-            const url = new URL(RELAY_SIGNAL_HTTP_URL);
-            url.searchParams.set('session', RELAY_SESSION_ID);
-            url.searchParams.set('client', RELAY_CLIENT_ID);
-            if (relayState.pollSince) url.searchParams.set('since', relayState.pollSince);
-            try {
-                const res = await fetch(url.toString());
-                if (res.ok) {
-                    const messages = await res.json();
-                    messages.forEach(msg => {
-                        if (msg.seq) relayState.pollSince = Math.max(relayState.pollSince, msg.seq);
-                        handleRelayMessage(msg);
-                    });
-                }
-            } catch (_) {}
-            scheduleRelayPoll();
-        }
-
         function connectRelay() {
             if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
                 return;
@@ -1663,16 +1621,14 @@
             relayState.ws = new WebSocket(url.toString());
             scheduleRelayConnectTimeout(relayState.ws);
             updateSyncIndicator('connecting');
-            relayState.ws.onopen = () => {
+            relayState.ws.onopen = async () => {
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
-                clearTimeout(relayState.pollTimer);
                 clearTimeout(relayState.connectTimeoutTimer);
-                fetchSnapshot('ws-open');
-                sendRelayMessage({ type: 'reattach', reason: 'ws-open', transient: true });
-                sendRelayMessage({ type: 'hello' });
+                await fetchSnapshot('ws-open');
                 startRelayKeepalive();
                 startPresenceUpdates();
+                sendSyncState('init');
                 queueSnapshot('ws-open');
             };
             relayState.ws.onmessage = event => {
@@ -1683,13 +1639,9 @@
             relayState.ws.onclose = () => {
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
-                updateSyncIndicator('polling');
+                updateSyncIndicator('connecting');
                 if (!document.hidden) {
-                    scheduleRelayPoll();
                     scheduleRelayReconnect();
-                } else {
-                    clearTimeout(relayState.pollTimer);
-                    relayState.pollTimer = null;
                 }
             };
             relayState.ws.onerror = () => {
@@ -1915,8 +1867,6 @@
             sendPresence('visibility');
             renderSessionStatus();
             if (document.hidden) {
-                clearTimeout(relayState.pollTimer);
-                relayState.pollTimer = null;
                 return;
             }
             closeNonOpenRelaySocket('visibility');
@@ -1932,9 +1882,6 @@
                 connectRelay();
             }
             fetchSnapshot('focus');
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
-                sendRelayMessage({ type: 'hello', reason: 'focus' });
-            }
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();
@@ -2072,9 +2019,6 @@
 
         connectRelay();
         fetchSnapshot('startup');
-        if (!document.hidden) {
-            scheduleRelayPoll();
-        }
         if (sharePanelBtn) {
             sharePanelBtn.addEventListener('click', () => {
                 shareSession();

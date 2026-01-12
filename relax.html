@@ -2637,26 +2637,81 @@
         function parseCsvRowValue(row) {
             const trimmed = row.trim();
             if (!trimmed) return '';
-            if (trimmed.startsWith('"')) {
-                let result = '';
-                let i = 1;
-                while (i < trimmed.length) {
-                    const char = trimmed[i];
-                    if (char === '"') {
-                        if (trimmed[i + 1] === '"') {
-                            result += '"';
-                            i += 2;
-                            continue;
-                        }
-                        break;
+            const cells = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < trimmed.length; i += 1) {
+                const char = trimmed[i];
+                if (char === '"') {
+                    if (inQuotes && trimmed[i + 1] === '"') {
+                        current += '"';
+                        i += 1;
+                        continue;
                     }
-                    result += char;
-                    i += 1;
+                    inQuotes = !inQuotes;
+                    continue;
                 }
-                return result.trim();
+                if (char === ',' && !inQuotes) {
+                    cells.push(current);
+                    current = '';
+                    continue;
+                }
+                current += char;
             }
-            const commaIndex = trimmed.indexOf(',');
-            return (commaIndex === -1 ? trimmed : trimmed.slice(0, commaIndex)).trim();
+            cells.push(current);
+            return cells.join(',').trim();
+        }
+
+        function stripHtmlTags(html) {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            return (temp.textContent || '').trim();
+        }
+
+        function parseCustomWordsPayload(raw) {
+            const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+            const entries = [];
+            const words = [];
+
+            lines.forEach((line) => {
+                const pipeIndex = line.indexOf('|');
+                const hasCode = pipeIndex !== -1;
+                const code = hasCode ? line.slice(0, pipeIndex).trim() : '';
+                const wordsHtml = hasCode ? line.slice(pipeIndex + 1).trim() : line;
+                const wordItems = wordsHtml.split(',').map(item => item.trim()).filter(Boolean);
+                wordItems.forEach((word) => {
+                    const cleaned = stripHtmlTags(word);
+                    if (cleaned) words.push(cleaned);
+                });
+                entries.push({ code, wordsHtml, hasCode });
+            });
+
+            return { entries, words };
+        }
+
+        function buildCustomWordsMarkup(entries) {
+            if (!entries.length) return '';
+            const hasCodes = entries.some(entry => entry.hasCode);
+            const header = hasCodes ? 'Custom Codes' : 'Custom Words';
+            const body = entries.map((entry) => {
+                const wordsHtml = entry.wordsHtml || '';
+                if (entry.hasCode) {
+                    return `
+                        <div class="flex items-start gap-2">
+                            <span class="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded text-amber-200">${entry.code}</span>
+                            <span class="text-sm">${wordsHtml}</span>
+                        </div>
+                    `;
+                }
+                return `<div class="text-sm">${wordsHtml}</div>`;
+            }).join('');
+
+            return `
+                <div class="space-y-2">
+                    <div class="text-[11px] uppercase tracking-wider text-white/60">${header}</div>
+                    <div class="space-y-2">${body}</div>
+                </div>
+            `;
         }
 
         function setFooterText(text) {
@@ -2674,13 +2729,28 @@
                 const rows = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
                 if (rows.length === 0) return false;
                 const values = rows.slice(0, 4).map(parseCsvRowValue);
-                if (values[0]) document.getElementById('main-title').textContent = values[0];
+                if (values[0]) document.getElementById('main-title').innerHTML = values[0];
                 if (values[1]) document.getElementById('main-subtitle-container').innerHTML = values[1];
                 if (values[2]) setFooterText(values[2]);
                 if (values[3]) {
+                    const parsedCustom = parseCustomWordsPayload(values[3]);
                     const b = document.getElementById('custom-message-container');
-                    b.innerHTML = values[3];
-                    b.classList.remove('hidden');
+                    const markup = buildCustomWordsMarkup(parsedCustom.entries);
+                    if (markup) {
+                        b.innerHTML = markup;
+                        b.classList.remove('hidden');
+                    } else {
+                        b.innerHTML = values[3];
+                        b.classList.remove('hidden');
+                    }
+                    if (parsedCustom.words.length > 0) {
+                        config.customWords = parsedCustom.words;
+                        const customWordsInput = document.getElementById('custom-words');
+                        if (customWordsInput) {
+                            customWordsInput.value = parsedCustom.words.join(', ');
+                            localStorage.setItem('garden_words', customWordsInput.value);
+                        }
+                    }
                 }
                 return true;
             } catch (e) {

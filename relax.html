@@ -229,6 +229,42 @@
         </div>
     </div>
 
+    <div id="peer-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div id="peer-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-lg p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div>
+                    <h3 id="peer-modal-name" class="text-xl font-bold text-gray-800">Peer</h3>
+                    <p id="peer-modal-meta" class="text-xs text-gray-500 mt-1">Connected: --</p>
+                </div>
+                <button id="close-peer-modal" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-3">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Connection Details</div>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600 space-y-2">
+                        <div><span class="font-semibold text-gray-700">Connected at:</span> <span id="peer-connected-at">--</span></div>
+                        <div><span class="font-semibold text-gray-700">Duration:</span> <span id="peer-connected-duration">--</span></div>
+                    </div>
+
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Last 5 Connections</div>
+                    <ul id="peer-connection-history" class="space-y-2 text-xs text-gray-600 max-h-44 overflow-y-auto"></ul>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Chat</div>
+                    <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-48 overflow-y-auto space-y-2"></div>
+                    <div class="flex gap-2">
+                        <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message...">
+                        <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const config = {
             currentThemeIndex: 0,
@@ -923,7 +959,6 @@
         }
         const RELAY_CLIENT_ID = resolvedClientId;
         const RELAY_DRAG_THROTTLE_MS = 20;
-        const RELAY_POLL_MS = 400;
         const RELAY_RECONNECT_BASE_MS = 800;
         const RELAY_RECONNECT_MAX_MS = 10000;
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
@@ -934,7 +969,8 @@
         const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
         const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
-        const relayState = { ws: null, pollTimer: null, pollSince: 0, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
+        const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
+        const relayQueue = [];
         const relayHandshake = {
             active: false,
             snapshotApplied: false,
@@ -962,21 +998,175 @@
         let snapshotTimer = null;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
-        const joinState = {
-            name: localStorage.getItem(JOIN_NAME_STORAGE_KEY) || `Guest ${RELAY_CLIENT_ID.slice(0, 4)}`
-        };
-        if (!localStorage.getItem(JOIN_NAME_STORAGE_KEY)) {
-            localStorage.setItem(JOIN_NAME_STORAGE_KEY, joinState.name);
+        function ensureJoinName() {
+            let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
+            if (!storedName || !storedName.trim()) {
+                const prompted = (window.prompt('Welcome! Enter your name for this session:', '') || '').trim();
+                storedName = prompted || 'Anonymous';
+                localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
+                localStorage.setItem('relax_joined_at', new Date().toISOString());
+            }
+            return storedName;
         }
+        const joinState = {
+            name: ensureJoinName()
+        };
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
         const RELAY_PRESENCE_STALE_MS = 30000;
         const SESSION_STATUS_RENDER_MS = 5000;
         const peerPresence = new Map();
+        const peerConnectionHistory = new Map();
+        const peerChatHistory = new Map();
+        let activePeerModalId = null;
         let presenceTimer = null;
         let presenceRenderTimer = null;
         let localPresenceState = 'active';
+
+        function getPeerHistoryKey(peerId) {
+            return `relax_peer_history_${RELAY_SESSION_ID}_${peerId}`;
+        }
+
+        function getPeerChatKey(peerId) {
+            return `relax_peer_chat_${RELAY_SESSION_ID}_${peerId}`;
+        }
+
+        function loadPeerHistory(peerId) {
+            if (peerConnectionHistory.has(peerId)) return peerConnectionHistory.get(peerId);
+            let history = [];
+            try {
+                const raw = localStorage.getItem(getPeerHistoryKey(peerId));
+                history = raw ? JSON.parse(raw) : [];
+            } catch (_) {
+                history = [];
+            }
+            peerConnectionHistory.set(peerId, history);
+            return history;
+        }
+
+        function savePeerHistory(peerId, history) {
+            peerConnectionHistory.set(peerId, history);
+            try {
+                localStorage.setItem(getPeerHistoryKey(peerId), JSON.stringify(history.slice(-5)));
+            } catch (_) {}
+        }
+
+        function loadPeerChat(peerId) {
+            if (peerChatHistory.has(peerId)) return peerChatHistory.get(peerId);
+            let history = [];
+            try {
+                const raw = localStorage.getItem(getPeerChatKey(peerId));
+                history = raw ? JSON.parse(raw) : [];
+            } catch (_) {
+                history = [];
+            }
+            peerChatHistory.set(peerId, history);
+            return history;
+        }
+
+        function savePeerChat(peerId, history) {
+            peerChatHistory.set(peerId, history);
+            try {
+                localStorage.setItem(getPeerChatKey(peerId), JSON.stringify(history.slice(-200)));
+            } catch (_) {}
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return '--';
+            return new Date(ts).toLocaleString();
+        }
+
+        function formatDuration(ms) {
+            if (!Number.isFinite(ms) || ms < 0) return '--';
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${minutes}m ${seconds}s`;
+        }
+
+        function openPeerModal(peerId) {
+            const peer = peerPresence.get(peerId);
+            if (!peer) return;
+            activePeerModalId = peerId;
+            document.getElementById('peer-modal-name').textContent = peer.name || 'Unnamed device';
+            const connectedAt = peer.connectedAt || peer.lastSeen || Date.now();
+            const duration = (peer.state === 'suspended' && peer.disconnectedAt)
+                ? peer.disconnectedAt - connectedAt
+                : Date.now() - connectedAt;
+            document.getElementById('peer-modal-meta').textContent = `Connected: ${formatTimestamp(connectedAt)}`;
+            document.getElementById('peer-connected-at').textContent = formatTimestamp(connectedAt);
+            document.getElementById('peer-connected-duration').textContent = formatDuration(duration);
+
+            const history = loadPeerHistory(peerId);
+            const historyList = document.getElementById('peer-connection-history');
+            historyList.innerHTML = '';
+            if (history.length === 0) {
+                const item = document.createElement('li');
+                item.className = 'text-[11px] text-gray-400';
+                item.textContent = 'No prior connections yet.';
+                historyList.appendChild(item);
+            } else {
+                history.slice(-5).reverse().forEach(entry => {
+                    const item = document.createElement('li');
+                    item.className = 'bg-white border border-gray-200 rounded-lg p-2';
+                    const endText = entry.disconnectedAt ? formatTimestamp(entry.disconnectedAt) : 'Active';
+                    item.innerHTML = `<div><strong>Start:</strong> ${formatTimestamp(entry.connectedAt)}</div>
+                        <div><strong>End:</strong> ${endText}</div>
+                        <div><strong>Duration:</strong> ${formatDuration(entry.durationMs || (entry.disconnectedAt ? entry.disconnectedAt - entry.connectedAt : 0))}</div>`;
+                    historyList.appendChild(item);
+                });
+            }
+
+            renderPeerChat(peerId);
+            toggleModal('peer', true);
+        }
+
+        function closePeerModal() {
+            activePeerModalId = null;
+            toggleModal('peer', false);
+        }
+
+        function renderPeerChat(peerId) {
+            const chatHistory = loadPeerChat(peerId);
+            const chatBox = document.getElementById('peer-chat-history');
+            chatBox.innerHTML = '';
+            chatHistory.forEach(entry => {
+                const bubble = document.createElement('div');
+                bubble.className = entry.from === 'local'
+                    ? 'bg-blue-100 text-blue-800 p-2 rounded-lg text-xs ml-auto max-w-[85%]'
+                    : 'bg-gray-200 text-gray-700 p-2 rounded-lg text-xs mr-auto max-w-[85%]';
+                const nameLine = document.createElement('div');
+                nameLine.className = 'font-semibold text-[10px] uppercase';
+                nameLine.textContent = entry.from === 'local' ? 'You' : (entry.name || 'Peer');
+                const messageLine = document.createElement('div');
+                messageLine.textContent = entry.message || '';
+                const timeLine = document.createElement('div');
+                timeLine.className = 'text-[10px] text-gray-400 mt-1';
+                timeLine.textContent = formatTimestamp(entry.ts);
+                bubble.appendChild(nameLine);
+                bubble.appendChild(messageLine);
+                bubble.appendChild(timeLine);
+                chatBox.appendChild(bubble);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function recordPeerConnectionStart(peerId, ts) {
+            const history = loadPeerHistory(peerId);
+            history.push({ connectedAt: ts, disconnectedAt: null, durationMs: null });
+            savePeerHistory(peerId, history);
+        }
+
+        function recordPeerConnectionEnd(peerId, ts) {
+            const history = loadPeerHistory(peerId);
+            const last = history[history.length - 1];
+            if (last && !last.disconnectedAt) {
+                last.disconnectedAt = ts;
+                last.durationMs = ts - last.connectedAt;
+                savePeerHistory(peerId, history);
+            }
+        }
 
         function getRelayLogSlotKey(index) {
             return `${RELAY_LOG_SLOT_PREFIX}${index}`;
@@ -1497,6 +1687,11 @@
                 .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
                 .forEach(peer => {
                     const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
+                    if (isStale && peer.state !== 'suspended') {
+                        peer.state = 'suspended';
+                        peer.disconnectedAt = now;
+                        recordPeerConnectionEnd(peer.id, now);
+                    }
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
                     const statusLabel = status === 'active' ? 'Active' : 'Suspended';
@@ -1514,9 +1709,19 @@
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'font-medium text-gray-700 truncate';
                     nameSpan.textContent = displayName;
+                    nameSpan.title = 'View details';
+                    nameSpan.addEventListener('click', () => openPeerModal(peer.id));
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'text-[10px] text-gray-400';
+                    timeSpan.textContent = `Connected ${formatTimestamp(peer.connectedAt || peer.lastSeen)}`;
 
                     left.appendChild(dot);
-                    left.appendChild(nameSpan);
+                    const nameBlock = document.createElement('div');
+                    nameBlock.className = 'flex flex-col min-w-0';
+                    nameBlock.appendChild(nameSpan);
+                    nameBlock.appendChild(timeSpan);
+                    left.appendChild(nameBlock);
 
                     const right = document.createElement('div');
                     right.className = 'flex items-center gap-2 shrink-0';
@@ -1553,12 +1758,40 @@
 
             if (message.type === 'presence') {
                 const existing = peerPresence.get(message.from) || { id: message.from };
+                const now = message.ts || Date.now();
+                const wasSuspended = existing.state === 'suspended';
                 peerPresence.set(message.from, {
                     id: message.from,
                     name: message.name || existing.name || null,
                     state: message.state || existing.state || 'active',
-                    lastSeen: message.ts || Date.now()
+                    lastSeen: now,
+                    connectedAt: existing.connectedAt || now,
+                    disconnectedAt: existing.disconnectedAt || null
                 });
+                if (!existing.connectedAt) {
+                    recordPeerConnectionStart(message.from, now);
+                } else if (wasSuspended && message.state === 'active') {
+                    const refreshed = peerPresence.get(message.from);
+                    refreshed.connectedAt = now;
+                    refreshed.disconnectedAt = null;
+                    recordPeerConnectionStart(message.from, now);
+                } else if (message.state === 'suspended' && existing.state !== 'suspended') {
+                    const refreshed = peerPresence.get(message.from);
+                    refreshed.disconnectedAt = now;
+                    recordPeerConnectionEnd(message.from, now);
+                }
+                renderSessionStatus();
+                return;
+            }
+
+            if (message.type === 'leave') {
+                const existing = peerPresence.get(message.from);
+                const now = message.ts || Date.now();
+                if (existing) {
+                    existing.state = 'suspended';
+                    existing.disconnectedAt = now;
+                    recordPeerConnectionEnd(message.from, now);
+                }
                 renderSessionStatus();
                 return;
             }
@@ -1581,6 +1814,22 @@
                 return;
             }
             if (message.type === 'ping') {
+                return;
+            }
+
+            if (message.type === 'chat') {
+                const peerId = message.from;
+                const chatHistory = loadPeerChat(peerId);
+                chatHistory.push({
+                    from: 'peer',
+                    name: message.name || peerPresence.get(peerId)?.name || 'Peer',
+                    message: message.text || '',
+                    ts: message.ts || Date.now()
+                });
+                savePeerChat(peerId, chatHistory);
+                if (activePeerModalId === peerId) {
+                    renderPeerChat(peerId);
+                }
                 return;
             }
 
@@ -1616,13 +1865,16 @@
                 updateSyncIndicator('live');
                 return;
             }
-            updateSyncIndicator('polling');
-            fetch(RELAY_SIGNAL_HTTP_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(message),
-                keepalive: true
-            }).catch(() => {});
+            relayQueue.push(message);
+            updateSyncIndicator('connecting');
+        }
+
+        function flushRelayQueue() {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
+            while (relayQueue.length) {
+                const queued = relayQueue.shift();
+                relayState.ws.send(JSON.stringify(queued));
+            }
         }
 
         function scheduleRelayReconnect() {
@@ -1633,13 +1885,6 @@
                 relayState.reconnectTimer = null;
                 startRelayHandshake('reconnect');
             }, delay);
-        }
-
-        function scheduleRelayPoll() {
-            clearTimeout(relayState.pollTimer);
-            relayState.pollTimer = null;
-            if (document.hidden) return;
-            relayState.pollTimer = setTimeout(pollRelayMessages, RELAY_POLL_MS);
         }
 
         function closeNonOpenRelaySocket(reason = 'refresh') {
@@ -1659,33 +1904,6 @@
             }, RELAY_CONNECT_TIMEOUT_MS);
         }
 
-        async function pollRelayMessages() {
-            if (document.hidden) {
-                clearTimeout(relayState.pollTimer);
-                relayState.pollTimer = null;
-                return;
-            }
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
-                scheduleRelayPoll();
-                return;
-            }
-            const url = new URL(RELAY_SIGNAL_HTTP_URL);
-            url.searchParams.set('session', RELAY_SESSION_ID);
-            url.searchParams.set('client', RELAY_CLIENT_ID);
-            if (relayState.pollSince) url.searchParams.set('since', relayState.pollSince);
-            try {
-                const res = await fetch(url.toString());
-                if (res.ok) {
-                    const messages = await res.json();
-                    messages.forEach(msg => {
-                        if (msg.seq) relayState.pollSince = Math.max(relayState.pollSince, msg.seq);
-                        handleRelayMessage(msg);
-                    });
-                }
-            } catch (_) {}
-            scheduleRelayPoll();
-        }
-
         function connectRelay() {
             if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
                 return;
@@ -1699,8 +1917,10 @@
             relayState.ws.onopen = () => {
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
-                clearTimeout(relayState.pollTimer);
                 clearTimeout(relayState.connectTimeoutTimer);
+                flushRelayQueue();
+                sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
+                sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -1710,13 +1930,9 @@
             relayState.ws.onclose = () => {
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
-                updateSyncIndicator('polling');
+                updateSyncIndicator('connecting');
                 if (!document.hidden) {
-                    scheduleRelayPoll();
                     scheduleRelayReconnect();
-                } else {
-                    clearTimeout(relayState.pollTimer);
-                    relayState.pollTimer = null;
                 }
             };
             relayState.ws.onerror = () => {
@@ -1749,10 +1965,8 @@
             clearTimeout(relayHandshake.timeoutTimer);
             startRelayKeepalive();
             startPresenceUpdates();
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
-                sendRelayMessage({ type: 'reattach', reason: source, transient: true });
-                sendRelayMessage({ type: 'hello', reason: source });
-            }
+            sendRelayMessage({ type: 'reattach', reason: source, transient: true });
+            sendRelayMessage({ type: 'hello', reason: source });
             if (localStateDirty || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
                 queueSnapshot('handshake');
             }
@@ -1954,14 +2168,15 @@
         }
 
         const modals = {
-            secrets: document.getElementById('secrets-modal')
+            secrets: document.getElementById('secrets-modal'),
+            peer: document.getElementById('peer-modal')
         };
 
         function toggleModal(id, show) {
             const el = modals[id];
             const content = el.querySelector('.modal-content') || el.querySelector('div');
             if(show) { 
-                updateSecretsUI(); 
+                if (id === 'secrets') updateSecretsUI();
                 el.classList.remove('invisible'); el.classList.add('visible');
                 content.classList.remove('scale-out'); content.classList.add('scale-in');
                 panel.classList.add('translate-x-full'); 
@@ -1977,8 +2192,6 @@
             sendPresence('visibility');
             renderSessionStatus();
             if (document.hidden) {
-                clearTimeout(relayState.pollTimer);
-                relayState.pollTimer = null;
                 return;
             }
             startRelayHandshake('visibility');
@@ -1997,6 +2210,35 @@
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
+        document.getElementById('close-peer-modal').onclick=closePeerModal;
+        document.getElementById('peer-chat-send').onclick=() => {
+            if (!activePeerModalId) return;
+            const input = document.getElementById('peer-chat-input');
+            const text = (input.value || '').trim();
+            if (!text) return;
+            const chatHistory = loadPeerChat(activePeerModalId);
+            chatHistory.push({
+                from: 'local',
+                name: joinState.name,
+                message: text,
+                ts: Date.now()
+            });
+            savePeerChat(activePeerModalId, chatHistory);
+            renderPeerChat(activePeerModalId);
+            sendRelayMessage({
+                type: 'chat',
+                to: activePeerModalId,
+                text,
+                name: joinState.name
+            });
+            input.value = '';
+        };
+        document.getElementById('peer-chat-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('peer-chat-send').click();
+            }
+        });
         document.getElementById('back-to-grid').onclick=()=>{
             document.getElementById('secrets-detail-view').classList.add('hidden');
             document.getElementById('secrets-grid-view').classList.remove('hidden');
@@ -2124,9 +2366,6 @@
         }
 
         startRelayHandshake('startup');
-        if (!document.hidden) {
-            scheduleRelayPoll();
-        }
         window.addEventListener('online', () => {
             startRelayHandshake('online');
         });
@@ -2136,15 +2375,13 @@
                 sendPresence('pageshow');
                 renderSessionStatus();
                 startRelayHandshake('pageshow');
-                if (!document.hidden) {
-                    scheduleRelayPoll();
-                }
             }
         });
         window.addEventListener('pagehide', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('pagehide');
             flushSnapshot('pagehide');
+            sendRelayMessage({ type: 'leave', reason: 'pagehide', transient: true });
         });
         requestAnimationFrame(loop);
     </script>
@@ -2383,6 +2620,7 @@
 
         window.addEventListener('beforeunload', () => {
             flushSnapshot('beforeunload');
+            sendRelayMessage({ type: 'leave', reason: 'beforeunload', transient: true });
             requestSessionEnd('beforeunload', true);
         });
 

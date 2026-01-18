@@ -1,10 +1,10 @@
-<!-- A Time for Peace - v1.0 - 2025-12-13 12:45 AM - PERFECT SYNC -->
+<!-- A Time to Relax - v13.3 - 2025-12-13 12:45 AM - PERFECT SYNC -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-    <title>A Time for Peace</title>
+    <title>A Time to Relax</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
     <style>
@@ -48,8 +48,7 @@
     <canvas class="block absolute top-0 left-0 w-full h-full z-0" id="gameCanvas"></canvas>
 
     <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 transition-opacity duration-1000 opacity-100 text-white/90 text-center drop-shadow-md" id="overlay">
-        <h1 class="text-3xl md:text-5xl font-light mb-2 tracking-widest" id="main-title">A Time for Peace</h1>
-        <div class="text-xs uppercase tracking-[0.4em] text-white/70" id="shared-intent-display">Shared Intention: Togetherness</div>
+        <h1 class="text-3xl md:text-5xl font-light mb-4 tracking-widest" id="main-title">A Time to Relax</h1>
         <div id="main-subtitle-container">
             <p class="text-lg md:text-xl font-light leading-relaxed">
                 Tap to Bloom<br>
@@ -71,7 +70,7 @@
     </div>
 
     <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
-      • A Time for Peace • Penang 2025 • <span id="clock">--:--</span>
+      • A Time to Relax • Penang 2025 • <span id="clock">--:--</span>
     </div>
 
     <button class="fixed top-5 right-5 w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/30 active:scale-95 transition-all shadow-lg z-50" id="settings-trigger">
@@ -117,6 +116,15 @@
                 </select>
             </div>
 
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Sprite Pack</span>
+                <select id="sprite-pack-selector" class="w-full px-4 py-2.5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 cursor-pointer">
+                    <option value="flowers">Flowers</option>
+                    <option value="fireworks">Fireworks</option>
+                    <option value="shapes">Shapes</option>
+                </select>
+            </div>
+
             <div class="space-y-3">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Background</span>
                 <div class="space-y-2">
@@ -135,20 +143,6 @@
             <div class="space-y-2">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Custom Words</span>
                 <textarea class="w-full p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300 resize-none h-24" id="custom-words" placeholder="e.g. Joy, Peace, Kindness..."></textarea>
-            </div>
-
-            <div class="space-y-2">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Shared Intention</span>
-                <input id="shared-intent-input" type="text" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="e.g. Togetherness, Calm, Gratitude">
-                <p class="text-[11px] text-gray-400">Shown to everyone in the space.</p>
-            </div>
-
-            <div class="flex justify-between items-center">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Memory Line</span>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="memory-toggle" class="sr-only peer" checked>
-                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-300"></div>
-                </label>
             </div>
 
             <div class="space-y-6">
@@ -271,6 +265,17 @@
                 <div class="space-y-3">
                     <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Chat</div>
                     <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-48 overflow-y-auto space-y-2"></div>
+                    <div class="flex items-center justify-between text-[10px] text-gray-500">
+                        <span class="uppercase tracking-wider font-semibold">Translation</span>
+                        <select id="peer-chat-translate" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
+                            <option value="">Off</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="ja">Japanese</option>
+                            <option value="th">Thai</option>
+                        </select>
+                    </div>
                     <div class="flex gap-2">
                         <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message...">
                         <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
@@ -290,7 +295,6 @@
                 "Wisdom", "Patience", "Courage", "☕☕☕", " 😴😴😴", "ดีที่สุดอย่างแท้จริง", "Relax...", "Deep Breath", "หายใจเข้าลึกๆ"
             ],
             customWords: [],
-            sharedIntent: "Togetherness",
             speedMultiplier: 1.0,
             decayValue: 0.005,
             trailDecay: 0.01,
@@ -301,7 +305,7 @@
             currentTrail: '♥',
             lastTrailSwitch: Date.now(),
             currentScale: 'original',
-            memoryEnabled: true
+            spritePack: 'flowers'
         };
 
         const themes = [
@@ -312,9 +316,9 @@
             { bg: ['#d4fc79', '#96e6a1'], text: '#1b5e20' }
         ];
 
-        const BG_DB_NAME = 'peace_assets';
+        const BG_DB_NAME = 'garden_assets';
         const BG_STORE_NAME = 'backgrounds';
-        const BG_STORE_KEY = 'peace_bg';
+        const BG_STORE_KEY = 'garden_bg';
         let bgDbPromise = null;
 
         function openBackgroundDb() {
@@ -427,8 +431,7 @@
         let wordEntities = [];
         let particles = []; 
         let presencePulses = [];
-        let memoryTrail = [];
-        let foundEggs = JSON.parse(localStorage.getItem('peace_egg_ids') || "[]");
+        let foundEggs = JSON.parse(localStorage.getItem('garden_egg_ids') || "[]");
         let inputBuffer = "";
         let pendingAudioEvents = [];
 
@@ -665,31 +668,32 @@
             isDead() { return this.life <= 0; }
         }
 
-        const MEMORY_WINDOW_MS = 60000;
-        const MEMORY_MAX_POINTS = 240;
-
         class PresencePulse {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.life = 1;
-                this.radius = 10;
+            constructor(type = 'join') {
+                this.x = width / 2;
+                this.y = height / 2;
+                this.radius = 20;
+                this.alpha = 0.6;
+                this.growth = type === 'join' ? 6 : 4.5;
+                this.color = type === 'join' ? 'rgba(120, 255, 190,' : 'rgba(255, 200, 120,';
             }
             update() {
-                this.radius += 1.6;
-                this.life -= 0.02;
+                this.radius += this.growth;
+                this.alpha -= 0.02;
             }
             draw(ctx) {
                 ctx.save();
-                ctx.globalAlpha = Math.max(0, this.life * 0.35);
-                ctx.strokeStyle = "rgba(255,255,255,0.5)";
-                ctx.lineWidth = 1;
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                const grad = ctx.createRadialGradient(this.x, this.y, this.radius * 0.2, this.x, this.y, this.radius);
+                grad.addColorStop(0, `${this.color}${this.alpha})`);
+                grad.addColorStop(1, `${this.color}0)`);
+                ctx.fillStyle = grad;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.stroke();
+                ctx.fill();
                 ctx.restore();
             }
-            isDead() { return this.life <= 0; }
+            isDead() { return this.alpha <= 0; }
         }
 
         class Word {
@@ -710,55 +714,6 @@
                 ctx.fillText(this.text, this.x, this.y); ctx.restore();
             }
             isDead() { return this.alpha <= 0 && !this.fadeIn; }
-        }
-
-        function recordMemoryPoint(x, y, type = 'tap') {
-            if (!config.memoryEnabled) return;
-            memoryTrail.push({ x, y, type, ts: Date.now() });
-            if (memoryTrail.length > MEMORY_MAX_POINTS) {
-                memoryTrail = memoryTrail.slice(-MEMORY_MAX_POINTS);
-            }
-        }
-
-        function drawMemoryTrail(ctx) {
-            if (!config.memoryEnabled) return;
-            const now = Date.now();
-            const recentPoints = memoryTrail.filter(p => now - p.ts <= MEMORY_WINDOW_MS);
-            memoryTrail = recentPoints;
-            ctx.save();
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = "rgba(255,255,255,0.08)";
-            ctx.beginPath();
-            for (let i = 1; i < recentPoints.length; i += 1) {
-                const prev = recentPoints[i - 1];
-                const curr = recentPoints[i];
-                if (curr.ts - prev.ts > 5000) continue;
-                ctx.moveTo(prev.x, prev.y);
-                ctx.lineTo(curr.x, curr.y);
-            }
-            ctx.stroke();
-            recentPoints.forEach(point => {
-                const age = now - point.ts;
-                const alpha = Math.max(0, 0.25 - (age / MEMORY_WINDOW_MS) * 0.25);
-                ctx.fillStyle = point.type === 'drag'
-                    ? `rgba(255,255,255,${alpha * 0.8})`
-                    : `rgba(255,255,255,${alpha})`;
-                ctx.beginPath();
-                ctx.arc(point.x, point.y, point.type === 'drag' ? 1.6 : 2.6, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            ctx.restore();
-        }
-
-        function addPresencePulse() {
-            const edge = Math.floor(Math.random() * 4);
-            let x = width / 2;
-            let y = height / 2;
-            if (edge === 0) { x = random(40, width - 40); y = 20; }
-            if (edge === 1) { x = width - 20; y = random(40, height - 40); }
-            if (edge === 2) { x = random(40, width - 40); y = height - 20; }
-            if (edge === 3) { x = 20; y = random(40, height - 40); }
-            presencePulses.push(new PresencePulse(x, y));
         }
 
         class Bloom {
@@ -860,6 +815,92 @@
                 }
                 return this.alpha <= 0; 
             }
+        }
+
+        class FireworkBloom {
+            constructor(x, y, size = null, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.size = 0;
+                this.maxSize = options.maxSize ?? size ?? random(40, 100, rng);
+                this.hue = options.hue ?? random(0, 360, rng);
+                this.alpha = 1;
+                this.spokes = options.spokes ?? Math.floor(random(8, 14, rng));
+                this.rotation = options.rotation ?? random(0, Math.PI * 2, rng);
+            }
+            update() {
+                this.rotation += 0.01;
+                if (this.size < this.maxSize) this.size += 0.8 * config.speedMultiplier;
+                else if (config.decayValue > 0) this.alpha -= config.decayValue * config.speedMultiplier;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                const strokeColor = `hsla(${this.hue}, 80%, 70%, ${this.alpha})`;
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < this.spokes; i++) {
+                    const angle = (i / this.spokes) * Math.PI * 2;
+                    const inner = this.size * 0.2;
+                    const outer = this.size;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+                    ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = `hsla(${this.hue}, 90%, 85%, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+            isDead() { return this.alpha <= 0; }
+        }
+
+        class ShapeBloom {
+            constructor(x, y, size = null, options = {}) {
+                const rng = options.rng || Math.random;
+                this.x = x; this.y = y; this.size = 0;
+                this.maxSize = options.maxSize ?? size ?? random(30, 80, rng);
+                this.hue = options.hue ?? random(0, 360, rng);
+                this.alpha = 1;
+                this.rotation = options.rotation ?? random(0, Math.PI * 2, rng);
+                this.shapeType = options.shapeType || (['circle', 'square', 'triangle', 'diamond'][Math.floor(random(0, 4, rng))]);
+            }
+            update() {
+                this.rotation += 0.004;
+                if (this.size < this.maxSize) this.size += 0.6 * config.speedMultiplier;
+                else if (config.decayValue > 0) this.alpha -= config.decayValue * config.speedMultiplier;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = `hsla(${this.hue}, 70%, 75%, ${this.alpha})`;
+                const half = this.size * 0.4;
+                ctx.beginPath();
+                if (this.shapeType === 'square') {
+                    ctx.rect(-half, -half, half * 2, half * 2);
+                } else if (this.shapeType === 'triangle') {
+                    ctx.moveTo(0, -half);
+                    ctx.lineTo(half, half);
+                    ctx.lineTo(-half, half);
+                    ctx.closePath();
+                } else if (this.shapeType === 'diamond') {
+                    ctx.moveTo(0, -half);
+                    ctx.lineTo(half, 0);
+                    ctx.lineTo(0, half);
+                    ctx.lineTo(-half, 0);
+                    ctx.closePath();
+                } else {
+                    ctx.arc(0, 0, half, 0, Math.PI * 2);
+                }
+                ctx.fill();
+                ctx.restore();
+            }
+            isDead() { return this.alpha <= 0; }
         }
 
         class GrowingHeart {
@@ -997,6 +1038,9 @@
                 this.hue = options.hue ?? random(0, 360, rng);
                 this.color = options.color ?? `hsl(${this.hue},100%,60%)`; 
                 this.cometColor = options.cometColor ?? `hsl(${random(200,260, rng)},100%,80%)`;
+                this.shapeType = options.shapeType;
+                this.sparkAngle = options.sparkAngle;
+                this.sparkLength = options.sparkLength;
             }
             update() {
                 this.y -= config.trailSpeed; 
@@ -1004,12 +1048,47 @@
             }
             draw(ctx) {
                 ctx.save(); ctx.globalAlpha = Math.max(0, this.alpha);
-                
-                if(this.type === "Comet") {
+
+                if (config.spritePack === 'fireworks') {
+                    const angle = this.sparkAngle ?? 0;
+                    const length = this.sparkLength ?? this.size * 1.6;
+                    ctx.strokeStyle = this.color;
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + Math.cos(angle) * length, this.y + Math.sin(angle) * length);
+                    ctx.stroke();
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (config.spritePack === 'shapes') {
+                    const shape = this.shapeType || (this.type === 'Comet' ? 'diamond' : (this.type === '⭐' ? 'triangle' : (this.type === '☁️' ? 'circle' : 'square')));
+                    ctx.translate(this.x, this.y);
+                    ctx.fillStyle = this.color;
+                    const half = this.size * 0.4;
+                    ctx.beginPath();
+                    if (shape === 'square') {
+                        ctx.rect(-half, -half, half * 2, half * 2);
+                    } else if (shape === 'triangle') {
+                        ctx.moveTo(0, -half);
+                        ctx.lineTo(half, half);
+                        ctx.lineTo(-half, half);
+                        ctx.closePath();
+                    } else if (shape === 'diamond') {
+                        ctx.moveTo(0, -half);
+                        ctx.lineTo(half, 0);
+                        ctx.lineTo(0, half);
+                        ctx.lineTo(-half, 0);
+                        ctx.closePath();
+                    } else {
+                        ctx.arc(0, 0, half, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
+                } else if(this.type === "Comet") {
                     ctx.fillStyle = this.cometColor;
                     ctx.beginPath(); ctx.arc(this.x, this.y, this.size/3, 0, Math.PI*2); ctx.fill();
-                } 
-                else if (this.type === "♥" || this.type === "⭐") {
+                } else if (this.type === "♥" || this.type === "⭐") {
                     ctx.translate(this.x, this.y);
                     
                     if(this.type === "♥") {
@@ -1021,8 +1100,7 @@
                         ctx.font = `${this.size}px serif`;
                         ctx.fillText("⭐", 0, 0);
                     }
-                } 
-                else {
+                } else {
                     ctx.fillStyle = "rgba(255,255,255,0.9)";
                     ctx.font = `${this.size}px serif`;
                     ctx.fillText(this.type, this.x, this.y);
@@ -1032,7 +1110,7 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_ID = `peace:${window.location.pathname.replace(/\/+$/, '') || '/'}`.replace(/[^a-z0-9:/_-]/gi, '_').toLowerCase();
+        const RELAY_SESSION_ID = `relax:${window.location.pathname.replace(/\/+$/, '') || '/'}`.replace(/[^a-z0-9:/_-]/gi, '_').toLowerCase();
         if (window.location.search) {
             const cleanUrl = new URL(window.location.href);
             cleanUrl.search = '';
@@ -1040,7 +1118,7 @@
         }
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
-        const CLIENT_ID_STORAGE_KEY = `peace_client_id_${RELAY_SESSION_ID}`;
+        const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
         let storedClientId = null;
         try {
             storedClientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
@@ -1061,8 +1139,8 @@
         const SNAPSHOT_DEBOUNCE_MS = 1200;
         const RELAY_LOG_SLOT_COUNT = 15;
         const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
-        const RELAY_LOG_SLOT_PREFIX = 'peace_relay_log_slot_';
-        const RELAY_LOG_META_KEY = 'peace_relay_log_meta';
+        const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
+        const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
         const relayQueue = [];
@@ -1074,7 +1152,7 @@
             snapshotFound: false,
             snapshotFetched: false
         };
-        const storedStateTs = Number(localStorage.getItem('peace_state_ts'));
+        const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
             initialSent: false,
@@ -1092,7 +1170,7 @@
         
         let relayKeepaliveTimer = null;
         let snapshotTimer = null;
-        const JOIN_NAME_STORAGE_KEY = 'peace_join_name';
+        const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
@@ -1100,7 +1178,7 @@
                 const prompted = (window.prompt('Welcome! Enter your name for this session:', '') || '').trim();
                 storedName = prompted || 'Anonymous';
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
-                localStorage.setItem('peace_joined_at', new Date().toISOString());
+                localStorage.setItem('relax_joined_at', new Date().toISOString());
             }
             return storedName;
         }
@@ -1121,11 +1199,11 @@
         let localPresenceState = 'active';
 
         function getPeerHistoryKey(peerId) {
-            return `peace_peer_history_${RELAY_SESSION_ID}_${peerId}`;
+            return `relax_peer_history_${RELAY_SESSION_ID}_${peerId}`;
         }
 
         function getPeerChatKey(peerId) {
-            return `peace_peer_chat_${RELAY_SESSION_ID}_${peerId}`;
+            return `relax_peer_chat_${RELAY_SESSION_ID}_${peerId}`;
         }
 
         function loadPeerHistory(peerId) {
@@ -1181,6 +1259,86 @@
             return `${minutes}m ${seconds}s`;
         }
 
+        const baseTitle = document.title;
+        let unreadChatCount = 0;
+        let isWindowFocused = document.hasFocus ? document.hasFocus() : true;
+        const translationCache = new Map();
+        const pendingTranslations = new Set();
+        let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
+
+        function updateDocumentTitle() {
+            if (unreadChatCount > 0) {
+                document.title = `(${unreadChatCount}) ${baseTitle}`;
+            } else {
+                document.title = baseTitle;
+            }
+        }
+
+        function clearUnreadChat() {
+            unreadChatCount = 0;
+            updateDocumentTitle();
+        }
+
+        function incrementUnreadChat() {
+            unreadChatCount += 1;
+            updateDocumentTitle();
+        }
+
+        function shouldAlertChat() {
+            return document.hidden || !isWindowFocused;
+        }
+
+        async function translateText(text, target) {
+            if (!text || !target) return null;
+            const cacheKey = `${target}|${text}`;
+            if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+            if (pendingTranslations.has(cacheKey)) return null;
+            pendingTranslations.add(cacheKey);
+            try {
+                const res = await fetch('https://libretranslate.de/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ q: text, source: 'auto', target, format: 'text' })
+                });
+                if (!res.ok) throw new Error('Translation failed');
+                const data = await res.json();
+                const translated = data?.translatedText || null;
+                if (translated) {
+                    translationCache.set(cacheKey, translated);
+                }
+                return translated;
+            } catch (_) {
+                return null;
+            } finally {
+                pendingTranslations.delete(cacheKey);
+            }
+        }
+
+        function queueChatTranslation(entry, target, peerId, chatHistory) {
+            if (!target || !entry.message) return;
+            const cacheKey = `${target}|${entry.message}`;
+            if (entry.translations?.[target] || translationCache.has(cacheKey) || pendingTranslations.has(cacheKey)) return;
+            translateText(entry.message, target).then(translated => {
+                if (!translated) return;
+                entry.translations = entry.translations || {};
+                entry.translations[target] = translated;
+                savePeerChat(peerId, chatHistory);
+                if (activePeerModalId === peerId) {
+                    renderPeerChat(peerId);
+                }
+            });
+        }
+
+        function notifyChat(entry) {
+            if (!shouldAlertChat()) return;
+            if (window.Notification && Notification.permission === 'granted') {
+                new Notification(entry.name || 'Peer', {
+                    body: entry.message || '',
+                    tag: `chat-${entry.ts || Date.now()}`
+                });
+            }
+        }
+
         function openPeerModal(peerId) {
             const peer = peerPresence.get(peerId);
             if (!peer) return;
@@ -1215,6 +1373,7 @@
             }
 
             renderPeerChat(peerId);
+            clearUnreadChat();
             toggleModal('peer', true);
         }
 
@@ -1227,7 +1386,9 @@
             const chatHistory = loadPeerChat(peerId);
             const chatBox = document.getElementById('peer-chat-history');
             chatBox.innerHTML = '';
+            const target = chatTranslationTarget;
             chatHistory.forEach(entry => {
+                const messageText = entry.message || '';
                 const bubble = document.createElement('div');
                 bubble.className = entry.from === 'local'
                     ? 'bg-blue-100 text-blue-800 p-2 rounded-lg text-xs ml-auto max-w-[85%]'
@@ -1236,7 +1397,30 @@
                 nameLine.className = 'font-semibold text-[10px] uppercase';
                 nameLine.textContent = entry.from === 'local' ? 'You' : (entry.name || 'Peer');
                 const messageLine = document.createElement('div');
-                messageLine.textContent = entry.message || '';
+                if (target) {
+                    const dual = document.createElement('div');
+                    dual.className = 'grid grid-cols-2 gap-2';
+                    const original = document.createElement('div');
+                    original.textContent = messageText;
+                    const translated = document.createElement('div');
+                    translated.className = 'text-gray-500';
+                    if (!messageText) {
+                        translated.textContent = '';
+                    } else {
+                        const cached = entry.translations?.[target] || translationCache.get(`${target}|${messageText}`);
+                        if (cached) {
+                            translated.textContent = cached;
+                        } else {
+                            translated.textContent = '…';
+                            queueChatTranslation(entry, target, peerId, chatHistory);
+                        }
+                    }
+                    dual.appendChild(original);
+                    dual.appendChild(translated);
+                    messageLine.appendChild(dual);
+                } else {
+                    messageLine.textContent = messageText;
+                }
                 const timeLine = document.createElement('div');
                 timeLine.className = 'text-[10px] text-gray-400 mt-1';
                 timeLine.textContent = formatTimestamp(entry.ts);
@@ -1339,6 +1523,25 @@
             };
         }
 
+        function buildFireworkBloomPayload(rng) {
+            return {
+                maxSize: random(40, 100, rng),
+                hue: random(0, 360, rng),
+                spokes: Math.floor(random(8, 14, rng)),
+                rotation: random(0, Math.PI * 2, rng)
+            };
+        }
+
+        function buildShapeBloomPayload(rng) {
+            const shapes = ['circle', 'square', 'triangle', 'diamond'];
+            return {
+                maxSize: random(30, 80, rng),
+                hue: random(0, 360, rng),
+                rotation: random(0, Math.PI * 2, rng),
+                shapeType: shapes[Math.floor(random(0, shapes.length, rng))]
+            };
+        }
+
         function buildGrowingHeartPayload(rng) {
             return {
                 maxSize: random(40, 90, rng),
@@ -1369,7 +1572,12 @@
                 size: random(10, 20, rng),
                 hue,
                 color: `hsl(${hue},100%,60%)`,
-                cometColor: `hsl(${random(200,260, rng)},100%,80%)`
+                cometColor: `hsl(${random(200,260, rng)},100%,80%)`,
+                shapeType: config.spritePack === 'shapes'
+                    ? (['circle', 'square', 'triangle', 'diamond'][Math.floor(random(0, 4, rng))])
+                    : undefined,
+                sparkAngle: config.spritePack === 'fireworks' ? random(0, Math.PI * 2, rng) : undefined,
+                sparkLength: config.spritePack === 'fireworks' ? random(8, 22, rng) : undefined
             };
         }
 
@@ -1399,6 +1607,26 @@
             dragStart=Date.now(); 
             isDragging=false; 
         }
+
+        function resolveSpritePackBloomType() {
+            if (config.spritePack === 'fireworks') return 'FireworkBloom';
+            if (config.spritePack === 'shapes') return 'ShapeBloom';
+            return 'Bloom';
+        }
+
+        function buildBloomPayloadForType(entType, rng) {
+            if (entType === 'FireworkBloom') return buildFireworkBloomPayload(rng);
+            if (entType === 'ShapeBloom') return buildShapeBloomPayload(rng);
+            return buildBloomPayload(rng);
+        }
+
+        function createBloomEntity(entType, x, y, bloomPayload, heartPayload) {
+            if (entType === 'GrowingHeart') return new GrowingHeart(x, y, heartPayload || {});
+            if (entType === 'HeartBloom') return new HeartBloom(x, y, null, bloomPayload || {});
+            if (entType === 'FireworkBloom') return new FireworkBloom(x, y, null, bloomPayload || {});
+            if (entType === 'ShapeBloom') return new ShapeBloom(x, y, null, bloomPayload || {});
+            return new Bloom(x, y, null, bloomPayload || {});
+        }
         
         function spawnTap(x, y, options = {}) {
             const {
@@ -1412,15 +1640,10 @@
                 heartPayload,
                 cloudPayload
             } = options;
-            let ent;
-            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
-            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
-            else ent = new Bloom(x, y, null, bloomPayload || {});
+            const ent = createBloomEntity(entType, x, y, bloomPayload, heartPayload);
 
             visualEntities.push(ent);
             wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
-            recordMemoryPoint(x, y, 'tap');
-            recordMemoryPoint(x, y, 'tap');
 
             pendingAudioEvents.push({
                 type: 'pluck',
@@ -1450,7 +1673,6 @@
             const { trailType = config.currentTrail, idx = ZenAudio.getFreqIndex(y, height), trailPayload } = options;
             const resolvedType = trailPayload?.type || trailType;
             visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
-            recordMemoryPoint(x, y, 'drag');
             pendingAudioEvents.push({
                 type: 'pluck',
                 freq: ZenAudio.scale[idx],
@@ -1513,11 +1735,12 @@
                 const seed = createSeed();
                 const rng = createSeededRng(seed);
                 const rnd = rng();
-                const entType = (foundEggs.includes(3) && rnd > 0.7)
+                const baseEntType = (foundEggs.includes(3) && rnd > 0.7)
                     ? 'GrowingHeart'
                     : (foundEggs.includes(3) && rnd > 0.5)
                         ? 'HeartBloom'
                         : 'Bloom';
+                const entType = baseEntType === 'Bloom' ? resolveSpritePackBloomType() : baseEntType;
 
                 registerInput('T');
 
@@ -1526,7 +1749,9 @@
 
                 const wordText = getRandomWord(rng);
                 const wordColor = themes[config.currentThemeIndex].text;
-                const bloomPayload = entType === 'Bloom' || entType === 'HeartBloom' ? buildBloomPayload(rng) : null;
+                const bloomPayload = (entType === 'Bloom' || entType === 'HeartBloom' || entType === 'FireworkBloom' || entType === 'ShapeBloom')
+                    ? buildBloomPayloadForType(entType, rng)
+                    : null;
                 const heartPayload = entType === 'GrowingHeart' ? buildGrowingHeartPayload(rng) : null;
                 const cloudPayload = isDoubleTap ? buildHeartCloudPayload(rng) : null;
 
@@ -1568,10 +1793,7 @@
                 heartPayload,
                 cloudPayload
             } = options;
-            let ent;
-            if (entType === 'GrowingHeart') ent = new GrowingHeart(x, y, heartPayload || {});
-            else if (entType === 'HeartBloom') ent = new HeartBloom(x, y, null, bloomPayload || {});
-            else ent = new Bloom(x, y, null, bloomPayload || {});
+            const ent = createBloomEntity(entType, x, y, bloomPayload, heartPayload);
             visualEntities.push(ent);
             wordEntities.push(new Word(x, y - 30, wordText, { color: wordColor }));
 
@@ -1596,7 +1818,6 @@
         function spawnRemoteDrag(x, y, trail, trailPayload) {
             const resolvedType = trailPayload?.type || trail || config.currentTrail;
             visualEntities.push(new TrailBase(x, y, resolvedType, trailPayload || {}));
-            recordMemoryPoint(x, y, 'drag');
             if (Date.now() - lastRemoteDragSound > 60) {
                 const idx = ZenAudio.getFreqIndex(y, height);
                 const baseVolume = 0.1;
@@ -1617,15 +1838,8 @@
                 backgroundImage: config.backgroundImageData || null,
                 customWords: config.customWords || [],
                 currentScale: config.currentScale,
-                sharedIntent: config.sharedIntent
+                spritePack: config.spritePack
             };
-        }
-
-        function updateSharedIntentDisplay(intentText) {
-            const display = document.getElementById('shared-intent-display');
-            if (!display) return;
-            const value = (intentText || '').trim();
-            display.textContent = value ? `Shared Intention: ${value}` : 'Shared Intention: Togetherness';
         }
 
         function shouldRelaxRemoteClock(reason) {
@@ -1689,7 +1903,7 @@
                 syncState.lastLocalStateTs = relaxLocalClock
                     ? effectiveStateTs
                     : Math.max(syncState.lastLocalStateTs, effectiveStateTs);
-                localStorage.setItem('peace_state_ts', String(syncState.lastLocalStateTs));
+                localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
             }
             if (options.source) {
                 localStateDirty = false;
@@ -1704,7 +1918,7 @@
                 config.customWords = state.customWords.filter(Boolean);
                 if (customWordsInput) {
                     customWordsInput.value = config.customWords.join(', ');
-                    localStorage.setItem('peace_words', customWordsInput.value);
+                    localStorage.setItem('garden_words', customWordsInput.value);
                 }
             }
 
@@ -1731,15 +1945,14 @@
                 const scaleSelector = document.getElementById('scale-selector');
                 if (scaleSelector) scaleSelector.value = config.currentScale;
                 ZenAudio.changeScale(config.currentScale);
-                localStorage.setItem('peace_scale', config.currentScale);
+                localStorage.setItem('garden_scale', config.currentScale);
             }
 
-            if (typeof state.sharedIntent === 'string') {
-                config.sharedIntent = state.sharedIntent.trim() || 'Togetherness';
-                const intentInput = document.getElementById('shared-intent-input');
-                if (intentInput) intentInput.value = config.sharedIntent;
-                localStorage.setItem('peace_intent', config.sharedIntent);
-                updateSharedIntentDisplay(config.sharedIntent);
+            if (state.spritePack && ['flowers', 'fireworks', 'shapes'].includes(state.spritePack)) {
+                config.spritePack = state.spritePack;
+                const spriteSelector = document.getElementById('sprite-pack-selector');
+                if (spriteSelector) spriteSelector.value = config.spritePack;
+                localStorage.setItem('garden_sprite_pack', config.spritePack);
             }
         }
 
@@ -1786,6 +1999,10 @@
             renderSessionStatus();
         }
 
+        function queuePresencePulse(type) {
+            presencePulses.push(new PresencePulse(type));
+        }
+
         function renderSessionStatus() {
             if (!sessionStatusList) return;
             const peers = Array.from(peerPresence.values());
@@ -1808,6 +2025,7 @@
                         peer.state = 'suspended';
                         peer.disconnectedAt = now;
                         recordPeerConnectionEnd(peer.id, now);
+                        queuePresencePulse('leave');
                     }
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
@@ -1887,15 +2105,18 @@
                 });
                 if (!existing.connectedAt) {
                     recordPeerConnectionStart(message.from, now);
+                    queuePresencePulse('join');
                 } else if (wasSuspended && message.state === 'active') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.connectedAt = now;
                     refreshed.disconnectedAt = null;
                     recordPeerConnectionStart(message.from, now);
+                    queuePresencePulse('join');
                 } else if (message.state === 'suspended' && existing.state !== 'suspended') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.disconnectedAt = now;
                     recordPeerConnectionEnd(message.from, now);
+                    queuePresencePulse('leave');
                 }
                 renderSessionStatus();
                 return;
@@ -1908,6 +2129,7 @@
                     existing.state = 'suspended';
                     existing.disconnectedAt = now;
                     recordPeerConnectionEnd(message.from, now);
+                    queuePresencePulse('leave');
                 }
                 renderSessionStatus();
                 return;
@@ -1941,15 +2163,20 @@
             if (message.type === 'chat') {
                 const peerId = message.from;
                 const chatHistory = loadPeerChat(peerId);
-                chatHistory.push({
+                const entry = {
                     from: 'peer',
                     name: message.name || peerPresence.get(peerId)?.name || 'Peer',
                     message: message.text || '',
                     ts: message.ts || Date.now()
-                });
+                };
+                chatHistory.push(entry);
                 savePeerChat(peerId, chatHistory);
                 if (activePeerModalId === peerId) {
                     renderPeerChat(peerId);
+                    clearUnreadChat();
+                } else if (shouldAlertChat()) {
+                    incrementUnreadChat();
+                    notifyChat(entry);
                 }
                 return;
             }
@@ -1959,7 +2186,6 @@
             document.getElementById('overlay').style.opacity='0';
 
             if (message.type === 'tap') {
-                addPresencePulse();
                 spawnRemoteTap(x, y, {
                     entType: message.entType || 'Bloom',
                     isDouble: Boolean(message.double),
@@ -1970,7 +2196,6 @@
                     cloudPayload: message.cloudPayload
                 });
             } else if (message.type === 'drag') {
-                addPresencePulse();
                 spawnRemoteDrag(x, y, message.trail, message.trailPayload);
             }
         }
@@ -2054,9 +2279,7 @@
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
-                if (!document.hidden) {
-                    scheduleRelayReconnect();
-                }
+                scheduleRelayReconnect();
             };
             relayState.ws.onerror = () => {
                 if (relayState.ws) relayState.ws.close();
@@ -2071,7 +2294,6 @@
                 relayHandshake.snapshotFound = false;
                 relayHandshake.snapshotFetched = false;
             }
-            if (document.hidden) return;
             closeNonOpenRelaySocket(reason);
             connectRelay();
             fetchSnapshot(reason);
@@ -2119,7 +2341,7 @@
         function triggerUnlock(id) {
             inputBuffer="";
             if(!foundEggs.includes(id)) {
-                foundEggs.push(id); localStorage.setItem('peace_egg_ids', JSON.stringify(foundEggs));
+                foundEggs.push(id); localStorage.setItem('garden_egg_ids', JSON.stringify(foundEggs));
                 
                 let b = new Bloom(width/2, height/2, 200);
                 if(id===3) b = new GrowingHeart(width/2, height/2); 
@@ -2170,16 +2392,18 @@
                     drawBackground(ctx, config.backgroundImage, width, height);
                 }
 
-                drawMemoryTrail(ctx);
+                for(let i=presencePulses.length-1; i>=0; i--) {
+                    presencePulses[i].update();
+                    presencePulses[i].draw(ctx);
+                    if(presencePulses[i].isDead()) presencePulses.splice(i,1);
+                }
 
                 for(let i=visualEntities.length-1; i>=0; i--) { visualEntities[i].update(); if(visualEntities[i].isDead()) visualEntities.splice(i,1); }
                 for(let i=wordEntities.length-1; i>=0; i--) { wordEntities[i].update(); if(wordEntities[i].isDead()) wordEntities.splice(i,1); }
                 for(let i=particles.length-1; i>=0; i--) { particles[i].update(); particles[i].draw(ctx); if(particles[i].isDead()) particles.splice(i,1); }
-                for(let i=presencePulses.length-1; i>=0; i--) { presencePulses[i].update(); if(presencePulses[i].isDead()) presencePulses.splice(i,1); }
 
                 visualEntities.forEach(e => e.draw(ctx));
                 wordEntities.forEach(w => w.draw(ctx));
-                presencePulses.forEach(p => p.draw(ctx));
 
                 document.getElementById('clock').innerText = new Date().toLocaleTimeString();
             }
@@ -2265,48 +2489,39 @@
         document.getElementById('clear-btn').onclick=()=>{visualEntities=[];wordEntities=[];particles=[];};
         document.getElementById('save-btn').onclick=()=>{const a=document.createElement('a');a.download='garden.png';a.href=canvas.toDataURL();a.click();};
         const scaleSelector = document.getElementById('scale-selector');
-        if (localStorage.getItem('peace_scale')) {
-            config.currentScale = localStorage.getItem('peace_scale');
+        if (localStorage.getItem('garden_scale')) {
+            config.currentScale = localStorage.getItem('garden_scale');
             scaleSelector.value = config.currentScale;
             ZenAudio.changeScale(config.currentScale);
         }
         scaleSelector.onchange = (e) => {
             config.currentScale = e.target.value;
-            localStorage.setItem('peace_scale', config.currentScale);
+            localStorage.setItem('garden_scale', config.currentScale);
             ZenAudio.changeScale(config.currentScale);
             markLocalStateChanged();
             sendSyncState('scale');
         };
 
-        const sharedIntentInput = document.getElementById('shared-intent-input');
-        if (sharedIntentInput) {
-            const storedIntent = localStorage.getItem('peace_intent');
-            if (storedIntent && storedIntent.trim()) {
-                config.sharedIntent = storedIntent.trim();
+        const spritePackSelector = document.getElementById('sprite-pack-selector');
+        if (localStorage.getItem('garden_sprite_pack')) {
+            const storedPack = localStorage.getItem('garden_sprite_pack');
+            if (['flowers', 'fireworks', 'shapes'].includes(storedPack)) {
+                config.spritePack = storedPack;
+                spritePackSelector.value = config.spritePack;
             }
-            sharedIntentInput.value = config.sharedIntent;
-            updateSharedIntentDisplay(config.sharedIntent);
-            sharedIntentInput.addEventListener('change', (event) => {
-                const value = (event.target.value || '').trim();
-                config.sharedIntent = value || 'Togetherness';
-                localStorage.setItem('peace_intent', config.sharedIntent);
-                updateSharedIntentDisplay(config.sharedIntent);
-                markLocalStateChanged();
-                sendSyncState('intent');
-            });
         }
-
-        const memoryToggle = document.getElementById('memory-toggle');
-        if (memoryToggle) {
-            memoryToggle.checked = config.memoryEnabled;
-            memoryToggle.addEventListener('change', (event) => {
-                config.memoryEnabled = event.target.checked;
-            });
-        }
+        spritePackSelector.onchange = (e) => {
+            const nextPack = e.target.value;
+            if (!['flowers', 'fireworks', 'shapes'].includes(nextPack)) return;
+            config.spritePack = nextPack;
+            localStorage.setItem('garden_sprite_pack', config.spritePack);
+            markLocalStateChanged();
+            sendSyncState('sprite-pack');
+        };
 
         function markLocalStateChanged() {
             syncState.lastLocalStateTs = Date.now();
-            localStorage.setItem('peace_state_ts', String(syncState.lastLocalStateTs));
+            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
             localStateDirty = true;
             queueSnapshot('local-change');
         }
@@ -2335,8 +2550,9 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('visibility');
             renderSessionStatus();
-            if (document.hidden) {
-                return;
+            isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
+            if (!document.hidden) {
+                clearUnreadChat();
             }
             startRelayHandshake('visibility');
         });
@@ -2344,17 +2560,31 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('focus');
             renderSessionStatus();
+            isWindowFocused = true;
+            clearUnreadChat();
             startRelayHandshake('focus');
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('blur');
             renderSessionStatus();
+            isWindowFocused = false;
         });
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('close-peer-modal').onclick=closePeerModal;
+        const chatTranslateSelect = document.getElementById('peer-chat-translate');
+        if (chatTranslateSelect) {
+            chatTranslateSelect.value = chatTranslationTarget;
+            chatTranslateSelect.onchange = (event) => {
+                chatTranslationTarget = event.target.value;
+                localStorage.setItem('garden_chat_translation', chatTranslationTarget);
+                if (activePeerModalId) {
+                    renderPeerChat(activePeerModalId);
+                }
+            };
+        }
         document.getElementById('peer-chat-send').onclick=() => {
             if (!activePeerModalId) return;
             const input = document.getElementById('peer-chat-input');
@@ -2514,12 +2744,10 @@
             startRelayHandshake('online');
         });
         window.addEventListener('pageshow', (event) => {
-            if (event.persisted || !document.hidden) {
-                localPresenceState = getLocalPresenceState();
-                sendPresence('pageshow');
-                renderSessionStatus();
-                startRelayHandshake('pageshow');
-            }
+            localPresenceState = getLocalPresenceState();
+            sendPresence('pageshow');
+            renderSessionStatus();
+            startRelayHandshake('pageshow');
         });
         window.addEventListener('pagehide', () => {
             localPresenceState = getLocalPresenceState();
@@ -2935,13 +3163,13 @@
             if (customWordsInput) {
                 customWordsInput.value = selectedWords.join(', ');
                 if (persist) {
-                    localStorage.setItem('peace_words', customWordsInput.value);
+                    localStorage.setItem('garden_words', customWordsInput.value);
                 }
             }
         }
 
         const cBox=document.getElementById('custom-words');
-        cBox.value=localStorage.getItem('peace_words')||"";
+        cBox.value=localStorage.getItem('garden_words')||"";
         applyCustomWordsSelection(cBox.value, { persist: false });
         cBox.onblur=e=>{
             applyCustomWordsSelection(e.target.value);

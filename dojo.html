@@ -324,18 +324,21 @@
         }
 
         if (payload.type === "message") {
-          const text = payload.clientId === clientId ? payload.text : translateIncoming(payload.text || "");
+          if (payload.clientId === clientId) {
+            return;
+          }
+          const text = translateIncoming(payload.text || "");
           appendMessage({
             name: payload.name || "Unnamed",
             text,
             ts: payload.ts,
-            isSelf: payload.clientId === clientId,
+            isSelf: false,
           });
         }
       });
 
       const handleDisconnect = () => {
-        if (!isConnected) {
+        if (reconnectTimer) {
           return;
         }
         isConnected = false;

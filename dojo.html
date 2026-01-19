@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dojo — Togetherness Space</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: #0f1115;
+      color: #f5f5f5;
+    }
+    body {
+      margin: 0;
+      padding: 32px 20px 40px;
+      max-width: 720px;
+      margin-inline: auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+      font-weight: 600;
+    }
+    p {
+      margin: 0 0 16px;
+      color: #b6bcc8;
+      line-height: 1.5;
+    }
+    .panel {
+      border: 1px solid #2a2f3a;
+      border-radius: 12px;
+      padding: 16px;
+      background: rgba(20, 22, 28, 0.9);
+      margin-bottom: 16px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .status {
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    label {
+      font-size: 14px;
+      color: #b6bcc8;
+    }
+    input[type="text"], select {
+      background: #141720;
+      border: 1px solid #2a2f3a;
+      color: #f5f5f5;
+      padding: 8px 10px;
+      border-radius: 8px;
+    }
+    input[type="text"] {
+      flex: 1 1 240px;
+    }
+    button {
+      background: #2d63ff;
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #32405f;
+      cursor: not-allowed;
+    }
+    #chatLog {
+      max-height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .message {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #171b24;
+      border: 1px solid #262c36;
+    }
+    .meta {
+      font-size: 12px;
+      color: #8f96a3;
+      margin-bottom: 6px;
+    }
+    .note {
+      font-size: 12px;
+      color: #f0c674;
+      margin-top: 6px;
+    }
+    .footer {
+      font-size: 12px;
+      color: #7e8796;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dojo</h1>
+  <p>A calm, shared ambient space. Stay awhile, breathe, and leave a simple note.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="status" id="connectionStatus">Connecting</div>
+      <div class="footer" id="presenceCount">Active clients: 0</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label for="displayName">Display name</label>
+        <div class="footer" id="currentName">Unnamed</div>
+      </div>
+      <input type="text" id="displayName" placeholder="Change your name" />
+      <button id="updateName">Update</button>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <label for="translationSelect">Translate incoming messages to:</label>
+      <select id="translationSelect">
+        <option value="None">None</option>
+        <option value="English">English</option>
+        <option value="Spanish">Spanish</option>
+        <option value="French">French</option>
+        <option value="Malay">Malay</option>
+        <option value="Chinese">Chinese</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel" id="chatLog"></div>
+
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="messageInput" placeholder="Share a thought..." />
+      <button id="sendButton">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const WORKER_URL = "wss://your-worker-domain/connect";
+    const CLIENT_ID_KEY = "dojo_client_id";
+    const DISPLAY_NAME_KEY = "dojo_display_name";
+
+    const statusEl = document.getElementById("connectionStatus");
+    const presenceEl = document.getElementById("presenceCount");
+    const currentNameEl = document.getElementById("currentName");
+    const displayNameInput = document.getElementById("displayName");
+    const updateNameButton = document.getElementById("updateName");
+    const translationSelect = document.getElementById("translationSelect");
+    const chatLog = document.getElementById("chatLog");
+    const messageInput = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+
+    const clientId = getOrCreateClientId();
+    let displayName = getStoredDisplayName();
+    let socket = null;
+    let reconnectTimer = null;
+    let queuedMessages = [];
+    let isConnected = false;
+    let lastTranslation = "None";
+    const seenLocalMessages = new Set();
+
+    function getOrCreateClientId() {
+      let stored = localStorage.getItem(CLIENT_ID_KEY);
+      if (!stored) {
+        stored = crypto.randomUUID();
+        localStorage.setItem(CLIENT_ID_KEY, stored);
+      }
+      return stored;
+    }
+
+    function getStoredDisplayName() {
+      return localStorage.getItem(DISPLAY_NAME_KEY) || "Unnamed";
+    }
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function updatePresence(count) {
+      presenceEl.textContent = `Active clients: ${count}`;
+    }
+
+    function updateDisplayName(name) {
+      displayName = name.trim() || "Unnamed";
+      localStorage.setItem(DISPLAY_NAME_KEY, displayName);
+      currentNameEl.textContent = displayName;
+      displayNameInput.value = displayName === "Unnamed" ? "" : displayName;
+      if (socket && isConnected) {
+        socket.send(
+          JSON.stringify({
+            type: "hello",
+            clientId,
+            name: displayName,
+          })
+        );
+      }
+    }
+
+    function appendMessage({ name, text, note, ts, isSelf }) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "message";
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const time = ts ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      meta.textContent = `${name}${isSelf ? " (you)" : ""} • ${time}`;
+
+      const body = document.createElement("div");
+      body.textContent = text;
+
+      wrapper.append(meta, body);
+
+      if (note) {
+        const noteEl = document.createElement("div");
+        noteEl.className = "note";
+        noteEl.textContent = note;
+        wrapper.append(noteEl);
+      }
+
+      chatLog.append(wrapper);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function translateIncoming(text) {
+      const target = translationSelect.value;
+      if (target === "None") {
+        return text;
+      }
+      const tag = target === "English" ? "EN" :
+        target === "Spanish" ? "ES" :
+        target === "French" ? "FR" :
+        target === "Malay" ? "MS" :
+        target === "Chinese" ? "ZH" : "XX";
+      return `[${tag}] ${text}`;
+    }
+
+    function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text) {
+        return;
+      }
+
+      const payload = {
+        type: "message",
+        clientId,
+        name: displayName,
+        text,
+        ts: Date.now(),
+        clientMessageId: crypto.randomUUID(),
+      };
+
+      if (socket && isConnected) {
+        socket.send(JSON.stringify(payload));
+      } else {
+        queuedMessages.push(payload);
+        seenLocalMessages.add(payload.clientMessageId);
+        appendMessage({
+          name: displayName,
+          text,
+          ts: payload.ts,
+          isSelf: true,
+          note: "Offline — message queued.",
+        });
+      }
+
+      messageInput.value = "";
+    }
+
+    function flushQueue() {
+      if (!socket || !isConnected || queuedMessages.length === 0) {
+        return;
+      }
+
+      queuedMessages.forEach((payload) => {
+        socket.send(JSON.stringify(payload));
+      });
+      queuedMessages = [];
+    }
+
+    function connect() {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+
+      setStatus("Connecting");
+      isConnected = false;
+
+      socket = new WebSocket(WORKER_URL);
+
+      socket.addEventListener("open", () => {
+        isConnected = true;
+        setStatus("Connected");
+        socket.send(
+          JSON.stringify({
+            type: "hello",
+            clientId,
+            name: displayName,
+          })
+        );
+        flushQueue();
+      });
+
+      socket.addEventListener("message", (event) => {
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (error) {
+          return;
+        }
+
+        if (payload.type === "presence") {
+          updatePresence(payload.count || 0);
+          return;
+        }
+
+        if (payload.type === "ping") {
+          socket.send(JSON.stringify({ type: "pong", ts: Date.now() }));
+          return;
+        }
+
+        if (payload.type === "message") {
+          if (payload.clientId === clientId && seenLocalMessages.has(payload.clientMessageId)) {
+            seenLocalMessages.delete(payload.clientMessageId);
+            return;
+          }
+          const text = payload.clientId === clientId ? payload.text : translateIncoming(payload.text || "");
+          appendMessage({
+            name: payload.name || "Unnamed",
+            text,
+            ts: payload.ts,
+            isSelf: payload.clientId === clientId,
+          });
+        }
+      });
+
+      const handleDisconnect = () => {
+        isConnected = false;
+        setStatus("Offline");
+        updatePresence(0);
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+
+      socket.addEventListener("close", handleDisconnect);
+      socket.addEventListener("error", handleDisconnect);
+    }
+
+    updateDisplayName(displayName);
+    translationSelect.value = lastTranslation;
+
+    updateNameButton.addEventListener("click", () => {
+      updateDisplayName(displayNameInput.value);
+    });
+
+    displayNameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        updateDisplayName(displayNameInput.value);
+      }
+    });
+
+    sendButton.addEventListener("click", sendMessage);
+    messageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    translationSelect.addEventListener("change", () => {
+      lastTranslation = translationSelect.value;
+    });
+
+    connect();
+  </script>
+</body>
+</html>

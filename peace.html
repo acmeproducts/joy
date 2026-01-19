@@ -94,11 +94,37 @@
 
         <div class="p-6 space-y-8 flex-1">
 
+            <div class="space-y-3">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Your Session</span>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-gray-700 truncate" id="local-name-display">--</div>
+                            <div class="text-[10px] uppercase tracking-wider text-gray-400">Logged in name</div>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                            <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                            <span id="local-status-label">Active</span>
+                        </div>
+                    </div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block" for="local-name-input">Display name</label>
+                    <div class="flex items-center gap-2">
+                        <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
+                        <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+                    </div>
+                    <div class="text-[10px] text-gray-400">This name is visible to peers and confirms your presence.</div>
+                </div>
+            </div>
+
             <div class="space-y-2">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Session Status</span>
                 <ul id="session-status-list" class="space-y-2 text-xs text-gray-600">
                     <li class="text-[11px] text-gray-400">No peers yet.</li>
                 </ul>
+                <button class="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition" id="session-log-btn">
+                    <span class="material-symbols-outlined text-base">receipt_long</span>
+                    View Session Log
+                </button>
             </div>
             
             <div class="flex justify-between items-center">
@@ -288,6 +314,44 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="session-log-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div id="session-log-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-2xl p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800">Session Log</h3>
+                    <p class="text-xs text-gray-500 mt-1" id="session-log-device-id">Device ID: --</p>
+                </div>
+                <button id="close-session-log" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Local Device</div>
+                    <div class="text-sm font-semibold text-gray-700" id="session-log-device-name">--</div>
+                    <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                        <span id="session-log-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span id="session-log-status-label">Active</span>
+                    </div>
+                </div>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Peers</div>
+                    <ul id="session-log-peers" class="space-y-2 text-xs text-gray-600 max-h-32 overflow-y-auto"></ul>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Network & Session Events</div>
+                <div class="flex gap-2">
+                    <button id="session-log-copy" class="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition">Copy</button>
+                    <button id="session-log-download" class="px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition">Download</button>
+                </div>
+            </div>
+            <pre id="session-log-output" class="bg-gray-900 text-gray-100 text-xs rounded-lg p-4 max-h-80 overflow-y-auto whitespace-pre-wrap"></pre>
         </div>
     </div>
 
@@ -1152,6 +1216,8 @@
         const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
         const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
+        const SESSION_LOG_STORAGE_KEY = 'relax_session_log_entries';
+        const SESSION_LOG_MAX_ENTRIES = 400;
         const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
         let reconnectFailures = [];
         let pendingSnapshot = false;
@@ -1176,6 +1242,12 @@
         const sessionStatusList = document.getElementById('session-status-list');
         const reconnectNowButton = document.getElementById('reconnect-now');
         const uiNotice = document.getElementById('ui-notice');
+        const sessionLogBtn = document.getElementById('session-log-btn');
+        const localNameDisplay = document.getElementById('local-name-display');
+        const localNameInput = document.getElementById('local-name-input');
+        const localStatusDot = document.getElementById('local-status-dot');
+        const localStatusLabel = document.getElementById('local-status-label');
+        const updateNameBtn = document.getElementById('update-name-btn');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1217,6 +1289,7 @@
         let presenceTimer = null;
         let presenceRenderTimer = null;
         let localPresenceState = 'active';
+        let sessionLogOpen = false;
 
         function getPeerHistoryKey(peerId) {
             return `relax_peer_history_${RELAY_SESSION_ID}_${peerId}`;
@@ -2066,6 +2139,146 @@
             return document.visibilityState === 'visible' ? 'active' : 'suspended';
         }
 
+        function resolveLocalStatus() {
+            if (navigator.onLine === false) {
+                return { state: 'offline', label: 'Offline', dotClass: 'bg-rose-400' };
+            }
+            if (localPresenceState === 'suspended') {
+                return { state: 'suspended', label: 'Away', dotClass: 'bg-amber-400' };
+            }
+            return { state: 'active', label: 'Active', dotClass: 'bg-emerald-400' };
+        }
+
+        function readStoredSessionLog() {
+            try {
+                const raw = localStorage.getItem(SESSION_LOG_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function writeStoredSessionLog(entries) {
+            try {
+                localStorage.setItem(SESSION_LOG_STORAGE_KEY, JSON.stringify(entries));
+            } catch (_) {}
+        }
+
+        function buildPeerSnapshot() {
+            return Array.from(peerPresence.values()).map(peer => ({
+                id: peer.id,
+                name: peer.name || 'Unnamed device',
+                state: peer.state || 'active',
+                lastSeen: peer.lastSeen || peer.connectedAt || null
+            }));
+        }
+
+        function formatPeerSnapshot(peers) {
+            if (!peers || peers.length === 0) return 'None';
+            return peers
+                .map(peer => `${peer.name} (${peer.id}) - ${peer.state || 'active'}`)
+                .join(', ');
+        }
+
+        function appendDeviceLog(type, detail, options = {}) {
+            const entry = {
+                ts: Date.now(),
+                type,
+                detail,
+                deviceId: RELAY_CLIENT_ID,
+                name: joinState.name,
+                localStatus: resolveLocalStatus().label,
+                peers: buildPeerSnapshot()
+            };
+            const logEntries = readStoredSessionLog();
+            logEntries.push(entry);
+            writeStoredSessionLog(logEntries.slice(-SESSION_LOG_MAX_ENTRIES));
+            if (!options.skipPipelineLog && typeof appendSessionLog === 'function') {
+                appendSessionLog('network', `[${type}] ${detail}`);
+            }
+            if (sessionLogOpen) {
+                renderSessionLog();
+            }
+            return entry;
+        }
+
+        function formatSessionLogEntry(entry) {
+            const time = entry.ts ? new Date(entry.ts).toLocaleString() : '--';
+            const peerSummary = formatPeerSnapshot(entry.peers);
+            const deviceSummary = `${entry.name || 'Unnamed'} (${entry.deviceId || 'unknown'})`;
+            return `[${time}] ${entry.type}: ${entry.detail} | device: ${deviceSummary} | status: ${entry.localStatus || 'unknown'} | peers: ${peerSummary}`;
+        }
+
+        function buildSessionLogText() {
+            const entries = readStoredSessionLog();
+            return entries.map(formatSessionLogEntry).join('\n');
+        }
+
+        function renderSessionLogPeers() {
+            const list = document.getElementById('session-log-peers');
+            if (!list) return;
+            const peers = buildPeerSnapshot();
+            list.innerHTML = '';
+            if (!peers.length) {
+                const item = document.createElement('li');
+                item.className = 'text-[11px] text-gray-400';
+                item.textContent = 'No peers connected.';
+                list.appendChild(item);
+                return;
+            }
+            peers
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .forEach(peer => {
+                    const item = document.createElement('li');
+                    const status = peer.state === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
+                    item.className = 'flex items-center gap-2 text-[11px] text-gray-600';
+                    item.innerHTML = `<span class="w-2 h-2 rounded-full ${status}"></span><span class="truncate">${peer.name}</span>`;
+                    item.title = `${peer.name} (${peer.id}) - ${peer.state}`;
+                    list.appendChild(item);
+                });
+        }
+
+        function renderSessionLog() {
+            const logOutput = document.getElementById('session-log-output');
+            const deviceName = document.getElementById('session-log-device-name');
+            const deviceId = document.getElementById('session-log-device-id');
+            const statusDot = document.getElementById('session-log-status-dot');
+            const statusLabel = document.getElementById('session-log-status-label');
+            if (deviceName) deviceName.textContent = joinState.name || 'Unnamed';
+            if (deviceId) deviceId.textContent = `Device ID: ${RELAY_CLIENT_ID}`;
+            const status = resolveLocalStatus();
+            if (statusDot) statusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
+            if (statusLabel) statusLabel.textContent = status.label;
+            renderSessionLogPeers();
+            if (logOutput) {
+                const text = buildSessionLogText();
+                logOutput.textContent = text || 'No session events logged yet.';
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        }
+
+        function updateLocalProfileUI() {
+            if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'Unnamed';
+            if (localNameInput && document.activeElement !== localNameInput) {
+                localNameInput.value = joinState.name || '';
+            }
+            const status = resolveLocalStatus();
+            if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
+            if (localStatusLabel) localStatusLabel.textContent = status.label;
+        }
+
+        function updateLocalName(nextName) {
+            const trimmed = (nextName || '').trim();
+            if (!trimmed) return;
+            joinState.name = trimmed;
+            try {
+                localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
+            } catch (_) {}
+            updateLocalProfileUI();
+            sendPresence('rename');
+            appendDeviceLog('identity', `Updated display name to "${trimmed}".`);
+        }
+
         function sendPresence(reason = 'interval') {
             const state = getLocalPresenceState();
             localPresenceState = state;
@@ -2075,6 +2288,9 @@
                 name: joinState.name || undefined,
                 reason
             });
+            if (reason !== 'interval') {
+                appendDeviceLog('presence', `Presence broadcast (${state}, reason: ${reason}).`, { skipPipelineLog: true });
+            }
         }
 
         function startPresenceUpdates() {
@@ -2117,6 +2333,7 @@
                         peer.disconnectedAt = now;
                         recordPeerConnectionEnd(peer.id, now);
                         queuePresencePulse('leave');
+                        appendDeviceLog('peer-timeout', `Peer ${peer.name || peer.id} timed out.`);
                     }
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
@@ -2173,6 +2390,9 @@
                     row.appendChild(right);
                     sessionStatusList.appendChild(row);
                 });
+            if (sessionLogOpen) {
+                renderSessionLog();
+            }
         }
 
         function handleRelayMessage(message) {
@@ -2186,9 +2406,10 @@
                 const existing = peerPresence.get(message.from) || { id: message.from };
                 const now = message.ts || Date.now();
                 const wasSuspended = existing.state === 'suspended';
+                const incomingName = message.name || existing.name || null;
                 peerPresence.set(message.from, {
                     id: message.from,
-                    name: message.name || existing.name || null,
+                    name: incomingName,
                     state: message.state || existing.state || 'active',
                     lastSeen: now,
                     connectedAt: existing.connectedAt || now,
@@ -2197,17 +2418,20 @@
                 if (!existing.connectedAt) {
                     recordPeerConnectionStart(message.from, now);
                     queuePresencePulse('join');
+                    appendDeviceLog('peer-join', `Peer ${incomingName || message.from} joined.`);
                 } else if (wasSuspended && message.state === 'active') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.connectedAt = now;
                     refreshed.disconnectedAt = null;
                     recordPeerConnectionStart(message.from, now);
                     queuePresencePulse('join');
+                    appendDeviceLog('peer-return', `Peer ${incomingName || message.from} returned.`);
                 } else if (message.state === 'suspended' && existing.state !== 'suspended') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.disconnectedAt = now;
                     recordPeerConnectionEnd(message.from, now);
                     queuePresencePulse('leave');
+                    appendDeviceLog('peer-away', `Peer ${incomingName || message.from} went away.`);
                 }
                 renderSessionStatus();
                 return;
@@ -2221,6 +2445,7 @@
                     existing.disconnectedAt = now;
                     recordPeerConnectionEnd(message.from, now);
                     queuePresencePulse('leave');
+                    appendDeviceLog('peer-leave', `Peer ${existing.name || message.from} disconnected.`);
                 }
                 renderSessionStatus();
                 return;
@@ -2332,6 +2557,7 @@
                 relayState.reconnectTimer = null;
                 startRelayHandshake('reconnect');
             }, delay);
+            appendDeviceLog('relay-reconnect', `Scheduled reconnect in ${delay}ms.`);
         }
 
         function recordReconnectFailure() {
@@ -2368,12 +2594,14 @@
             relayState.ws = new WebSocket(url.toString());
             scheduleRelayConnectTimeout(relayState.ws);
             updateSyncIndicator('connecting');
+            appendDeviceLog('relay-connect', 'Opening relay connection...');
             relayState.ws.onopen = () => {
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
                 reconnectFailures = [];
                 updateReconnectUi();
                 clearTimeout(relayState.connectTimeoutTimer);
+                appendDeviceLog('relay-open', 'Relay connection established.');
                 sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
                 sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
                 sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
@@ -2388,10 +2616,12 @@
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
                 recordReconnectFailure();
+                appendDeviceLog('relay-close', 'Relay connection closed.');
                 scheduleRelayReconnect();
             };
             relayState.ws.onerror = () => {
                 recordReconnectFailure();
+                appendDeviceLog('relay-error', 'Relay connection error.');
                 if (relayState.ws) relayState.ws.close();
             };
         }
@@ -2408,6 +2638,7 @@
                 relayHandshake.snapshotFound = false;
                 relayHandshake.snapshotFetched = false;
             }
+            appendDeviceLog('relay-handshake', `Handshake started (${reason}).`, { skipPipelineLog: true });
             closeNonOpenRelaySocket(reason);
             connectRelay();
             fetchSnapshot(reason);
@@ -2427,6 +2658,7 @@
             if (localStateDirty || pendingSnapshot || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
                 sendSnapshot(pendingSnapshotReason || 'handshake');
             }
+            appendDeviceLog('relay-ready', `Handshake completed (${source}).`, { skipPipelineLog: true });
         }
 
         const rhythmSequences = [
@@ -2649,7 +2881,8 @@
 
         const modals = {
             secrets: document.getElementById('secrets-modal'),
-            peer: document.getElementById('peer-modal')
+            peer: document.getElementById('peer-modal'),
+            'session-log': document.getElementById('session-log-modal')
         };
 
         function toggleModal(id, show) {
@@ -2657,6 +2890,7 @@
             const content = el.querySelector('.modal-content') || el.querySelector('div');
             if(show) { 
                 if (id === 'secrets') updateSecretsUI();
+                if (id === 'session-log') renderSessionLog();
                 el.classList.remove('invisible'); el.classList.add('visible');
                 content.classList.remove('scale-out'); content.classList.add('scale-in');
                 panel.classList.add('translate-x-full'); 
@@ -2671,6 +2905,7 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('visibility');
             renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
             if (!document.hidden) {
                 clearUnreadChat();
@@ -2681,6 +2916,7 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('focus');
             renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
             startRelayHandshake('focus');
@@ -2689,12 +2925,64 @@
             localPresenceState = getLocalPresenceState();
             sendPresence('blur');
             renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = false;
         });
 
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('close-peer-modal').onclick=closePeerModal;
+        if (sessionLogBtn) {
+            sessionLogBtn.onclick = () => {
+                sessionLogOpen = true;
+                toggleModal('session-log', true);
+            };
+        }
+        document.getElementById('close-session-log').onclick=() => {
+            sessionLogOpen = false;
+            toggleModal('session-log', false);
+        };
+        const sessionLogCopyBtn = document.getElementById('session-log-copy');
+        const sessionLogDownloadBtn = document.getElementById('session-log-download');
+        if (sessionLogCopyBtn) {
+            sessionLogCopyBtn.onclick = async () => {
+                const text = buildSessionLogText();
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showUiNotice('Session log copied.');
+                    } catch (_) {
+                        showUiNotice('Copy failed.');
+                    }
+                } else {
+                    const temp = document.createElement('textarea');
+                    temp.value = text;
+                    document.body.appendChild(temp);
+                    temp.select();
+                    try {
+                        document.execCommand('copy');
+                        showUiNotice('Session log copied.');
+                    } catch (_) {
+                        showUiNotice('Copy failed.');
+                    }
+                    document.body.removeChild(temp);
+                }
+            };
+        }
+        if (sessionLogDownloadBtn) {
+            sessionLogDownloadBtn.onclick = () => {
+                const text = buildSessionLogText();
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `session-log-${Date.now()}.txt`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+        }
         const chatTranslateSelect = document.getElementById('peer-chat-translate');
         if (chatTranslateSelect) {
             chatTranslateSelect.value = chatTranslationTarget;
@@ -2874,23 +3162,44 @@
             recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
         }
 
+        if (updateNameBtn && localNameInput) {
+            updateNameBtn.onclick = () => updateLocalName(localNameInput.value);
+            localNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateNameBtn.click();
+                }
+            });
+        }
+
+        updateLocalProfileUI();
+        appendDeviceLog('session', 'Session initialized.');
+
         startRelayHandshake('startup');
         window.addEventListener('online', () => {
             reconnectFailures = [];
             updateReconnectUi();
             startRelayHandshake('online');
+            updateLocalProfileUI();
+            appendDeviceLog('network', 'Browser is online.');
+        });
+        window.addEventListener('offline', () => {
+            updateLocalProfileUI();
+            appendDeviceLog('network', 'Browser is offline.');
         });
         window.addEventListener('pageshow', (event) => {
             localPresenceState = getLocalPresenceState();
             sendPresence('pageshow');
             renderSessionStatus();
             startRelayHandshake('pageshow');
+            updateLocalProfileUI();
         });
         window.addEventListener('pagehide', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('pagehide');
             flushSnapshot('pagehide');
             sendRelayMessage({ type: 'leave', reason: 'pagehide', transient: true });
+            appendDeviceLog('session', 'Page hidden.');
         });
         requestAnimationFrame(loop);
     </script>
@@ -3127,6 +3436,16 @@
 
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
 
+        window.addEventListener('pagehide', () => {
+            requestSessionEnd('pagehide', true);
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                requestSessionEnd('visibility', false);
+            } else {
+                cancelSessionEnd('visibility');
+            }
+        });
         window.addEventListener('beforeunload', () => {
             flushSnapshot('beforeunload');
             sendRelayMessage({ type: 'leave', reason: 'beforeunload', transient: true });

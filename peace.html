@@ -2376,7 +2376,6 @@
                 clearTimeout(relayState.connectTimeoutTimer);
                 sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
                 sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
-                sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
             };
             relayState.ws.onmessage = event => {
                 try {

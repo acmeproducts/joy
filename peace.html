@@ -1180,12 +1180,7 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_ID = `relax:${window.location.pathname.replace(/\/+$/, '') || '/'}`.replace(/[^a-z0-9:/_-]/gi, '_').toLowerCase();
-        if (window.location.search) {
-            const cleanUrl = new URL(window.location.href);
-            cleanUrl.search = '';
-            history.replaceState({}, document.title, cleanUrl.toString());
-        }
+        const RELAY_SESSION_ID = 'relax:peace';
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
@@ -1267,8 +1262,8 @@
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
-                const prompted = (window.prompt('Welcome! Enter your name for this session:', '') || '').trim();
-                storedName = prompted || 'Anonymous';
+                const clientSuffix = RELAY_CLIENT_ID.slice(0, 4);
+                storedName = `Guest-${clientSuffix}`;
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
                 localStorage.setItem('relax_joined_at', new Date().toISOString());
             }
@@ -3008,10 +3003,6 @@
                 showUiNotice('Slow down — 1 message per second.');
                 return;
             }
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
-                showUiNotice('Offline — message not sent.');
-                return;
-            }
             const chatHistory = loadPeerChat(activePeerModalId);
             chatHistory.push({
                 from: 'local',
@@ -3022,12 +3013,15 @@
             savePeerChat(activePeerModalId, chatHistory);
             renderPeerChat(activePeerModalId);
             lastChatSentAt = now;
-            sendRelayMessage({
+            const sent = sendRelayMessage({
                 type: 'chat',
                 to: activePeerModalId,
                 text,
                 name: joinState.name
             });
+            if (!sent) {
+                showUiNotice('Offline — message queued.');
+            }
             input.value = '';
         };
         document.getElementById('peer-chat-input').addEventListener('keydown', (event) => {

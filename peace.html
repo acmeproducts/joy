@@ -69,6 +69,12 @@
         SYNCING
     </div>
 
+    <button class="fixed top-16 left-5 px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-white/20 text-white/80 backdrop-blur opacity-0 pointer-events-none transition-opacity z-50" id="reconnect-now">
+        Reconnect now
+    </button>
+
+    <div class="fixed top-16 left-24 px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-wide bg-black/40 text-white/80 backdrop-blur opacity-0 transition-opacity z-50 pointer-events-none" id="ui-notice"></div>
+
     <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
       • A Time to Relax • Penang 2025 • <span id="clock">--:--</span>
     </div>
@@ -1137,13 +1143,19 @@
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
+        const RELAY_RECONNECT_JITTER_MIN = 0.8;
+        const RELAY_RECONNECT_JITTER_MAX = 1.3;
+        const RELAY_RECONNECT_WINDOW_MS = 30000;
+        const RELAY_RECONNECT_FAILURE_THRESHOLD = 3;
         const RELAY_LOG_SLOT_COUNT = 15;
         const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
         const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
         const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
-        const relayQueue = [];
+        let reconnectFailures = [];
+        let pendingSnapshot = false;
+        let pendingSnapshotReason = null;
         const relayHandshake = {
             active: false,
             snapshotApplied: false,
@@ -1162,6 +1174,8 @@
         let localStateDirty = false;
         const syncIndicator = document.getElementById('sync-indicator');
         const sessionStatusList = document.getElementById('session-status-list');
+        const reconnectNowButton = document.getElementById('reconnect-now');
+        const uiNotice = document.getElementById('ui-notice');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1170,8 +1184,14 @@
         
         let relayKeepaliveTimer = null;
         let snapshotTimer = null;
+        let uiNoticeTimer = null;
+        let lastChatSentAt = 0;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const RELAY_KEEPALIVE_MS = 20000;
+        const CHAT_MAX_LENGTH = 800;
+        const CHAT_COOLDOWN_MS = 1000;
+        const MAX_BG_DATA_URL_LENGTH = 900000;
+        const MAX_BG_BLOB_BYTES = 700000;
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
@@ -1590,6 +1610,48 @@
             syncIndicator.style.opacity = '1';
         }
 
+        function showUiNotice(message, duration = 3000) {
+            if (!uiNotice) return;
+            uiNotice.textContent = message;
+            uiNotice.style.opacity = '1';
+            clearTimeout(uiNoticeTimer);
+            uiNoticeTimer = setTimeout(() => {
+                uiNotice.style.opacity = '0';
+            }, duration);
+        }
+
+        function updateReconnectUi() {
+            if (!reconnectNowButton) return;
+            const now = Date.now();
+            reconnectFailures = reconnectFailures.filter(ts => now - ts < RELAY_RECONNECT_WINDOW_MS);
+            const shouldShow = reconnectFailures.length >= RELAY_RECONNECT_FAILURE_THRESHOLD
+                && (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN);
+            reconnectNowButton.style.opacity = shouldShow ? '1' : '0';
+            reconnectNowButton.style.pointerEvents = shouldShow ? 'auto' : 'none';
+        }
+
+        if (reconnectNowButton) {
+            reconnectNowButton.addEventListener('click', () => {
+                reconnectFailures = [];
+                relayState.reconnectAttempts = 0;
+                updateReconnectUi();
+                startRelayHandshake('manual');
+            });
+        }
+
+        function estimateDataUrlBytes(dataUrl) {
+            if (!dataUrl || typeof dataUrl !== 'string') return 0;
+            const commaIndex = dataUrl.indexOf(',');
+            const base64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+            const padding = (base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0);
+            return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+        }
+
+        function isBackgroundPayloadTooLarge(dataUrl) {
+            if (!dataUrl) return false;
+            if (dataUrl.length > MAX_BG_DATA_URL_LENGTH) return true;
+            return estimateDataUrlBytes(dataUrl) > MAX_BG_BLOB_BYTES;
+        }
         
         
         function wakeAudio() {
@@ -1832,10 +1894,19 @@
         }
 
         function buildSyncState() {
+            let backgroundImage = config.backgroundImageData || null;
+            if (backgroundImage && isBackgroundPayloadTooLarge(backgroundImage)) {
+                backgroundImage = null;
+                config.useGradient = true;
+                config.backgroundImage = null;
+                config.backgroundImageData = null;
+                clearBackgroundImage();
+                showUiNotice('Background too large; using gradient.');
+            }
             return {
                 themeIndex: config.currentThemeIndex,
                 useGradient: config.useGradient,
-                backgroundImage: config.backgroundImageData || null,
+                backgroundImage,
                 customWords: config.customWords || [],
                 currentScale: config.currentScale,
                 spritePack: config.spritePack
@@ -1870,10 +1941,22 @@
         function sendSnapshot(reason = 'snapshot') {
             const stateTs = syncState.lastLocalStateTs || Date.now();
             const state = buildSyncState();
-            sendRelayMessage({ type: 'snapshot', state, stateTs, reason });
+            if (sendRelayMessage({ type: 'snapshot', state, stateTs, reason })) {
+                localStateDirty = false;
+                pendingSnapshot = false;
+                pendingSnapshotReason = null;
+            } else {
+                pendingSnapshot = true;
+                pendingSnapshotReason = reason;
+            }
         }
 
         function queueSnapshot(reason = 'debounced') {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                pendingSnapshot = true;
+                pendingSnapshotReason = reason;
+                return;
+            }
             if (snapshotTimer) clearTimeout(snapshotTimer);
             snapshotTimer = setTimeout(() => {
                 snapshotTimer = null;
@@ -1923,14 +2006,22 @@
             }
 
             if (state.backgroundImage) {
-                const img = new Image();
-                img.onload = () => {
-                    config.backgroundImage = img;
-                    config.useGradient = false;
-                    config.backgroundImageData = state.backgroundImage;
-                    saveBackgroundImage(state.backgroundImage);
-                };
-                img.src = state.backgroundImage;
+                if (isBackgroundPayloadTooLarge(state.backgroundImage)) {
+                    config.useGradient = true;
+                    config.backgroundImage = null;
+                    config.backgroundImageData = null;
+                    clearBackgroundImage();
+                    showUiNotice('Background too large; using gradient.');
+                } else {
+                    const img = new Image();
+                    img.onload = () => {
+                        config.backgroundImage = img;
+                        config.useGradient = false;
+                        config.backgroundImageData = state.backgroundImage;
+                        saveBackgroundImage(state.backgroundImage);
+                    };
+                    img.src = state.backgroundImage;
+                }
             } else if (state.useGradient !== undefined) {
                 config.useGradient = state.useGradient;
                 if (state.useGradient) {
@@ -2138,7 +2229,7 @@
             if (message.type === 'hello') {
                 remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
                 ZenAudio.softenEntry();
-                sendSyncState('hello');
+                sendSnapshot('hello');
                 return;
             }
 
@@ -2208,31 +2299,46 @@
                 ...payload
             };
             recordRelayEvent(message);
-            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+            const isOpen = relayState.ws && relayState.ws.readyState === WebSocket.OPEN;
+            if (isOpen) {
                 relayState.ws.send(JSON.stringify(message));
                 updateSyncIndicator('live');
-                return;
+                return true;
             }
-            relayQueue.push(message);
+            const isTransient = payload.transient
+                || ['tap', 'drag', 'chat', 'presence', 'ping', 'hello', 'reattach', 'leave'].includes(payload.type);
+            if (isTransient) {
+                updateSyncIndicator('connecting');
+                return false;
+            }
+            if (payload.type === 'state' || payload.type === 'snapshot') {
+                pendingSnapshot = true;
+                pendingSnapshotReason = payload.reason || payload.type;
+            }
             updateSyncIndicator('connecting');
-        }
-
-        function flushRelayQueue() {
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
-            while (relayQueue.length) {
-                const queued = relayQueue.shift();
-                relayState.ws.send(JSON.stringify(queued));
-            }
+            return false;
         }
 
         function scheduleRelayReconnect() {
             if (relayState.reconnectTimer) return;
-            const delay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** relayState.reconnectAttempts));
+            const baseDelay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** relayState.reconnectAttempts));
+            const jitter = random(RELAY_RECONNECT_JITTER_MIN, RELAY_RECONNECT_JITTER_MAX);
+            let delay = Math.round(baseDelay * jitter);
+            if (navigator.onLine === false) {
+                delay = Math.max(delay, RELAY_RECONNECT_MAX_MS);
+            }
             relayState.reconnectAttempts += 1;
             relayState.reconnectTimer = setTimeout(() => {
                 relayState.reconnectTimer = null;
                 startRelayHandshake('reconnect');
             }, delay);
+        }
+
+        function recordReconnectFailure() {
+            const now = Date.now();
+            reconnectFailures = reconnectFailures.filter(ts => now - ts < RELAY_RECONNECT_WINDOW_MS);
+            reconnectFailures.push(now);
+            updateReconnectUi();
         }
 
         function closeNonOpenRelaySocket(reason = 'refresh') {
@@ -2265,10 +2371,12 @@
             relayState.ws.onopen = () => {
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
+                reconnectFailures = [];
+                updateReconnectUi();
                 clearTimeout(relayState.connectTimeoutTimer);
-                flushRelayQueue();
                 sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
                 sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
+                sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
             };
             relayState.ws.onmessage = event => {
                 try {
@@ -2279,15 +2387,21 @@
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
+                recordReconnectFailure();
                 scheduleRelayReconnect();
             };
             relayState.ws.onerror = () => {
+                recordReconnectFailure();
                 if (relayState.ws) relayState.ws.close();
             };
         }
         
         function startRelayHandshake(reason = 'startup') {
             relayHandshake.reason = reason;
+            if (relayState.reconnectTimer) {
+                clearTimeout(relayState.reconnectTimer);
+                relayState.reconnectTimer = null;
+            }
             if (!relayHandshake.active) {
                 relayHandshake.active = true;
                 relayHandshake.snapshotApplied = false;
@@ -2310,10 +2424,8 @@
             clearTimeout(relayHandshake.timeoutTimer);
             startRelayKeepalive();
             startPresenceUpdates();
-            sendRelayMessage({ type: 'reattach', reason: source, transient: true });
-            sendRelayMessage({ type: 'hello', reason: source });
-            if (localStateDirty || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
-                queueSnapshot('handshake');
+            if (localStateDirty || pendingSnapshot || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
+                sendSnapshot(pendingSnapshotReason || 'handshake');
             }
         }
 
@@ -2415,26 +2527,30 @@
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
-            const objectUrl = URL.createObjectURL(f);
-            const i=new Image(); 
-            i.onload=()=>{
-                config.backgroundImage=i;
-                config.useGradient=false;
-                config.backgroundImageData=null;
-                URL.revokeObjectURL(objectUrl);
-            };
-            i.onerror=()=>URL.revokeObjectURL(objectUrl);
-            i.src=objectUrl;
             appendSessionLog('background', 'Applied custom background.');
 
             const r=new FileReader(); 
             r.onload=e=>{ 
                 const dataUrl = e.target.result;
                 compressBackgroundDataUrl(dataUrl).then(compressedDataUrl => {
-                    config.backgroundImageData = compressedDataUrl;
-                    markLocalStateChanged();
-                    sendSyncState('background');
-                    saveBackgroundImage(compressedDataUrl);
+                    if (isBackgroundPayloadTooLarge(compressedDataUrl)) {
+                        config.useGradient = true;
+                        config.backgroundImage = null;
+                        config.backgroundImageData = null;
+                        clearBackgroundImage();
+                        showUiNotice('Background too large; using gradient.');
+                        return;
+                    }
+                    const img = new Image();
+                    img.onload = () => {
+                        config.backgroundImage = img;
+                        config.useGradient = false;
+                        config.backgroundImageData = compressedDataUrl;
+                        markLocalStateChanged();
+                        sendSyncState('background');
+                        saveBackgroundImage(compressedDataUrl);
+                    };
+                    img.src = compressedDataUrl;
                 });
             }; 
             r.readAsDataURL(f);
@@ -2452,6 +2568,11 @@
         loadBackgroundImage().then(dataUrl => {
             if (!dataUrl) return;
             if (remoteStateApplied) return;
+            if (isBackgroundPayloadTooLarge(dataUrl)) {
+                clearBackgroundImage();
+                showUiNotice('Stored background too large; using gradient.');
+                return;
+            }
             const i=new Image();
             i.onload=()=>{
                 config.backgroundImage=i;
@@ -2590,6 +2711,19 @@
             const input = document.getElementById('peer-chat-input');
             const text = (input.value || '').trim();
             if (!text) return;
+            if (text.length > CHAT_MAX_LENGTH) {
+                showUiNotice(`Message too long (max ${CHAT_MAX_LENGTH} chars).`);
+                return;
+            }
+            const now = Date.now();
+            if (now - lastChatSentAt < CHAT_COOLDOWN_MS) {
+                showUiNotice('Slow down — 1 message per second.');
+                return;
+            }
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                showUiNotice('Offline — message not sent.');
+                return;
+            }
             const chatHistory = loadPeerChat(activePeerModalId);
             chatHistory.push({
                 from: 'local',
@@ -2599,6 +2733,7 @@
             });
             savePeerChat(activePeerModalId, chatHistory);
             renderPeerChat(activePeerModalId);
+            lastChatSentAt = now;
             sendRelayMessage({
                 type: 'chat',
                 to: activePeerModalId,
@@ -2741,6 +2876,8 @@
 
         startRelayHandshake('startup');
         window.addEventListener('online', () => {
+            reconnectFailures = [];
+            updateReconnectUi();
             startRelayHandshake('online');
         });
         window.addEventListener('pageshow', (event) => {

@@ -2627,7 +2627,6 @@
     </script>
 
     <script>
-        const AppState = { bgImage: null, useGradient: true };
         const SHEET_ID = '1lSxTIZbtXWdxCUWqdqan-hCV1f5_aWQCoV-HXSRHxng';
         const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
 
@@ -2860,7 +2859,10 @@
                     const r = await fetch(`img.${ext}`, {method:'HEAD'});
                     if(r.ok) {
                         const i = new Image(); 
-                        i.onload = ()=>{ AppState.bgImage=i; AppState.useGradient=false; }; 
+                        i.onload = () => {
+                            config.backgroundImage = i;
+                            config.useGradient = false;
+                        }; 
                         i.src=`img.${ext}`; 
                         break;
                     }

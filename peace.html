@@ -1397,7 +1397,20 @@
                 }
                 return translated;
             } catch (_) {
-                return null;
+                try {
+                    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`);
+                    if (!res.ok) throw new Error('Translation fallback failed');
+                    const data = await res.json();
+                    const translated = Array.isArray(data?.[0])
+                        ? data[0].map(part => part?.[0]).filter(Boolean).join('')
+                        : null;
+                    if (translated) {
+                        translationCache.set(cacheKey, translated);
+                    }
+                    return translated;
+                } catch (_) {
+                    return null;
+                }
             } finally {
                 pendingTranslations.delete(cacheKey);
             }
@@ -1431,8 +1444,12 @@
         function isLikelyEnglishMessage(text) {
             const normalized = (text || '').trim();
             if (!normalized) return true;
-            if (!/[A-Za-z]/.test(normalized)) return true;
-            return !/[^\x00-\x7F]/.test(normalized);
+            const hasLatin = /[A-Za-z]/.test(normalized);
+            const hasNonAscii = /[^\x00-\x7F]/.test(normalized);
+            if (!hasLatin) {
+                return !hasNonAscii;
+            }
+            return !hasNonAscii;
         }
 
         function sendPendingPeerReconnects() {
@@ -1495,8 +1512,9 @@
                 const messageText = entry.message || '';
                 const hasTarget = Boolean(target);
                 const isEnglish = isLikelyEnglishMessage(messageText);
-                const translationTarget = isEnglish ? (hasTarget ? target : '') : 'en';
-                const showOriginal = isEnglish || hasTarget;
+                const shouldTranslateToEnglish = !hasTarget && !isEnglish;
+                const translationTarget = hasTarget ? target : (shouldTranslateToEnglish ? 'en' : '');
+                const showOriginal = isEnglish || hasTarget || !translationTarget;
                 const showTranslation = Boolean(translationTarget);
                 const showDual = showOriginal && showTranslation && hasTarget;
                 const bubble = document.createElement('div');
@@ -2412,13 +2430,22 @@
 
                     const removeBtn = document.createElement('button');
                     removeBtn.type = 'button';
-                    removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
-                    removeBtn.title = 'Clear';
-                    removeBtn.textContent = '✕';
-                    removeBtn.addEventListener('click', () => {
-                        peerPresence.delete(peer.id);
-                        renderSessionStatus();
-                    });
+                    if (status === 'suspended') {
+                        removeBtn.className = 'text-amber-500 hover:text-amber-600 transition flex items-center';
+                        removeBtn.title = 'Force reconnect';
+                        removeBtn.innerHTML = '<span class="material-symbols-outlined text-base">refresh</span>';
+                        removeBtn.addEventListener('click', () => {
+                            requestPeerReconnect(peer);
+                        });
+                    } else {
+                        removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
+                        removeBtn.title = 'Clear';
+                        removeBtn.textContent = '✕';
+                        removeBtn.addEventListener('click', () => {
+                            peerPresence.delete(peer.id);
+                            renderSessionStatus();
+                        });
+                    }
 
                     right.appendChild(statusSpan);
                     right.appendChild(removeBtn);

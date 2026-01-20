@@ -1813,7 +1813,7 @@
         function sendPendingPeerReconnects() {
             if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
             pendingPeerReconnects.forEach(peerId => {
-                sendRelayMessage({ type: 'hello', to: peerId, reason: 'peer-reconnect' });
+                sendRelayMessage({ type: 'hello', to: peerId, reason: 'peer-reconnect', name: joinState.name || undefined });
             });
             pendingPeerReconnects.clear();
         }
@@ -3256,8 +3256,8 @@
                 updateReconnectUi();
                 clearTimeout(relayState.connectTimeoutTimer);
                 appendDeviceLog('relay-open', 'Relay connection established.');
-                sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
-                sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
+                sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true, name: joinState.name || undefined });
+                sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open', name: joinState.name || undefined });
                 sendPendingPeerReconnects();
                 sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
             };

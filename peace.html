@@ -2282,6 +2282,38 @@
             localStateDirty = false;
         }
 
+        function forceClientReset(reason = 'manual') {
+            flushSnapshot(`reset-${reason}`);
+            if (relayKeepaliveTimer) {
+                clearInterval(relayKeepaliveTimer);
+                relayKeepaliveTimer = null;
+            }
+            if (relayState.reconnectTimer) {
+                clearTimeout(relayState.reconnectTimer);
+                relayState.reconnectTimer = null;
+            }
+            clearTimeout(relayState.connectTimeoutTimer);
+            if (relayState.ws) {
+                try {
+                    relayState.ws.close(4002, `client-reset:${reason}`);
+                } catch (_) {}
+                relayState.ws = null;
+            }
+            relayState.reconnectAttempts = 0;
+            reconnectFailures = [];
+            pendingSnapshot = false;
+            pendingSnapshotReason = null;
+            relayHandshake.active = false;
+            relayHandshake.snapshotApplied = false;
+            relayHandshake.snapshotFound = false;
+            relayHandshake.snapshotFetched = false;
+            clearTimeout(relayHandshake.timeoutTimer);
+            relayHandshake.timeoutTimer = null;
+            updateReconnectUi();
+            appendDeviceLog('client-reset', `Client reset triggered (${reason}).`, { skipPipelineLog: true });
+            startRelayHandshake(`client-reset-${reason}`);
+        }
+
         function applySyncState(state, stateTs = Date.now(), options = {}) {
             if (!state) return;
             const relaxLocalClock = Boolean(options.relaxLocalClock);
@@ -3551,7 +3583,10 @@
         }
 
         if (updateNameBtn && localNameInput) {
-            updateNameBtn.onclick = () => updateLocalName(localNameInput.value);
+            updateNameBtn.onclick = () => {
+                updateLocalName(localNameInput.value);
+                forceClientReset('name-update');
+            };
             localNameInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();

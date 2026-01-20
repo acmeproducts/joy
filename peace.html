@@ -1353,6 +1353,7 @@
         const translationCache = new Map();
         const pendingTranslations = new Set();
         let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
+        const pendingPeerReconnects = new Set();
 
         function updateDocumentTitle() {
             if (unreadChatCount > 0) {
@@ -1427,6 +1428,21 @@
             }
         }
 
+        function isLikelyEnglishMessage(text) {
+            const normalized = (text || '').trim();
+            if (!normalized) return true;
+            if (!/[A-Za-z]/.test(normalized)) return true;
+            return !/[^\x00-\x7F]/.test(normalized);
+        }
+
+        function sendPendingPeerReconnects() {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
+            pendingPeerReconnects.forEach(peerId => {
+                sendRelayMessage({ type: 'hello', to: peerId, reason: 'peer-reconnect' });
+            });
+            pendingPeerReconnects.clear();
+        }
+
         function openPeerModal(peerId) {
             const peer = peerPresence.get(peerId);
             if (!peer) return;
@@ -1477,6 +1493,12 @@
             const target = chatTranslationTarget;
             chatHistory.forEach(entry => {
                 const messageText = entry.message || '';
+                const hasTarget = Boolean(target);
+                const isEnglish = isLikelyEnglishMessage(messageText);
+                const translationTarget = isEnglish ? (hasTarget ? target : '') : 'en';
+                const showOriginal = isEnglish || hasTarget;
+                const showTranslation = Boolean(translationTarget);
+                const showDual = showOriginal && showTranslation && hasTarget;
                 const bubble = document.createElement('div');
                 bubble.className = entry.from === 'local'
                     ? 'bg-blue-100 text-blue-800 p-2 rounded-lg text-xs ml-auto max-w-[85%]'
@@ -1485,7 +1507,7 @@
                 nameLine.className = 'font-semibold text-[10px] uppercase';
                 nameLine.textContent = entry.from === 'local' ? 'You' : (entry.name || 'Peer');
                 const messageLine = document.createElement('div');
-                if (target) {
+                if (showDual) {
                     const dual = document.createElement('div');
                     dual.className = 'grid grid-cols-2 gap-2';
                     const original = document.createElement('div');
@@ -1495,17 +1517,29 @@
                     if (!messageText) {
                         translated.textContent = '';
                     } else {
-                        const cached = entry.translations?.[target] || translationCache.get(`${target}|${messageText}`);
+                        const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
                         if (cached) {
                             translated.textContent = cached;
                         } else {
                             translated.textContent = '…';
-                            queueChatTranslation(entry, target, peerId, chatHistory);
+                            queueChatTranslation(entry, translationTarget, peerId, chatHistory);
                         }
                     }
                     dual.appendChild(original);
                     dual.appendChild(translated);
                     messageLine.appendChild(dual);
+                } else if (showTranslation) {
+                    if (!messageText) {
+                        messageLine.textContent = '';
+                    } else {
+                        const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
+                        if (cached) {
+                            messageLine.textContent = cached;
+                        } else {
+                            messageLine.textContent = '…';
+                            queueChatTranslation(entry, translationTarget, peerId, chatHistory);
+                        }
+                    }
                 } else {
                     messageLine.textContent = messageText;
                 }
@@ -2343,6 +2377,14 @@
 
                     const dot = document.createElement('span');
                     dot.className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
+                    if (status === 'suspended') {
+                        dot.classList.add('cursor-pointer');
+                        dot.title = 'Reconnect peer';
+                        dot.addEventListener('click', (event) => {
+                            event.stopPropagation();
+                            requestPeerReconnect(peer);
+                        });
+                    }
 
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'font-medium text-gray-700 truncate';
@@ -2388,6 +2430,16 @@
             if (sessionLogOpen) {
                 renderSessionLog();
             }
+        }
+
+        function requestPeerReconnect(peer) {
+            if (!peer) return;
+            const displayName = peer.name?.trim() || 'Unnamed device';
+            showUiNotice(`Reconnecting ${displayName}...`);
+            appendDeviceLog('peer-reconnect', `Reconnect requested for ${displayName}.`);
+            pendingPeerReconnects.add(peer.id);
+            startRelayHandshake('peer-reconnect');
+            sendPendingPeerReconnects();
         }
 
         function handleRelayMessage(message) {
@@ -2599,6 +2651,7 @@
                 appendDeviceLog('relay-open', 'Relay connection established.');
                 sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true });
                 sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open' });
+                sendPendingPeerReconnects();
                 sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
             };
             relayState.ws.onmessage = event => {

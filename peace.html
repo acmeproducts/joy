@@ -310,10 +310,10 @@
                         </select>
                     </div>
                     <div class="flex gap-2 items-center">
-                        <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach image">
+                        <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
                             <span class="material-symbols-outlined text-base">attach_file</span>
                         </button>
-                        <input id="peer-chat-attachments-input" type="file" accept="image/*" multiple class="hidden">
+                        <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
                         <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
                         <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
                     </div>
@@ -322,6 +322,25 @@
                         <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-attachment-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center invisible modal">
+        <div id="chat-attachment-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-2xl p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div class="min-w-0">
+                    <h3 id="chat-attachment-title" class="text-xl font-bold text-gray-800 truncate">Attachment</h3>
+                    <p id="chat-attachment-meta" class="text-xs text-gray-500 mt-1">--</p>
+                </div>
+                <button id="close-chat-attachment" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div id="chat-attachment-preview" class="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[60vh] overflow-auto flex items-center justify-center"></div>
+            <div class="flex items-center justify-end gap-2 mt-4">
+                <button id="chat-attachment-download" class="px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition">Download</button>
+                <button id="chat-attachment-share" class="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition">Share</button>
             </div>
         </div>
     </div>
@@ -1305,6 +1324,26 @@
         const MAX_CHAT_ATTACHMENTS = 3;
         const MAX_CHAT_ATTACHMENT_BYTES = 250000;
         const CHAT_ATTACHMENT_MAX_DIMENSION = 1200;
+        const CHAT_ATTACHMENT_ALLOWED_MIME = new Set([
+            'application/pdf',
+            'text/html',
+            'audio/mpeg',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/wave',
+            'audio/vnd.wave',
+            'video/x-msvideo',
+            'video/mp4'
+        ]);
+        const CHAT_ATTACHMENT_EXTENSION_MAP = {
+            pdf: 'application/pdf',
+            html: 'text/html',
+            htm: 'text/html',
+            mp3: 'audio/mpeg',
+            wav: 'audio/wav',
+            avi: 'video/x-msvideo',
+            mp4: 'video/mp4'
+        };
         const TAP_MIRROR_MAX_EVENTS = 12;
         const TAP_MIRROR_MAX_AGE_MS = 20000;
         const MAX_BG_DATA_URL_LENGTH = 900000;
@@ -1519,22 +1558,239 @@
             return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
         }
 
-        function appendChatAttachments(container, attachments) {
+        function getAttachmentMimeFromDataUrl(dataUrl) {
+            if (typeof dataUrl !== 'string') return '';
+            const match = dataUrl.match(/^data:([^;]+);/);
+            return match ? match[1] : '';
+        }
+
+        function isAllowedAttachmentMime(mime) {
+            if (!mime) return false;
+            if (mime.startsWith('image/')) return true;
+            return CHAT_ATTACHMENT_ALLOWED_MIME.has(mime);
+        }
+
+        function getAttachmentMime(att) {
+            if (!att) return '';
+            return att.mime || getAttachmentMimeFromDataUrl(att.dataUrl) || '';
+        }
+
+        function getAttachmentLabel(att) {
+            return att?.name || 'Attachment';
+        }
+
+        function formatBytes(bytes) {
+            if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let index = 0;
+            let value = bytes;
+            while (value >= 1024 && index < units.length - 1) {
+                value /= 1024;
+                index += 1;
+            }
+            return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+        }
+
+        function normalizeChatAttachment(att) {
+            if (!att || !att.dataUrl) return null;
+            const mime = getAttachmentMime(att);
+            if (!isAllowedAttachmentMime(mime)) return null;
+            const size = estimateDataUrlBytes(att.dataUrl);
+            if (size > MAX_CHAT_ATTACHMENT_BYTES) return null;
+            return {
+                type: mime.startsWith('image/') ? 'image' : 'file',
+                dataUrl: att.dataUrl,
+                name: getAttachmentLabel(att),
+                mime,
+                size
+            };
+        }
+
+        function appendChatAttachments(container, attachments, options = {}) {
             const wrap = document.createElement('div');
             wrap.className = 'grid grid-cols-2 gap-2 mt-2';
-            attachments.forEach(att => {
+            attachments.forEach((att, index) => {
                 if (!att) return;
-                if (att.type === 'image' && isImageDataUrl(att.dataUrl)) {
+                const mime = getAttachmentMime(att);
+                const isImage = isImageDataUrl(att.dataUrl) || mime.startsWith('image/');
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'group relative w-full text-left rounded-lg border border-white/30 bg-white/70 hover:bg-white transition overflow-hidden';
+                tile.title = 'Preview attachment';
+                if (isImage) {
                     const img = document.createElement('img');
                     img.src = att.dataUrl;
-                    img.alt = att.name || 'Attachment';
-                    img.className = 'rounded-lg border border-white/30 max-h-32 object-cover';
-                    wrap.appendChild(img);
+                    img.alt = getAttachmentLabel(att);
+                    img.className = 'w-full h-24 object-cover';
+                    tile.appendChild(img);
+                } else {
+                    const shell = document.createElement('div');
+                    shell.className = 'flex items-center gap-3 p-3';
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-outlined text-blue-500';
+                    icon.textContent = 'description';
+                    const meta = document.createElement('div');
+                    meta.className = 'min-w-0';
+                    const name = document.createElement('div');
+                    name.className = 'text-xs font-semibold text-gray-700 truncate';
+                    name.textContent = getAttachmentLabel(att);
+                    const type = document.createElement('div');
+                    type.className = 'text-[10px] text-gray-500';
+                    const sizeLabel = att.size ? ` • ${formatBytes(att.size)}` : '';
+                    type.textContent = `${mime || 'Unknown'}${sizeLabel}`;
+                    meta.appendChild(name);
+                    meta.appendChild(type);
+                    shell.appendChild(icon);
+                    shell.appendChild(meta);
+                    tile.appendChild(shell);
                 }
+                tile.onclick = () => openChatAttachmentModal(att);
+                if (options.allowDelete) {
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'absolute top-1 right-1 bg-white/90 hover:bg-white text-gray-500 rounded-full p-1 shadow';
+                    remove.title = 'Remove attachment';
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-outlined text-[16px]';
+                    icon.textContent = 'close';
+                    remove.appendChild(icon);
+                    remove.onclick = (event) => {
+                        event.stopPropagation();
+                        removeChatAttachment(options.peerId, options.entryIndex, index);
+                    };
+                    tile.appendChild(remove);
+                }
+                wrap.appendChild(tile);
             });
             if (wrap.children.length) {
                 container.appendChild(wrap);
             }
+        }
+
+        function removeChatAttachment(peerId, entryIndex, attachmentIndex) {
+            if (!peerId && peerId !== 0) return;
+            const chatHistory = loadPeerChat(peerId);
+            const entry = chatHistory[entryIndex];
+            if (!entry || !Array.isArray(entry.attachments)) return;
+            entry.attachments.splice(attachmentIndex, 1);
+            savePeerChat(peerId, chatHistory);
+            if (activePeerModalId === peerId) {
+                renderPeerChat(peerId);
+            }
+        }
+
+        function createChatAttachmentPreview(att) {
+            const mime = getAttachmentMime(att);
+            const isImage = mime.startsWith('image/') || isImageDataUrl(att.dataUrl);
+            if (isImage) {
+                const img = document.createElement('img');
+                img.src = att.dataUrl;
+                img.alt = getAttachmentLabel(att);
+                img.className = 'max-h-[55vh] rounded-lg shadow';
+                return img;
+            }
+            if (mime === 'application/pdf') {
+                const frame = document.createElement('iframe');
+                frame.src = att.dataUrl;
+                frame.className = 'w-full h-[55vh] rounded-lg';
+                frame.title = getAttachmentLabel(att);
+                return frame;
+            }
+            if (mime === 'text/html') {
+                const frame = document.createElement('iframe');
+                frame.src = att.dataUrl;
+                frame.sandbox = '';
+                frame.className = 'w-full h-[55vh] rounded-lg bg-white';
+                frame.title = getAttachmentLabel(att);
+                return frame;
+            }
+            if (mime.startsWith('audio/')) {
+                const audio = document.createElement('audio');
+                audio.src = att.dataUrl;
+                audio.controls = true;
+                audio.className = 'w-full';
+                return audio;
+            }
+            if (mime.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = att.dataUrl;
+                video.controls = true;
+                video.className = 'w-full rounded-lg';
+                return video;
+            }
+            const fallback = document.createElement('div');
+            fallback.className = 'text-sm text-gray-500';
+            fallback.textContent = 'Preview not available.';
+            return fallback;
+        }
+
+        function dataUrlToBlob(dataUrl) {
+            if (typeof dataUrl !== 'string') return null;
+            const [header, body] = dataUrl.split(',');
+            if (!body) return null;
+            const mimeMatch = header.match(/data:([^;]+);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            const binary = atob(body);
+            const len = binary.length;
+            const buffer = new Uint8Array(len);
+            for (let i = 0; i < len; i += 1) {
+                buffer[i] = binary.charCodeAt(i);
+            }
+            return new Blob([buffer], { type: mime });
+        }
+
+        function openChatAttachmentModal(att) {
+            const modal = document.getElementById('chat-attachment-modal');
+            const preview = document.getElementById('chat-attachment-preview');
+            const title = document.getElementById('chat-attachment-title');
+            const meta = document.getElementById('chat-attachment-meta');
+            const downloadBtn = document.getElementById('chat-attachment-download');
+            const shareBtn = document.getElementById('chat-attachment-share');
+            if (!modal || !preview || !title || !meta || !downloadBtn || !shareBtn) return;
+            const mime = getAttachmentMime(att);
+            title.textContent = getAttachmentLabel(att);
+            const sizeLabel = att.size ? ` • ${formatBytes(att.size)}` : '';
+            meta.textContent = `${mime || 'Unknown'}${sizeLabel}`;
+            preview.innerHTML = '';
+            preview.appendChild(createChatAttachmentPreview(att));
+            if (!navigator.share) {
+                shareBtn.disabled = true;
+                shareBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                shareBtn.disabled = false;
+                shareBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            downloadBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.href = att.dataUrl;
+                link.download = getAttachmentLabel(att);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+            shareBtn.onclick = async () => {
+                if (!navigator.share) {
+                    showUiNotice('Sharing not supported on this device.');
+                    return;
+                }
+                const blob = dataUrlToBlob(att.dataUrl);
+                if (!blob) {
+                    showUiNotice('Unable to share attachment.');
+                    return;
+                }
+                const fileName = getAttachmentLabel(att);
+                const file = new File([blob], fileName, { type: mime || blob.type || 'application/octet-stream' });
+                if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+                    showUiNotice('Sharing not available for this file type.');
+                    return;
+                }
+                try {
+                    await navigator.share({ files: [file], title: fileName });
+                } catch (_) {
+                    showUiNotice('Share cancelled.');
+                }
+            };
+            toggleModal('chat-attachment', true);
         }
 
         function isLikelyEnglishMessage(text) {
@@ -1604,7 +1860,7 @@
             const chatBox = document.getElementById('peer-chat-history');
             chatBox.innerHTML = '';
             const target = chatTranslationTarget;
-            chatHistory.forEach(entry => {
+            chatHistory.forEach((entry, entryIndex) => {
                 const messageText = entry.message || '';
                 const hasTarget = Boolean(target);
                 const isEnglish = isLikelyEnglishMessage(messageText);
@@ -1659,7 +1915,11 @@
                     messageLine.innerHTML = renderMarkdown(messageText);
                 }
                 if (Array.isArray(entry.attachments) && entry.attachments.length) {
-                    appendChatAttachments(messageLine, entry.attachments);
+                    appendChatAttachments(messageLine, entry.attachments, {
+                        allowDelete: entry.from === 'local',
+                        peerId,
+                        entryIndex
+                    });
                 }
                 const timeLine = document.createElement('div');
                 timeLine.className = 'text-[10px] text-gray-400 mt-1';
@@ -2799,10 +3059,9 @@
                 const chatHistory = loadPeerChat(peerId);
                 const attachments = Array.isArray(message.attachments)
                     ? message.attachments
-                        .filter(att => att && att.type === 'image' && isImageDataUrl(att.dataUrl))
-                        .filter(att => estimateDataUrlBytes(att.dataUrl) <= MAX_CHAT_ATTACHMENT_BYTES)
+                        .map(normalizeChatAttachment)
+                        .filter(Boolean)
                         .slice(0, MAX_CHAT_ATTACHMENTS)
-                        .map(att => ({ type: 'image', dataUrl: att.dataUrl, name: att.name || 'Attachment' }))
                     : [];
                 const entry = {
                     from: 'peer',
@@ -3227,7 +3486,8 @@
         const modals = {
             secrets: document.getElementById('secrets-modal'),
             peer: document.getElementById('peer-modal'),
-            'session-log': document.getElementById('session-log-modal')
+            'session-log': document.getElementById('session-log-modal'),
+            'chat-attachment': document.getElementById('chat-attachment-modal')
         };
 
         function toggleModal(id, show) {
@@ -3243,6 +3503,19 @@
                 el.classList.remove('visible'); el.classList.add('invisible');
                 content.classList.remove('scale-in'); content.classList.add('scale-out');
             }
+        }
+
+        const chatAttachmentClose = document.getElementById('close-chat-attachment');
+        if (chatAttachmentClose) {
+            chatAttachmentClose.onclick = () => toggleModal('chat-attachment', false);
+        }
+        const chatAttachmentModal = document.getElementById('chat-attachment-modal');
+        if (chatAttachmentModal) {
+            chatAttachmentModal.addEventListener('click', (event) => {
+                if (event.target === chatAttachmentModal) {
+                    toggleModal('chat-attachment', false);
+                }
+            });
         }
 
         localPresenceState = getLocalPresenceState();
@@ -3361,10 +3634,24 @@
             }
         }
 
-        function readFileAsDataUrl(file) {
+        function getFileExtension(filename) {
+            if (!filename) return '';
+            const parts = filename.split('.');
+            if (parts.length < 2) return '';
+            return parts.pop().toLowerCase();
+        }
+
+        function readFileAsDataUrl(file, mimeOverride) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
+                reader.onload = () => {
+                    let result = reader.result;
+                    if (typeof result === 'string' && mimeOverride && result.startsWith('data:;base64,')) {
+                        const base64 = result.split(',')[1];
+                        result = `data:${mimeOverride};base64,${base64}`;
+                    }
+                    resolve(result);
+                };
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
@@ -3380,23 +3667,32 @@
                         showUiNotice(`Up to ${MAX_CHAT_ATTACHMENTS} attachments allowed.`);
                         break;
                     }
-                    if (!file.type.startsWith('image/')) {
-                        showUiNotice('Only image attachments are supported.');
+                    const ext = getFileExtension(file.name);
+                    const inferredMime = CHAT_ATTACHMENT_EXTENSION_MAP[ext] || '';
+                    const fileMime = file.type || inferredMime;
+                    if (!isAllowedAttachmentMime(fileMime)) {
+                        showUiNotice('Only images, PDF, HTML, MP3, WAV, AVI, or MP4 files are supported.');
                         continue;
                     }
                     try {
-                        const dataUrl = await readFileAsDataUrl(file);
-                        const compressed = await compressChatAttachmentDataUrl(dataUrl);
-                        const bytes = estimateDataUrlBytes(compressed);
+                        const dataUrl = await readFileAsDataUrl(file, inferredMime);
+                        let finalDataUrl = dataUrl;
+                        let finalMime = fileMime;
+                        if (fileMime.startsWith('image/')) {
+                            finalDataUrl = await compressChatAttachmentDataUrl(dataUrl);
+                            finalMime = 'image/jpeg';
+                        }
+                        const bytes = estimateDataUrlBytes(finalDataUrl);
                         if (bytes > MAX_CHAT_ATTACHMENT_BYTES) {
                             showUiNotice('Attachment too large.');
                             continue;
                         }
                         pendingChatAttachments.push({
-                            type: 'image',
-                            dataUrl: compressed,
+                            type: finalMime.startsWith('image/') ? 'image' : 'file',
+                            dataUrl: finalDataUrl,
                             name: file.name,
-                            size: bytes
+                            size: bytes,
+                            mime: finalMime
                         });
                     } catch (_) {
                         showUiNotice('Failed to attach file.');

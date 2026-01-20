@@ -3578,8 +3578,8 @@
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
             if (!document.hidden) {
                 clearUnreadChat();
+                forceClientReset('visibility');
             }
-            startRelayHandshake('visibility');
         });
         window.addEventListener('focus', () => {
             localPresenceState = getLocalPresenceState();
@@ -3588,7 +3588,7 @@
             updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
-            startRelayHandshake('focus');
+            forceClientReset('focus');
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();

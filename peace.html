@@ -2326,6 +2326,7 @@
                 if (Date.now() - lastRelayDragSend > RELAY_DRAG_THROTTLE_MS) {
                     sendRelayMessage({
                         type: 'drag',
+                        name: joinState.name || undefined,
                         x: x / width,
                         y: y / height,
                         trail: config.currentTrail,
@@ -2388,6 +2389,7 @@
                 sendRelayMessage({
                     type: 'tap',
                     id: tapEvent.id,
+                    name: joinState.name || undefined,
                     x: x / width,
                     y: y / height,
                     double: isDoubleTap,
@@ -3186,6 +3188,10 @@
                 || ['tap', 'drag', 'chat', 'presence', 'ping', 'hello', 'reattach', 'leave'].includes(payload.type);
             if (isTransient) {
                 updateSyncIndicator('connecting');
+                if (payload.type === 'tap') {
+                    pendingSnapshot = true;
+                    pendingSnapshotReason = payload.reason || 'tap';
+                }
                 return false;
             }
             if (payload.type === 'state' || payload.type === 'snapshot') {
@@ -3580,14 +3586,30 @@
         }
 
         localPresenceState = getLocalPresenceState();
+        let pendingRefocusReload = false;
+        let lastRefocusReloadAt = 0;
+        function reloadOnRefocus(reason) {
+            if (!pendingRefocusReload) return false;
+            const now = Date.now();
+            if (now - lastRefocusReloadAt < 1500) return false;
+            lastRefocusReloadAt = now;
+            pendingRefocusReload = false;
+            appendDeviceLog('client-reload', `Reloading after ${reason}.`, { skipPipelineLog: true });
+            window.location.reload();
+            return true;
+        }
         document.addEventListener('visibilitychange', () => {
             localPresenceState = getLocalPresenceState();
             sendPresence('visibility');
             renderSessionStatus();
             updateLocalProfileUI();
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
-            if (!document.hidden) {
-                clearUnreadChat();
+            if (document.hidden) {
+                pendingRefocusReload = true;
+                return;
+            }
+            clearUnreadChat();
+            if (!reloadOnRefocus('visibility')) {
                 forceClientReset('visibility');
             }
         });
@@ -3598,7 +3620,9 @@
             updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
-            forceClientReset('focus');
+            if (!reloadOnRefocus('focus')) {
+                forceClientReset('focus');
+            }
         });
         window.addEventListener('blur', () => {
             localPresenceState = getLocalPresenceState();

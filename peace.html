@@ -1514,24 +1514,21 @@
             }
         }
 
+        function isImageDataUrl(dataUrl) {
+            return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
+        }
+
         function appendChatAttachments(container, attachments) {
             const wrap = document.createElement('div');
             wrap.className = 'grid grid-cols-2 gap-2 mt-2';
             attachments.forEach(att => {
                 if (!att) return;
-                if (att.type === 'image' && att.dataUrl) {
+                if (att.type === 'image' && isImageDataUrl(att.dataUrl)) {
                     const img = document.createElement('img');
                     img.src = att.dataUrl;
                     img.alt = att.name || 'Attachment';
                     img.className = 'rounded-lg border border-white/30 max-h-32 object-cover';
                     wrap.appendChild(img);
-                } else if (att.dataUrl) {
-                    const link = document.createElement('a');
-                    link.href = att.dataUrl;
-                    link.download = att.name || 'attachment';
-                    link.textContent = att.name || 'Download attachment';
-                    link.className = 'text-[11px] text-blue-600 underline';
-                    wrap.appendChild(link);
                 }
             });
             if (wrap.children.length) {
@@ -2801,7 +2798,7 @@
                 const chatHistory = loadPeerChat(peerId);
                 const attachments = Array.isArray(message.attachments)
                     ? message.attachments
-                        .filter(att => att && typeof att.dataUrl === 'string' && att.type === 'image')
+                        .filter(att => att && att.type === 'image' && isImageDataUrl(att.dataUrl))
                         .filter(att => estimateDataUrlBytes(att.dataUrl) <= MAX_CHAT_ATTACHMENT_BYTES)
                         .slice(0, MAX_CHAT_ATTACHMENTS)
                         .map(att => ({ type: 'image', dataUrl: att.dataUrl, name: att.name || 'Attachment' }))

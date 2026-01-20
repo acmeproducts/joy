@@ -1560,6 +1560,10 @@
             return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
         }
 
+        function isDataUrl(dataUrl) {
+            return typeof dataUrl === 'string' && dataUrl.startsWith('data:');
+        }
+
         function getAttachmentMimeFromDataUrl(dataUrl) {
             if (typeof dataUrl !== 'string') return '';
             const match = dataUrl.match(/^data:([^;]+);/);
@@ -1574,7 +1578,7 @@
 
         function getAttachmentMime(att) {
             if (!att) return '';
-            return att.mime || getAttachmentMimeFromDataUrl(att.dataUrl) || '';
+            return getAttachmentMimeFromDataUrl(att.dataUrl) || att.mime || '';
         }
 
         function getAttachmentLabel(att) {
@@ -1594,9 +1598,9 @@
         }
 
         function normalizeChatAttachment(att) {
-            if (!att || !att.dataUrl) return null;
-            const mime = getAttachmentMime(att);
-            if (!isAllowedAttachmentMime(mime)) return null;
+            if (!att || !isDataUrl(att.dataUrl)) return null;
+            const mime = getAttachmentMimeFromDataUrl(att.dataUrl);
+            if (!mime || !isAllowedAttachmentMime(mime)) return null;
             const size = estimateDataUrlBytes(att.dataUrl);
             if (size > MAX_CHAT_ATTACHMENT_BYTES) return null;
             return {

@@ -2549,6 +2549,10 @@
         }
 
         function forceClientReset(reason = 'manual') {
+            const hadPendingSnapshot = pendingSnapshot;
+            const hadPendingSnapshotReason = pendingSnapshotReason;
+            const hadLocalStateDirty = localStateDirty;
+            const hadSnapshotTimer = Boolean(snapshotTimer);
             flushSnapshot(`reset-${reason}`);
             if (relayKeepaliveTimer) {
                 clearInterval(relayKeepaliveTimer);
@@ -2567,8 +2571,14 @@
             }
             relayState.reconnectAttempts = 0;
             reconnectFailures = [];
-            pendingSnapshot = false;
-            pendingSnapshotReason = null;
+            const preservePendingSnapshot = pendingSnapshot || (hadPendingSnapshot && !hadLocalStateDirty && !hadSnapshotTimer);
+            if (preservePendingSnapshot) {
+                pendingSnapshot = true;
+                pendingSnapshotReason = pendingSnapshotReason || hadPendingSnapshotReason;
+            } else {
+                pendingSnapshot = false;
+                pendingSnapshotReason = null;
+            }
             relayHandshake.active = false;
             relayHandshake.snapshotApplied = false;
             relayHandshake.snapshotFound = false;

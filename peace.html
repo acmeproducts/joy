@@ -69,10 +69,6 @@
         SYNCING
     </div>
 
-    <button class="fixed top-16 left-5 px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-white/20 text-white/80 backdrop-blur opacity-0 pointer-events-none transition-opacity z-50" id="reconnect-now">
-        Reconnect now
-    </button>
-
     <div class="fixed top-16 left-24 px-3 py-1.5 rounded-full text-[10px] font-semibold tracking-wide bg-black/40 text-white/80 backdrop-blur opacity-0 transition-opacity z-50 pointer-events-none" id="ui-notice"></div>
 
     <div class="fixed bottom-3 right-4 text-[10px] text-white/60 pointer-events-none z-10 tracking-wider" id="master-footer">
@@ -1261,15 +1257,9 @@
             }
         })();
         const RELAY_DRAG_THROTTLE_MS = 20;
-        const RELAY_RECONNECT_BASE_MS = 800;
-        const RELAY_RECONNECT_MAX_MS = 10000;
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
-        const RELAY_RECONNECT_JITTER_MIN = 0.8;
-        const RELAY_RECONNECT_JITTER_MAX = 1.3;
-        const RELAY_RECONNECT_WINDOW_MS = 30000;
-        const RELAY_RECONNECT_FAILURE_THRESHOLD = 3;
         const RELAY_LOG_SLOT_COUNT = 15;
         const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
         const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
@@ -1277,18 +1267,9 @@
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const SESSION_LOG_STORAGE_KEY = 'relax_session_log_entries';
         const SESSION_LOG_MAX_ENTRIES = 400;
-        const relayState = { ws: null, reconnectTimer: null, reconnectAttempts: 0, connectTimeoutTimer: null };
-        let reconnectFailures = [];
+        const relayState = { ws: null, connectTimeoutTimer: null };
         let pendingSnapshot = false;
         let pendingSnapshotReason = null;
-        const relayHandshake = {
-            active: false,
-            snapshotApplied: false,
-            reason: null,
-            timeoutTimer: null,
-            snapshotFound: false,
-            snapshotFetched: false
-        };
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
@@ -1299,7 +1280,6 @@
         let localStateDirty = false;
         const syncIndicator = document.getElementById('sync-indicator');
         const sessionStatusList = document.getElementById('session-status-list');
-        const reconnectNowButton = document.getElementById('reconnect-now');
         const uiNotice = document.getElementById('ui-notice');
         const sessionLogBtn = document.getElementById('session-log-btn');
         const localNameDisplay = document.getElementById('local-name-display');
@@ -1313,12 +1293,10 @@
         let lastRemoteDragSound = 0;
         let remoteEntryDampenUntil = 0;
         
-        let relayKeepaliveTimer = null;
         let snapshotTimer = null;
         let uiNoticeTimer = null;
         let lastChatSentAt = 0;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
-        const RELAY_KEEPALIVE_MS = 20000;
         const CHAT_MAX_LENGTH = 800;
         const CHAT_COOLDOWN_MS = 1000;
         const MAX_CHAT_ATTACHMENTS = 3;
@@ -1444,7 +1422,6 @@
         const translationCache = new Map();
         const pendingTranslations = new Set();
         let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
-        const pendingPeerReconnects = new Set();
         const recentTapEvents = [];
         const seenTapIds = new Set();
         let pendingChatAttachments = [];
@@ -1810,14 +1787,6 @@
             return !hasNonAscii;
         }
 
-        function sendPendingPeerReconnects() {
-            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
-            pendingPeerReconnects.forEach(peerId => {
-                sendRelayMessage({ type: 'hello', to: peerId, reason: 'peer-reconnect', name: joinState.name || undefined });
-            });
-            pendingPeerReconnects.clear();
-        }
-
         function openPeerModal(peerId) {
             const peer = peerPresence.get(peerId);
             if (!peer) return;
@@ -2104,25 +2073,6 @@
             uiNoticeTimer = setTimeout(() => {
                 uiNotice.style.opacity = '0';
             }, duration);
-        }
-
-        function updateReconnectUi() {
-            if (!reconnectNowButton) return;
-            const now = Date.now();
-            reconnectFailures = reconnectFailures.filter(ts => now - ts < RELAY_RECONNECT_WINDOW_MS);
-            const shouldShow = reconnectFailures.length >= RELAY_RECONNECT_FAILURE_THRESHOLD
-                && (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN);
-            reconnectNowButton.style.opacity = shouldShow ? '1' : '0';
-            reconnectNowButton.style.pointerEvents = shouldShow ? 'auto' : 'none';
-        }
-
-        if (reconnectNowButton) {
-            reconnectNowButton.addEventListener('click', () => {
-                reconnectFailures = [];
-                relayState.reconnectAttempts = 0;
-                updateReconnectUi();
-                startRelayHandshake('manual');
-            });
         }
 
         function estimateDataUrlBytes(dataUrl) {
@@ -2500,16 +2450,13 @@
             url.searchParams.set('snapshot', '1');
             try {
                 const res = await fetch(url.toString());
-                relayHandshake.snapshotFetched = true;
                 if (!res.ok) return;
                 const snapshot = await res.json();
                 if (snapshot?.state) {
-                    relayHandshake.snapshotFound = true;
                     applySyncState(snapshot.state, snapshot.stateTs || snapshot.ts, {
                         relaxLocalClock: true,
                         source: reason
                     });
-                    completeRelayHandshake('snapshot');
                 }
             } catch (_) {}
         }
@@ -2548,48 +2495,6 @@
             }
             sendSnapshot(reason);
             localStateDirty = false;
-        }
-
-        function forceClientReset(reason = 'manual') {
-            const hadPendingSnapshot = pendingSnapshot;
-            const hadPendingSnapshotReason = pendingSnapshotReason;
-            const hadLocalStateDirty = localStateDirty;
-            const hadSnapshotTimer = Boolean(snapshotTimer);
-            flushSnapshot(`reset-${reason}`);
-            if (relayKeepaliveTimer) {
-                clearInterval(relayKeepaliveTimer);
-                relayKeepaliveTimer = null;
-            }
-            if (relayState.reconnectTimer) {
-                clearTimeout(relayState.reconnectTimer);
-                relayState.reconnectTimer = null;
-            }
-            clearTimeout(relayState.connectTimeoutTimer);
-            if (relayState.ws) {
-                try {
-                    relayState.ws.close(4002, `client-reset:${reason}`);
-                } catch (_) {}
-                relayState.ws = null;
-            }
-            relayState.reconnectAttempts = 0;
-            reconnectFailures = [];
-            const preservePendingSnapshot = pendingSnapshot || (hadPendingSnapshot && !hadLocalStateDirty && !hadSnapshotTimer);
-            if (preservePendingSnapshot) {
-                pendingSnapshot = true;
-                pendingSnapshotReason = pendingSnapshotReason || hadPendingSnapshotReason;
-            } else {
-                pendingSnapshot = false;
-                pendingSnapshotReason = null;
-            }
-            relayHandshake.active = false;
-            relayHandshake.snapshotApplied = false;
-            relayHandshake.snapshotFound = false;
-            relayHandshake.snapshotFetched = false;
-            clearTimeout(relayHandshake.timeoutTimer);
-            relayHandshake.timeoutTimer = null;
-            updateReconnectUi();
-            appendDeviceLog('client-reset', `Client reset triggered (${reason}).`, { skipPipelineLog: true });
-            startRelayHandshake(`client-reset-${reason}`);
         }
 
         function applySyncState(state, stateTs = Date.now(), options = {}) {
@@ -2694,13 +2599,6 @@
             const state = buildSyncState();
             sendRelayMessage({ type: 'state', state, stateTs, reason });
             syncState.initialSent = true;
-        }
-
-        function startRelayKeepalive() {
-            if (relayKeepaliveTimer) return;
-            relayKeepaliveTimer = setInterval(() => {
-                sendRelayMessage({ type: 'ping' });
-            }, RELAY_KEEPALIVE_MS);
         }
 
         function getLocalPresenceState() {
@@ -2923,21 +2821,11 @@
 
                     const dot = document.createElement('span');
                     dot.className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
-                    if (status === 'suspended') {
-                        dot.classList.add('cursor-pointer');
-                        dot.title = 'Reconnect peer';
-                        dot.addEventListener('click', (event) => {
-                            event.stopPropagation();
-                            requestPeerReconnect(peer);
-                        });
-                    }
-
                     const nameSpan = document.createElement('span');
                     nameSpan.className = 'font-medium text-gray-700 truncate';
                     nameSpan.textContent = displayName;
                     nameSpan.title = 'View details';
                     nameSpan.addEventListener('click', () => {
-                        requestPeerReconnect(peer);
                         openPeerModal(peer.id);
                     });
 
@@ -2961,22 +2849,13 @@
 
                     const removeBtn = document.createElement('button');
                     removeBtn.type = 'button';
-                    if (status === 'suspended') {
-                        removeBtn.className = 'text-amber-500 hover:text-amber-600 transition flex items-center';
-                        removeBtn.title = 'Force reconnect';
-                        removeBtn.innerHTML = '<span class="material-symbols-outlined text-base">refresh</span>';
-                        removeBtn.addEventListener('click', () => {
-                            requestPeerReconnect(peer);
-                        });
-                    } else {
-                        removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
-                        removeBtn.title = 'Clear';
-                        removeBtn.textContent = '✕';
-                        removeBtn.addEventListener('click', () => {
-                            peerPresence.delete(peer.id);
-                            renderSessionStatus();
-                        });
-                    }
+                    removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
+                    removeBtn.title = 'Clear';
+                    removeBtn.textContent = '✕';
+                    removeBtn.addEventListener('click', () => {
+                        peerPresence.delete(peer.id);
+                        renderSessionStatus();
+                    });
 
                     right.appendChild(statusSpan);
                     right.appendChild(removeBtn);
@@ -2988,16 +2867,6 @@
             if (sessionLogOpen) {
                 renderSessionLog();
             }
-        }
-
-        function requestPeerReconnect(peer) {
-            if (!peer) return;
-            const displayName = peer.name?.trim() || 'Unnamed device';
-            showUiNotice(`Reconnecting ${displayName}...`);
-            appendDeviceLog('peer-reconnect', `Reconnect requested for ${displayName}.`);
-            pendingPeerReconnects.add(peer.id);
-            startRelayHandshake('peer-reconnect');
-            sendPendingPeerReconnects();
         }
 
         function touchPeerPresence(message, source = 'activity') {
@@ -3110,7 +2979,6 @@
             if (message.type === 'snapshot') {
                 const relaxLocalClock = shouldRelaxRemoteClock(message.reason || 'snapshot');
                 applySyncState(message.state, message.stateTs || message.ts, { relaxLocalClock, source: message.reason });
-                completeRelayHandshake('snapshot');
                 return;
             }
             if (message.type === 'ping') {
@@ -3202,37 +3070,6 @@
             return false;
         }
 
-        function scheduleRelayReconnect() {
-            if (relayState.reconnectTimer) return;
-            const baseDelay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** relayState.reconnectAttempts));
-            const jitter = random(RELAY_RECONNECT_JITTER_MIN, RELAY_RECONNECT_JITTER_MAX);
-            let delay = Math.round(baseDelay * jitter);
-            if (navigator.onLine === false) {
-                delay = Math.max(delay, RELAY_RECONNECT_MAX_MS);
-            }
-            relayState.reconnectAttempts += 1;
-            relayState.reconnectTimer = setTimeout(() => {
-                relayState.reconnectTimer = null;
-                startRelayHandshake('reconnect');
-            }, delay);
-            appendDeviceLog('relay-reconnect', `Scheduled reconnect in ${delay}ms.`);
-        }
-
-        function recordReconnectFailure() {
-            const now = Date.now();
-            reconnectFailures = reconnectFailures.filter(ts => now - ts < RELAY_RECONNECT_WINDOW_MS);
-            reconnectFailures.push(now);
-            updateReconnectUi();
-        }
-
-        function closeNonOpenRelaySocket(reason = 'refresh') {
-            if (relayState.ws && relayState.ws.readyState !== WebSocket.OPEN) {
-                relayState.ws.close(4000, reason);
-                relayState.ws = null;
-                clearTimeout(relayState.connectTimeoutTimer);
-            }
-        }
-
         function scheduleRelayConnectTimeout(ws) {
             clearTimeout(relayState.connectTimeoutTimer);
             relayState.connectTimeoutTimer = setTimeout(() => {
@@ -3257,15 +3094,13 @@
             ws.onopen = () => {
                 if (relayState.ws !== ws) return;
                 updateSyncIndicator('live');
-                relayState.reconnectAttempts = 0;
-                reconnectFailures = [];
-                updateReconnectUi();
                 clearTimeout(relayState.connectTimeoutTimer);
                 appendDeviceLog('relay-open', 'Relay connection established.');
-                sendRelayMessage({ type: 'reattach', reason: relayHandshake.reason || 'open', transient: true, name: joinState.name || undefined });
-                sendRelayMessage({ type: 'hello', reason: relayHandshake.reason || 'open', name: joinState.name || undefined });
-                sendPendingPeerReconnects();
-                sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
+                sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
+                startPresenceUpdates();
+                if (localStateDirty || pendingSnapshot) {
+                    sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'connect' : 'open'));
+                }
             };
             ws.onmessage = event => {
                 if (relayState.ws !== ws) return;
@@ -3278,51 +3113,13 @@
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
-                recordReconnectFailure();
                 appendDeviceLog('relay-close', 'Relay connection closed.');
-                scheduleRelayReconnect();
             };
             ws.onerror = () => {
                 if (relayState.ws !== ws) return;
-                recordReconnectFailure();
                 appendDeviceLog('relay-error', 'Relay connection error.');
                 if (relayState.ws) relayState.ws.close();
             };
-        }
-        
-        function startRelayHandshake(reason = 'startup') {
-            relayHandshake.reason = reason;
-            if (relayState.reconnectTimer) {
-                clearTimeout(relayState.reconnectTimer);
-                relayState.reconnectTimer = null;
-            }
-            if (!relayHandshake.active) {
-                relayHandshake.active = true;
-                relayHandshake.snapshotApplied = false;
-                relayHandshake.snapshotFound = false;
-                relayHandshake.snapshotFetched = false;
-            }
-            appendDeviceLog('relay-handshake', `Handshake started (${reason}).`, { skipPipelineLog: true });
-            closeNonOpenRelaySocket(reason);
-            connectRelay();
-            fetchSnapshot(reason);
-            clearTimeout(relayHandshake.timeoutTimer);
-            relayHandshake.timeoutTimer = setTimeout(() => {
-                completeRelayHandshake('timeout');
-            }, 5000);
-        }
-
-        function completeRelayHandshake(source = 'snapshot') {
-            if (!relayHandshake.active) return;
-            relayHandshake.active = false;
-            relayHandshake.snapshotApplied = source === 'snapshot';
-            clearTimeout(relayHandshake.timeoutTimer);
-            startRelayKeepalive();
-            startPresenceUpdates();
-            if (localStateDirty || pendingSnapshot || (relayHandshake.snapshotFetched && !relayHandshake.snapshotFound)) {
-                sendSnapshot(pendingSnapshotReason || 'handshake');
-            }
-            appendDeviceLog('relay-ready', `Handshake completed (${source}).`, { skipPipelineLog: true });
         }
 
         const rhythmSequences = [
@@ -3586,49 +3383,33 @@
         }
 
         localPresenceState = getLocalPresenceState();
-        let pendingRefocusReload = false;
-        let lastRefocusReloadAt = 0;
-        function reloadOnRefocus(reason) {
-            if (!pendingRefocusReload) return false;
+        const RELOAD_GUARD_KEY = 'relax_reload_guard';
+        const RELOAD_GUARD_WINDOW_MS = 1500;
+        function triggerReload(reason) {
             const now = Date.now();
-            if (now - lastRefocusReloadAt < 1500) return false;
-            lastRefocusReloadAt = now;
-            pendingRefocusReload = false;
+            try {
+                const lastReload = Number(sessionStorage.getItem(RELOAD_GUARD_KEY)) || 0;
+                if (now - lastReload < RELOAD_GUARD_WINDOW_MS) return;
+                sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
+                sessionStorage.setItem(`${RELOAD_GUARD_KEY}_reason`, reason);
+            } catch (_) {}
             appendDeviceLog('client-reload', `Reloading after ${reason}.`, { skipPipelineLog: true });
             window.location.reload();
-            return true;
         }
+        window.addEventListener('pageshow', () => {
+            triggerReload('pageshow');
+        });
         document.addEventListener('visibilitychange', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('visibility');
-            renderSessionStatus();
-            updateLocalProfileUI();
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
-            if (document.hidden) {
-                pendingRefocusReload = true;
-                return;
-            }
-            clearUnreadChat();
-            if (!reloadOnRefocus('visibility')) {
-                forceClientReset('visibility');
+            if (document.visibilityState === 'visible') {
+                triggerReload('visibility');
             }
         });
         window.addEventListener('focus', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('focus');
-            renderSessionStatus();
-            updateLocalProfileUI();
             isWindowFocused = true;
-            clearUnreadChat();
-            if (!reloadOnRefocus('focus')) {
-                forceClientReset('focus');
-            }
+            triggerReload('focus');
         });
         window.addEventListener('blur', () => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('blur');
-            renderSessionStatus();
-            updateLocalProfileUI();
             isWindowFocused = false;
         });
 
@@ -3970,7 +3751,6 @@
         if (updateNameBtn && localNameInput) {
             updateNameBtn.onclick = () => {
                 updateLocalName(localNameInput.value);
-                forceClientReset('name-update');
             };
             localNameInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -3983,24 +3763,15 @@
         updateLocalProfileUI();
         appendDeviceLog('session', 'Session initialized.');
 
-        startRelayHandshake('startup');
+        connectRelay();
+        fetchSnapshot('startup');
         window.addEventListener('online', () => {
-            reconnectFailures = [];
-            updateReconnectUi();
-            startRelayHandshake('online');
             updateLocalProfileUI();
             appendDeviceLog('network', 'Browser is online.');
         });
         window.addEventListener('offline', () => {
             updateLocalProfileUI();
             appendDeviceLog('network', 'Browser is offline.');
-        });
-        window.addEventListener('pageshow', (event) => {
-            localPresenceState = getLocalPresenceState();
-            sendPresence('pageshow');
-            renderSessionStatus();
-            startRelayHandshake('pageshow');
-            updateLocalProfileUI();
         });
         window.addEventListener('pagehide', () => {
             localPresenceState = getLocalPresenceState();

@@ -2923,10 +2923,12 @@
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
             relayState.ws = new WebSocket(url.toString());
-            scheduleRelayConnectTimeout(relayState.ws);
+            const ws = relayState.ws;
+            scheduleRelayConnectTimeout(ws);
             updateSyncIndicator('connecting');
             appendDeviceLog('relay-connect', 'Opening relay connection...');
-            relayState.ws.onopen = () => {
+            ws.onopen = () => {
+                if (relayState.ws !== ws) return;
                 updateSyncIndicator('live');
                 relayState.reconnectAttempts = 0;
                 reconnectFailures = [];
@@ -2938,12 +2940,14 @@
                 sendPendingPeerReconnects();
                 sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'reconnect' : 'connect'));
             };
-            relayState.ws.onmessage = event => {
+            ws.onmessage = event => {
+                if (relayState.ws !== ws) return;
                 try {
                     handleRelayMessage(JSON.parse(event.data));
                 } catch (_) {}
             };
-            relayState.ws.onclose = () => {
+            ws.onclose = () => {
+                if (relayState.ws !== ws) return;
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
@@ -2951,7 +2955,8 @@
                 appendDeviceLog('relay-close', 'Relay connection closed.');
                 scheduleRelayReconnect();
             };
-            relayState.ws.onerror = () => {
+            ws.onerror = () => {
+                if (relayState.ws !== ws) return;
                 recordReconnectFailure();
                 appendDeviceLog('relay-error', 'Relay connection error.');
                 if (relayState.ws) relayState.ws.close();

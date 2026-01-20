@@ -1326,6 +1326,8 @@
         const TAP_MIRROR_MAX_AGE_MS = 20000;
         const MAX_BG_DATA_URL_LENGTH = 900000;
         const MAX_BG_BLOB_BYTES = 700000;
+        const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
+        const AUTO_RELOAD_COOLDOWN_MS = 1500;
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
@@ -3383,33 +3385,41 @@
         }
 
         localPresenceState = getLocalPresenceState();
-        const RELOAD_GUARD_KEY = 'relax_reload_guard';
-        const RELOAD_GUARD_WINDOW_MS = 1500;
-        function triggerReload(reason) {
-            const now = Date.now();
+        function requestAutoReload(reason) {
             try {
-                const lastReload = Number(sessionStorage.getItem(RELOAD_GUARD_KEY)) || 0;
-                if (now - lastReload < RELOAD_GUARD_WINDOW_MS) return;
-                sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
-                sessionStorage.setItem(`${RELOAD_GUARD_KEY}_reason`, reason);
+                const lastReload = Number(sessionStorage.getItem(AUTO_RELOAD_STORAGE_KEY) || 0);
+                const now = Date.now();
+                if (now - lastReload < AUTO_RELOAD_COOLDOWN_MS) return;
+                sessionStorage.setItem(AUTO_RELOAD_STORAGE_KEY, String(now));
+                sessionStorage.setItem('relax_auto_reload_reason', reason);
             } catch (_) {}
-            appendDeviceLog('client-reload', `Reloading after ${reason}.`, { skipPipelineLog: true });
             window.location.reload();
         }
-        window.addEventListener('pageshow', () => {
-            triggerReload('pageshow');
-        });
         document.addEventListener('visibilitychange', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('visibility');
+            renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
-            if (document.visibilityState === 'visible') {
-                triggerReload('visibility');
+            if (!document.hidden) {
+                clearUnreadChat();
+                requestAutoReload('visibility');
             }
         });
         window.addEventListener('focus', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('focus');
+            renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = true;
-            triggerReload('focus');
+            clearUnreadChat();
+            requestAutoReload('focus');
         });
         window.addEventListener('blur', () => {
+            localPresenceState = getLocalPresenceState();
+            sendPresence('blur');
+            renderSessionStatus();
+            updateLocalProfileUI();
             isWindowFocused = false;
         });
 
@@ -3751,6 +3761,7 @@
         if (updateNameBtn && localNameInput) {
             updateNameBtn.onclick = () => {
                 updateLocalName(localNameInput.value);
+                requestAutoReload('name-update');
             };
             localNameInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -3765,9 +3776,14 @@
 
         connectRelay();
         fetchSnapshot('startup');
+        window.addEventListener('load', () => {
+            requestAutoReload('load');
+        });
+        window.addEventListener('pageshow', () => {
+            requestAutoReload('pageshow');
+        });
         window.addEventListener('online', () => {
-            updateLocalProfileUI();
-            appendDeviceLog('network', 'Browser is online.');
+            requestAutoReload('online');
         });
         window.addEventListener('offline', () => {
             updateLocalProfileUI();

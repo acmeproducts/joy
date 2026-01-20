@@ -1325,6 +1325,7 @@
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
+        const RELAY_PRESENCE_ACTIVITY_THROTTLE_MS = 8000;
         const RELAY_PRESENCE_STALE_MS = 30000;
         const SESSION_STATUS_RENDER_MS = 5000;
         const peerPresence = new Map();
@@ -1333,6 +1334,7 @@
         let activePeerModalId = null;
         let presenceTimer = null;
         let presenceRenderTimer = null;
+        let lastPresenceSentAt = 0;
         let localPresenceState = 'active';
         let sessionLogOpen = false;
 
@@ -2067,6 +2069,7 @@
                         transient: true
                     });
                     lastRelayDragSend = Date.now();
+                    noteLocalPresenceActivity('activity');
                 }
             }
         }
@@ -2132,6 +2135,7 @@
                     cloudPayload,
                     seed
                 });
+                noteLocalPresenceActivity('activity');
                 lastTap = now;
                 lastTapX = x;
                 lastTapY = y;
@@ -2570,6 +2574,7 @@
         function sendPresence(reason = 'interval') {
             const state = getLocalPresenceState();
             localPresenceState = state;
+            lastPresenceSentAt = Date.now();
             sendRelayMessage({
                 type: 'presence',
                 state,
@@ -2579,6 +2584,12 @@
             if (reason !== 'interval') {
                 appendDeviceLog('presence', `Presence broadcast (${state}, reason: ${reason}).`, { skipPipelineLog: true });
             }
+        }
+
+        function noteLocalPresenceActivity(reason = 'activity') {
+            const now = Date.now();
+            if (now - lastPresenceSentAt < RELAY_PRESENCE_ACTIVITY_THROTTLE_MS) return;
+            sendPresence(reason);
         }
 
         function startPresenceUpdates() {
@@ -2713,6 +2724,40 @@
             sendPendingPeerReconnects();
         }
 
+        function touchPeerPresence(message, source = 'activity') {
+            const peerId = message?.from;
+            if (!peerId || peerId === RELAY_CLIENT_ID) return;
+            const now = message.ts || Date.now();
+            const existing = peerPresence.get(peerId);
+            const name = message.name || existing?.name || null;
+            if (!existing) {
+                peerPresence.set(peerId, {
+                    id: peerId,
+                    name,
+                    state: 'active',
+                    lastSeen: now,
+                    connectedAt: now,
+                    disconnectedAt: null
+                });
+                recordPeerConnectionStart(peerId, now);
+                queuePresencePulse('join');
+                renderSessionStatus();
+                return;
+            }
+            existing.lastSeen = now;
+            if (!existing.name && name) {
+                existing.name = name;
+            }
+            if (existing.state === 'suspended') {
+                existing.state = 'active';
+                existing.connectedAt = now;
+                existing.disconnectedAt = null;
+                recordPeerConnectionStart(peerId, now);
+                queuePresencePulse('join');
+                renderSessionStatus();
+            }
+        }
+
         function handleRelayMessage(message) {
             if (!message || message.session !== RELAY_SESSION_ID) return;
             if (message.from && message.from === RELAY_CLIENT_ID) return;
@@ -2768,6 +2813,8 @@
                 renderSessionStatus();
                 return;
             }
+
+            touchPeerPresence(message);
 
             if (message.type === 'hello') {
                 remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
@@ -3446,6 +3493,7 @@
                 attachments,
                 name: joinState.name
             });
+            noteLocalPresenceActivity('chat');
             if (!sent) {
                 showUiNotice('Offline — message queued.');
             }

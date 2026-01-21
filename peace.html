@@ -1337,14 +1337,28 @@
         const MAX_BG_BLOB_BYTES = 700000;
         const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
         const AUTO_RELOAD_COOLDOWN_MS = 1500;
+        const FILE_PICKER_GRACE_MS = 3000;
         let isFilePickerActive = false;
+        let filePickerActivatedAt = 0;
 
         function markFilePickerActive() {
             isFilePickerActive = true;
+            filePickerActivatedAt = Date.now();
         }
 
         function clearFilePickerActive() {
             isFilePickerActive = false;
+        }
+
+        function shouldSkipAutoReload() {
+            return isFilePickerActive || (Date.now() - filePickerActivatedAt) < FILE_PICKER_GRACE_MS;
+        }
+
+        function bindFilePickerGuards(element) {
+            if (!element) return;
+            ['pointerdown', 'mousedown', 'touchstart', 'click', 'change'].forEach(eventName => {
+                element.addEventListener(eventName, markFilePickerActive, { passive: true });
+            });
         }
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
@@ -3238,8 +3252,7 @@
 
         const bgInput=document.getElementById('bg-upload-input');
         if (bgInput) {
-            bgInput.addEventListener('click', markFilePickerActive);
-            bgInput.addEventListener('change', markFilePickerActive);
+            bindFilePickerGuards(bgInput);
         }
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
@@ -3440,7 +3453,7 @@
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
             if (!document.hidden) {
                 clearUnreadChat();
-                if (isFilePickerActive) {
+                if (shouldSkipAutoReload()) {
                     clearFilePickerActive();
                     return;
                 }
@@ -3454,7 +3467,7 @@
             updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
-            if (isFilePickerActive) {
+            if (shouldSkipAutoReload()) {
                 clearFilePickerActive();
                 return;
             }
@@ -3579,12 +3592,12 @@
         }
 
         if (chatAttachmentButton && chatAttachmentInput) {
+            bindFilePickerGuards(chatAttachmentButton);
+            bindFilePickerGuards(chatAttachmentInput);
             chatAttachmentButton.onclick = () => {
                 markFilePickerActive();
                 chatAttachmentInput.click();
             };
-            chatAttachmentInput.addEventListener('click', markFilePickerActive);
-            chatAttachmentInput.addEventListener('change', markFilePickerActive);
             chatAttachmentInput.onchange = async () => {
                 const files = Array.from(chatAttachmentInput.files || []);
                 if (!files.length) return;

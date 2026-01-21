@@ -2635,18 +2635,19 @@
             syncState.initialSent = true;
         }
 
+        function isOnline() {
+            return navigator.onLine !== false;
+        }
+
         function getLocalPresenceState() {
-            return document.visibilityState === 'visible' ? 'active' : 'suspended';
+            return isOnline() ? 'active' : 'offline';
         }
 
         function resolveLocalStatus() {
-            if (navigator.onLine === false) {
-                return { state: 'offline', label: 'Offline', dotClass: 'bg-rose-400' };
+            if (!isOnline()) {
+                return { state: 'offline', label: 'Offline', dotClass: 'bg-slate-400' };
             }
-            if (localPresenceState === 'suspended') {
-                return { state: 'suspended', label: 'Away', dotClass: 'bg-amber-400' };
-            }
-            return { state: 'active', label: 'Active', dotClass: 'bg-emerald-400' };
+            return { state: 'active', label: 'Hot', dotClass: 'bg-rose-400' };
         }
 
         function readStoredSessionLog() {
@@ -2782,6 +2783,10 @@
         function sendPresence(reason = 'interval') {
             const state = getLocalPresenceState();
             localPresenceState = state;
+            if (!isOnline()) {
+                updateLocalProfileUI();
+                return;
+            }
             lastPresenceSentAt = Date.now();
             sendRelayMessage({
                 type: 'presence',

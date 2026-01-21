@@ -1337,6 +1337,15 @@
         const MAX_BG_BLOB_BYTES = 700000;
         const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
         const AUTO_RELOAD_COOLDOWN_MS = 1500;
+        let isFilePickerActive = false;
+
+        function markFilePickerActive() {
+            isFilePickerActive = true;
+        }
+
+        function clearFilePickerActive() {
+            isFilePickerActive = false;
+        }
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
@@ -3228,6 +3237,10 @@
         }
 
         const bgInput=document.getElementById('bg-upload-input');
+        if (bgInput) {
+            bgInput.addEventListener('click', markFilePickerActive);
+            bgInput.addEventListener('change', markFilePickerActive);
+        }
         
         document.getElementById('apply-bg-btn').addEventListener('click', ()=>{
             const f=bgInput.files[0]; if(!f){alert("Please select an image file first.");return;}
@@ -3427,6 +3440,10 @@
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
             if (!document.hidden) {
                 clearUnreadChat();
+                if (isFilePickerActive) {
+                    clearFilePickerActive();
+                    return;
+                }
                 requestAutoReload('visibility');
             }
         });
@@ -3437,6 +3454,10 @@
             updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
+            if (isFilePickerActive) {
+                clearFilePickerActive();
+                return;
+            }
             requestAutoReload('focus');
         });
         window.addEventListener('blur', () => {
@@ -3558,7 +3579,12 @@
         }
 
         if (chatAttachmentButton && chatAttachmentInput) {
-            chatAttachmentButton.onclick = () => chatAttachmentInput.click();
+            chatAttachmentButton.onclick = () => {
+                markFilePickerActive();
+                chatAttachmentInput.click();
+            };
+            chatAttachmentInput.addEventListener('click', markFilePickerActive);
+            chatAttachmentInput.addEventListener('change', markFilePickerActive);
             chatAttachmentInput.onchange = async () => {
                 const files = Array.from(chatAttachmentInput.files || []);
                 if (!files.length) return;

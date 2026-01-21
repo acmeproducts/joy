@@ -475,20 +475,29 @@
             return new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => {
-                    const maxSide = Math.max(img.width, img.height);
-                    const scale = maxSide > maxDimension ? (maxDimension / maxSide) : 1;
-                    const targetWidth = Math.max(1, Math.round(img.width * scale));
-                    const targetHeight = Math.max(1, Math.round(img.height * scale));
                     const canvas = document.createElement('canvas');
-                    canvas.width = targetWidth;
-                    canvas.height = targetHeight;
                     const ctx = canvas.getContext('2d');
                     if (!ctx) {
                         resolve(dataUrl);
                         return;
                     }
-                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-                    const compressed = canvas.toDataURL('image/jpeg', quality);
+                    let targetMax = maxDimension;
+                    let targetQuality = quality;
+                    let compressed = dataUrl;
+                    for (let attempt = 0; attempt < 4; attempt++) {
+                        const maxSide = Math.max(img.width, img.height);
+                        const scale = maxSide > targetMax ? (targetMax / maxSide) : 1;
+                        const targetWidth = Math.max(1, Math.round(img.width * scale));
+                        const targetHeight = Math.max(1, Math.round(img.height * scale));
+                        canvas.width = targetWidth;
+                        canvas.height = targetHeight;
+                        ctx.clearRect(0, 0, targetWidth, targetHeight);
+                        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                        compressed = canvas.toDataURL('image/jpeg', targetQuality) || compressed;
+                        if (!isBackgroundPayloadTooLarge(compressed)) break;
+                        targetMax = Math.max(600, Math.round(targetMax * 0.8));
+                        targetQuality = Math.max(0.6, targetQuality - 0.1);
+                    }
                     resolve(compressed || dataUrl);
                 };
                 img.onerror = () => resolve(dataUrl);
@@ -3246,6 +3255,13 @@
                         sendSyncState('background');
                         saveBackgroundImage(compressedDataUrl);
                     };
+                    img.onerror = () => {
+                        config.useGradient = true;
+                        config.backgroundImage = null;
+                        config.backgroundImageData = null;
+                        clearBackgroundImage();
+                        showUiNotice('Unable to load that image format.');
+                    };
                     img.src = compressedDataUrl;
                 });
             }; 
@@ -3386,14 +3402,22 @@
 
         localPresenceState = getLocalPresenceState();
         function requestAutoReload(reason) {
+            let shouldReload = true;
             try {
                 const lastReload = Number(sessionStorage.getItem(AUTO_RELOAD_STORAGE_KEY) || 0);
                 const now = Date.now();
-                if (now - lastReload < AUTO_RELOAD_COOLDOWN_MS) return;
-                sessionStorage.setItem(AUTO_RELOAD_STORAGE_KEY, String(now));
-                sessionStorage.setItem('relax_auto_reload_reason', reason);
+                if (now - lastReload < AUTO_RELOAD_COOLDOWN_MS) {
+                    shouldReload = false;
+                } else {
+                    sessionStorage.setItem(AUTO_RELOAD_STORAGE_KEY, String(now));
+                    sessionStorage.setItem('relax_auto_reload_reason', reason);
+                }
             } catch (_) {}
-            window.location.reload();
+            if (shouldReload) {
+                window.location.reload();
+                return;
+            }
+            fetchSnapshot(reason);
         }
         document.addEventListener('visibilitychange', () => {
             localPresenceState = getLocalPresenceState();

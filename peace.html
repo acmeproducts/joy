@@ -79,6 +79,69 @@
         <span class="material-symbols-outlined">settings</span>
     </button>
 
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(960px,92vw)] bg-black/50 backdrop-blur-xl rounded-2xl px-4 py-3 flex flex-col gap-3 text-white z-40 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-[240px]">
+                <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60">
+                    <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <span id="local-status-label">Active</span>
+                </div>
+                <div class="text-sm font-semibold text-white/90 truncate" id="local-name-display">--</div>
+            </div>
+            <div class="flex items-center gap-2 flex-1 min-w-[240px]">
+                <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-white/20 bg-white/10 text-white rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
+                <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+            </div>
+            <div class="text-[10px] uppercase tracking-wider text-white/70">Session</div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+            <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-white/80"></ul>
+            <button class="flex items-center justify-center gap-2 px-3 py-2 bg-white/10 text-white/80 text-xs font-semibold rounded-lg hover:bg-white/20 transition" id="session-log-btn">
+                <span class="material-symbols-outlined text-base">receipt_long</span>
+                Log
+            </button>
+        </div>
+    </div>
+
+    <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(360px,90vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <div class="min-w-0">
+                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Peer</div>
+                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Connected: --</div>
+            </div>
+            <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors">
+                <span class="material-symbols-outlined text-2xl">close</span>
+            </button>
+        </div>
+        <div class="px-4 py-3 space-y-3">
+            <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
+            <div class="flex items-center justify-between">
+                <label class="text-[10px] uppercase tracking-wider text-gray-400">Translate</label>
+                <select id="peer-chat-translate" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
+                    <option value="">Auto</option>
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
+                    <span class="material-symbols-outlined text-base">attach_file</span>
+                </button>
+                <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
+                <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
+                <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-gray-400" id="peer-chat-attachments">
+                <span>No attachments selected.</span>
+                <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
+            </div>
+        </div>
+    </div>
+
     <aside class="fixed top-0 right-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="settings-panel">
         
         <div class="p-6 flex justify-between items-center border-b border-gray-100">
@@ -90,39 +153,6 @@
 
         <div class="p-6 space-y-8 flex-1">
 
-            <div class="space-y-3">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Your Session</span>
-                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-                    <div class="flex items-center justify-between gap-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-semibold text-gray-700 truncate" id="local-name-display">--</div>
-                            <div class="text-[10px] uppercase tracking-wider text-gray-400">Logged in name</div>
-                        </div>
-                        <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                            <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                            <span id="local-status-label">Active</span>
-                        </div>
-                    </div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block" for="local-name-input">Display name</label>
-                    <div class="flex items-center gap-2">
-                        <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
-                        <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
-                    </div>
-                    <div class="text-[10px] text-gray-400">This name is visible to peers and confirms your presence.</div>
-                </div>
-            </div>
-
-            <div class="space-y-2">
-                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Session Status</span>
-                <ul id="session-status-list" class="space-y-2 text-xs text-gray-600">
-                    <li class="text-[11px] text-gray-400">No peers yet.</li>
-                </ul>
-                <button class="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition" id="session-log-btn">
-                    <span class="material-symbols-outlined text-base">receipt_long</span>
-                    View Session Log
-                </button>
-            </div>
-            
             <div class="flex justify-between items-center">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sound</span>
                 <label class="relative inline-flex items-center cursor-pointer">
@@ -292,30 +322,8 @@
 
                 <div class="space-y-3">
                     <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Chat</div>
-                    <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-48 overflow-y-auto space-y-2"></div>
-                    <div class="flex items-center justify-between text-[10px] text-gray-500">
-                        <span class="uppercase tracking-wider font-semibold">Translation</span>
-                        <select id="peer-chat-translate" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
-                            <option value="">Off</option>
-                            <option value="es">Spanish</option>
-                            <option value="zh">Chinese</option>
-                            <option value="ms">Malay</option>
-                            <option value="vi">Vietnamese</option>
-                            <option value="lo">Lao</option>
-                            <option value="th">Thai</option>
-                        </select>
-                    </div>
-                    <div class="flex gap-2 items-center">
-                        <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
-                            <span class="material-symbols-outlined text-base">attach_file</span>
-                        </button>
-                        <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
-                        <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
-                        <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
-                    </div>
-                    <div class="flex items-center justify-between text-[10px] text-gray-400" id="peer-chat-attachments">
-                        <span>No attachments selected.</span>
-                        <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-500">
+                        Chat now opens in the floating window at the top of the screen.
                     </div>
                 </div>
             </div>
@@ -1388,6 +1396,8 @@
         let lastPresenceSentAt = 0;
         let localPresenceState = 'active';
         let sessionLogOpen = false;
+        let relayReconnectTimer = null;
+        const RELAY_RECONNECT_DELAY_MS = 2500;
 
         function getPeerHistoryKey(peerId) {
             return `relax_peer_history_${RELAY_SESSION_ID}_${peerId}`;
@@ -1825,11 +1835,21 @@
             const peer = peerPresence.get(peerId);
             if (!peer) return;
             activePeerModalId = peerId;
-            document.getElementById('peer-modal-name').textContent = peer.name || 'Unnamed device';
             const connectedAt = peer.connectedAt || peer.lastSeen || Date.now();
             const duration = (peer.state === 'suspended' && peer.disconnectedAt)
                 ? peer.disconnectedAt - connectedAt
                 : Date.now() - connectedAt;
+            const name = peer.name || 'Unnamed device';
+            const chatWindow = document.getElementById('peer-chat-window');
+            const chatName = document.getElementById('peer-chat-window-name');
+            const chatMeta = document.getElementById('peer-chat-window-meta');
+            if (chatName) chatName.textContent = name;
+            if (chatMeta) {
+                chatMeta.textContent = `Connected: ${formatTimestamp(connectedAt)} • ${formatDuration(duration)}`;
+            }
+            if (chatWindow) chatWindow.classList.remove('hidden');
+
+            document.getElementById('peer-modal-name').textContent = name;
             document.getElementById('peer-modal-meta').textContent = `Connected: ${formatTimestamp(connectedAt)}`;
             document.getElementById('peer-connected-at').textContent = formatTimestamp(connectedAt);
             document.getElementById('peer-connected-duration').textContent = formatDuration(duration);
@@ -1856,12 +1876,12 @@
 
             renderPeerChat(peerId);
             clearUnreadChat();
-            toggleModal('peer', true);
         }
 
         function closePeerModal() {
             activePeerModalId = null;
-            toggleModal('peer', false);
+            const chatWindow = document.getElementById('peer-chat-window');
+            if (chatWindow) chatWindow.classList.add('hidden');
         }
 
         function renderPeerChat(peerId) {
@@ -2830,7 +2850,7 @@
 
             if (peers.length === 0) {
                 const emptyItem = document.createElement('li');
-                emptyItem.className = 'text-[11px] text-gray-400';
+                emptyItem.className = 'text-[11px] text-white/60';
                 emptyItem.textContent = 'No peers yet.';
                 sessionStatusList.appendChild(emptyItem);
                 return;
@@ -2849,58 +2869,28 @@
                     }
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
-                    const statusLabel = status === 'active' ? 'Active' : 'Suspended';
                     const displayName = peer.name?.trim() || 'Unnamed device';
 
                     const row = document.createElement('li');
-                    row.className = 'flex items-center justify-between gap-2 text-xs text-gray-600';
+                    row.className = 'flex items-center';
 
-                    const left = document.createElement('div');
-                    left.className = 'flex items-center gap-2 min-w-0';
-
-                    const dot = document.createElement('span');
-                    dot.className = `w-2.5 h-2.5 rounded-full ${dotClass}`;
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'font-medium text-gray-700 truncate';
-                    nameSpan.textContent = displayName;
-                    nameSpan.title = 'View details';
-                    nameSpan.addEventListener('click', () => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition text-xs text-white/90';
+                    button.title = 'Open chat';
+                    button.addEventListener('click', () => {
                         openPeerModal(peer.id);
                     });
 
-                    const timeSpan = document.createElement('span');
-                    timeSpan.className = 'text-[10px] text-gray-400';
-                    timeSpan.textContent = `Connected ${formatTimestamp(peer.connectedAt || peer.lastSeen)}`;
+                    const dot = document.createElement('span');
+                    dot.className = `w-2 h-2 rounded-full ${dotClass}`;
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'font-medium truncate max-w-[120px]';
+                    nameSpan.textContent = displayName;
 
-                    left.appendChild(dot);
-                    const nameBlock = document.createElement('div');
-                    nameBlock.className = 'flex flex-col min-w-0';
-                    nameBlock.appendChild(nameSpan);
-                    nameBlock.appendChild(timeSpan);
-                    left.appendChild(nameBlock);
-
-                    const right = document.createElement('div');
-                    right.className = 'flex items-center gap-2 shrink-0';
-
-                    const statusSpan = document.createElement('span');
-                    statusSpan.className = 'text-[10px] uppercase tracking-wider text-gray-400';
-                    statusSpan.textContent = statusLabel;
-
-                    const removeBtn = document.createElement('button');
-                    removeBtn.type = 'button';
-                    removeBtn.className = 'text-[11px] text-gray-400 hover:text-gray-700 transition';
-                    removeBtn.title = 'Clear';
-                    removeBtn.textContent = '✕';
-                    removeBtn.addEventListener('click', () => {
-                        peerPresence.delete(peer.id);
-                        renderSessionStatus();
-                    });
-
-                    right.appendChild(statusSpan);
-                    right.appendChild(removeBtn);
-
-                    row.appendChild(left);
-                    row.appendChild(right);
+                    button.appendChild(dot);
+                    button.appendChild(nameSpan);
+                    row.appendChild(button);
                     sessionStatusList.appendChild(row);
                 });
             if (sessionLogOpen) {
@@ -3122,6 +3112,10 @@
             if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
                 return;
             }
+            if (relayReconnectTimer) {
+                clearTimeout(relayReconnectTimer);
+                relayReconnectTimer = null;
+            }
             const url = new URL(RELAY_SIGNAL_WS_URL);
             url.searchParams.set('session', RELAY_SESSION_ID);
             url.searchParams.set('client', RELAY_CLIENT_ID);
@@ -3134,6 +3128,10 @@
                 if (relayState.ws !== ws) return;
                 updateSyncIndicator('live');
                 clearTimeout(relayState.connectTimeoutTimer);
+                if (relayReconnectTimer) {
+                    clearTimeout(relayReconnectTimer);
+                    relayReconnectTimer = null;
+                }
                 appendDeviceLog('relay-open', 'Relay connection established.');
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
                 startPresenceUpdates();
@@ -3153,6 +3151,12 @@
                 relayState.ws = null;
                 updateSyncIndicator('connecting');
                 appendDeviceLog('relay-close', 'Relay connection closed.');
+                if (!relayReconnectTimer) {
+                    relayReconnectTimer = setTimeout(() => {
+                        relayReconnectTimer = null;
+                        connectRelay();
+                    }, RELAY_RECONNECT_DELAY_MS);
+                }
             };
             ws.onerror = () => {
                 if (relayState.ws !== ws) return;
@@ -3433,20 +3437,20 @@
 
         localPresenceState = getLocalPresenceState();
         function requestAutoReload(reason) {
-            let shouldReload = true;
+            let shouldSync = true;
             try {
                 const lastReload = Number(sessionStorage.getItem(AUTO_RELOAD_STORAGE_KEY) || 0);
                 const now = Date.now();
                 if (now - lastReload < AUTO_RELOAD_COOLDOWN_MS) {
-                    shouldReload = false;
+                    shouldSync = false;
                 } else {
                     sessionStorage.setItem(AUTO_RELOAD_STORAGE_KEY, String(now));
                     sessionStorage.setItem('relax_auto_reload_reason', reason);
                 }
             } catch (_) {}
-            if (shouldReload) {
-                window.location.reload();
-                return;
+            if (!shouldSync) return;
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                connectRelay();
             }
             fetchSnapshot(reason);
         }
@@ -3489,6 +3493,10 @@
         document.getElementById('secrets-btn').onclick=()=>toggleModal('secrets', true);
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('close-peer-modal').onclick=closePeerModal;
+        const peerChatWindowClose = document.getElementById('peer-chat-window-close');
+        if (peerChatWindowClose) {
+            peerChatWindowClose.onclick = closePeerModal;
+        }
         if (sessionLogBtn) {
             sessionLogBtn.onclick = () => {
                 sessionLogOpen = true;
@@ -3865,6 +3873,10 @@
             flushSnapshot('pagehide');
             sendRelayMessage({ type: 'leave', reason: 'pagehide', transient: true });
             appendDeviceLog('session', 'Page hidden.');
+            if (relayReconnectTimer) {
+                clearTimeout(relayReconnectTimer);
+                relayReconnectTimer = null;
+            }
         });
         requestAnimationFrame(loop);
     </script>

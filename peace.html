@@ -3580,9 +3580,11 @@
                 const reader = new FileReader();
                 reader.onload = () => {
                     let result = reader.result;
-                    if (typeof result === 'string' && mimeOverride && result.startsWith('data:;base64,')) {
+                    if (typeof result === 'string' && mimeOverride && result.startsWith('data:')) {
                         const base64 = result.split(',')[1];
-                        result = `data:${mimeOverride};base64,${base64}`;
+                        if (base64) {
+                            result = `data:${mimeOverride};base64,${base64}`;
+                        }
                     }
                     resolve(result);
                 };

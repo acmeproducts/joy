@@ -2548,29 +2548,36 @@
             }
         }
 
-        function buildSyncState() {
-            let backgroundImage = config.backgroundImageData || null;
-            if (backgroundImage && isBackgroundPayloadTooLarge(backgroundImage)) {
-                backgroundImage = null;
-                config.useGradient = true;
-                config.backgroundImage = null;
-                config.backgroundImageData = null;
-                clearBackgroundImage();
-                showUiNotice('Background too large; using gradient.');
+        function buildSyncState(options = {}) {
+            const { includeBackground = true } = options;
+            let backgroundImage = null;
+            if (includeBackground) {
+                backgroundImage = config.backgroundImageData || null;
+                if (backgroundImage && isBackgroundPayloadTooLarge(backgroundImage)) {
+                    backgroundImage = null;
+                    config.useGradient = true;
+                    config.backgroundImage = null;
+                    config.backgroundImageData = null;
+                    clearBackgroundImage();
+                    showUiNotice('Background too large; using gradient.');
+                }
             }
             const now = Date.now();
             const recentTaps = recentTapEvents.filter(event => !event?.ts || now - event.ts <= TAP_MIRROR_MAX_AGE_MS);
-            return {
+            const state = {
                 themeIndex: config.currentThemeIndex,
-                useGradient: config.useGradient,
-                backgroundImage,
-                backgroundMeta,
                 customWords: config.customWords || [],
                 currentScale: config.currentScale,
                 spritePack: config.spritePack,
                 audioEnabled: ZenAudio.enabled,
                 recentTaps
             };
+            if (includeBackground) {
+                state.useGradient = config.useGradient;
+                state.backgroundImage = backgroundImage;
+                state.backgroundMeta = backgroundMeta;
+            }
+            return state;
         }
 
         function shouldRelaxRemoteClock(reason) {
@@ -2597,7 +2604,7 @@
 
         function sendSnapshot(reason = 'snapshot') {
             const stateTs = syncState.lastLocalStateTs || Date.now();
-            const state = buildSyncState();
+            const state = buildSyncState({ includeBackground: true });
             if (sendRelayMessage({ type: 'snapshot', state, stateTs, reason })) {
                 localStateDirty = false;
                 pendingSnapshot = false;
@@ -2730,7 +2737,8 @@
         function sendSyncState(reason = 'update') {
             if (reason === 'init' && syncState.initialSent) return;
             const stateTs = syncState.lastLocalStateTs || Date.now();
-            const state = buildSyncState();
+            const includeBackground = ['background', 'background-load', 'background-reset'].includes(reason);
+            const state = buildSyncState({ includeBackground });
             sendRelayMessage({ type: 'state', state, stateTs, reason });
             syncState.initialSent = true;
         }

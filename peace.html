@@ -147,6 +147,13 @@
                     <option value="ko">Korean</option>
                 </select>
             </div>
+            <div class="flex items-center justify-between">
+                <label class="text-[10px] uppercase tracking-wider text-gray-400">Display</label>
+                <select id="peer-chat-display" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
+                    <option value="single">Single</option>
+                    <option value="dual">Dual</option>
+                </select>
+            </div>
             <div class="flex items-center gap-2">
                 <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
                     <span class="material-symbols-outlined text-base">attach_file</span>
@@ -1504,6 +1511,7 @@
         const translationCache = new Map();
         const pendingTranslations = new Set();
         let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
+        let chatTranslationDisplay = localStorage.getItem('garden_chat_display') || 'dual';
         const recentTapEvents = [];
         const seenTapIds = new Set();
         let pendingChatAttachments = [];
@@ -1973,15 +1981,15 @@
             const chatBox = document.getElementById('peer-chat-history');
             chatBox.innerHTML = '';
             const target = chatTranslationTarget;
+            const displayMode = chatTranslationDisplay || 'dual';
             chatHistory.forEach((entry, entryIndex) => {
                 const messageText = entry.message || '';
                 const hasTarget = Boolean(target);
                 const isEnglish = isLikelyEnglishMessage(messageText);
                 const shouldTranslateToEnglish = !hasTarget && !isEnglish;
                 const translationTarget = hasTarget ? target : (shouldTranslateToEnglish ? 'en' : '');
-                const showOriginal = isEnglish || hasTarget || !translationTarget;
                 const showTranslation = Boolean(translationTarget);
-                const showDual = showOriginal && showTranslation && hasTarget;
+                const showDual = displayMode === 'dual' && hasTarget && showTranslation;
                 const bubble = document.createElement('div');
                 bubble.className = entry.from === 'local'
                     ? 'bg-blue-100 text-blue-800 p-2 rounded-lg text-xs ml-auto max-w-[85%]'
@@ -3741,6 +3749,17 @@
             chatTranslateSelect.onchange = (event) => {
                 chatTranslationTarget = event.target.value;
                 localStorage.setItem('garden_chat_translation', chatTranslationTarget);
+                if (activePeerModalId) {
+                    renderPeerChat(activePeerModalId);
+                }
+            };
+        }
+        const chatDisplaySelect = document.getElementById('peer-chat-display');
+        if (chatDisplaySelect) {
+            chatDisplaySelect.value = chatTranslationDisplay;
+            chatDisplaySelect.onchange = (event) => {
+                chatTranslationDisplay = event.target.value || 'dual';
+                localStorage.setItem('garden_chat_display', chatTranslationDisplay);
                 if (activePeerModalId) {
                     renderPeerChat(activePeerModalId);
                 }

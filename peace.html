@@ -1322,6 +1322,7 @@
         const relayState = { ws: null, connectTimeoutTimer: null };
         let pendingSnapshot = false;
         let pendingSnapshotReason = null;
+        let pendingSnapshotTarget = null;
         const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
@@ -2644,16 +2645,22 @@
             } catch (_) {}
         }
 
-        function sendSnapshot(reason = 'snapshot') {
+        function sendSnapshot(reason = 'snapshot', targetId = null) {
             const stateTs = syncState.lastLocalStateTs || Date.now();
             const state = buildSyncState({ includeBackground: true });
-            if (sendRelayMessage({ type: 'snapshot', state, stateTs, reason })) {
+            const payload = { type: 'snapshot', state, stateTs, reason };
+            if (targetId) {
+                payload.to = targetId;
+            }
+            if (sendRelayMessage(payload)) {
                 localStateDirty = false;
                 pendingSnapshot = false;
                 pendingSnapshotReason = null;
+                pendingSnapshotTarget = null;
             } else {
                 pendingSnapshot = true;
                 pendingSnapshotReason = reason;
+                pendingSnapshotTarget = targetId;
             }
         }
 
@@ -2661,6 +2668,7 @@
             if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
                 pendingSnapshot = true;
                 pendingSnapshotReason = reason;
+                pendingSnapshotTarget = null;
                 return;
             }
             if (snapshotTimer) clearTimeout(snapshotTimer);
@@ -3127,6 +3135,7 @@
                     recordPeerConnectionStart(message.from, now);
                     queuePresencePulse('join');
                     appendDeviceLog('peer-join', `Peer ${incomingName || message.from} joined.`);
+                    sendSnapshot('peer-join', message.from);
                 } else if (wasSuspended && message.state === 'active') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.connectedAt = now;
@@ -3134,6 +3143,7 @@
                     recordPeerConnectionStart(message.from, now);
                     queuePresencePulse('join');
                     appendDeviceLog('peer-return', `Peer ${incomingName || message.from} returned.`);
+                    sendSnapshot('peer-return', message.from);
                 } else if (message.state === 'suspended' && existing.state !== 'suspended') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.disconnectedAt = now;
@@ -3164,7 +3174,7 @@
             if (message.type === 'hello') {
                 remoteEntryDampenUntil = Date.now() + REMOTE_ENTRY_DAMPEN_MS;
                 ZenAudio.softenEntry();
-                sendSnapshot('hello');
+                sendSnapshot('hello', message.from);
                 return;
             }
 
@@ -3340,7 +3350,10 @@
                 startPresenceUpdates();
                 startRelayHeartbeat();
                 if (localStateDirty || pendingSnapshot) {
-                    sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'connect' : 'open'));
+                    sendSnapshot(
+                        pendingSnapshotReason || (localStateDirty ? 'connect' : 'open'),
+                        pendingSnapshotTarget
+                    );
                 }
             };
             ws.onmessage = event => {

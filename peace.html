@@ -1301,6 +1301,8 @@
         })();
         const RELAY_DRAG_THROTTLE_MS = 20;
         const RELAY_CONNECT_TIMEOUT_MS = 8000;
+        const RELAY_HEARTBEAT_INTERVAL_MS = 15000;
+        const RELAY_HEARTBEAT_STALE_MS = 45000;
         const REMOTE_ENTRY_DAMPEN_MS = 5000;
         const SNAPSHOT_DEBOUNCE_MS = 1200;
         const RELAY_LOG_SLOT_COUNT = 15;
@@ -1317,7 +1319,7 @@
         const syncState = {
             lastStateTs: 0,
             initialSent: false,
-            lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : Date.now()
+            lastLocalStateTs: Number.isFinite(storedStateTs) && storedStateTs > 0 ? storedStateTs : 0
         };
         let remoteStateApplied = false;
         let localStateDirty = false;
@@ -1417,7 +1419,7 @@
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
         const RELAY_PRESENCE_ACTIVITY_THROTTLE_MS = 8000;
-        const RELAY_PRESENCE_STALE_MS = 30000;
+        const RELAY_PRESENCE_STALE_MS = 60000;
         const SESSION_STATUS_RENDER_MS = 5000;
         const peerPresence = new Map();
         const peerConnectionHistory = new Map();
@@ -1429,6 +1431,8 @@
         let localPresenceState = 'active';
         let sessionLogOpen = false;
         let relayReconnectTimer = null;
+        let relayHeartbeatTimer = null;
+        let lastRelayReceiveAt = Date.now();
         const RELAY_RECONNECT_DELAY_MS = 2500;
 
         function getPeerHistoryKey(peerId) {
@@ -2301,6 +2305,7 @@
             while (recentTapEvents.length > TAP_MIRROR_MAX_EVENTS) {
                 recentTapEvents.shift();
             }
+            updateLocalStateTimestamp(event.ts || Date.now());
         }
 
         function applyRecentTaps(events = []) {
@@ -2749,6 +2754,12 @@
             syncState.initialSent = true;
         }
 
+        function updateLocalStateTimestamp(ts = Date.now()) {
+            const nextTs = Math.max(syncState.lastLocalStateTs || 0, ts);
+            syncState.lastLocalStateTs = nextTs;
+            localStorage.setItem('garden_state_ts', String(nextTs));
+        }
+
         function isOnline() {
             return navigator.onLine !== false;
         }
@@ -3131,6 +3142,9 @@
                 return;
             }
             if (message.type === 'ping') {
+                if (message.kind === 'probe' && message.from && message.from !== RELAY_CLIENT_ID) {
+                    sendRelayMessage({ type: 'ping', kind: 'reply', to: message.from });
+                }
                 return;
             }
 
@@ -3231,6 +3245,29 @@
             }, RELAY_CONNECT_TIMEOUT_MS);
         }
 
+        function stopRelayHeartbeat() {
+            if (relayHeartbeatTimer) {
+                clearInterval(relayHeartbeatTimer);
+                relayHeartbeatTimer = null;
+            }
+        }
+
+        function startRelayHeartbeat() {
+            if (relayHeartbeatTimer) return;
+            relayHeartbeatTimer = setInterval(() => {
+                const ws = relayState.ws;
+                if (!ws || ws.readyState !== WebSocket.OPEN) return;
+                if (peerPresence.size > 0 && Date.now() - lastRelayReceiveAt > RELAY_HEARTBEAT_STALE_MS) {
+                    appendDeviceLog('relay-stale', 'No relay traffic detected; reconnecting.');
+                    ws.close(4002, 'relay-stale');
+                    return;
+                }
+                if (peerPresence.size > 0) {
+                    sendRelayMessage({ type: 'ping', kind: 'probe' });
+                }
+            }, RELAY_HEARTBEAT_INTERVAL_MS);
+        }
+
         function connectRelay() {
             if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
                 return;
@@ -3249,6 +3286,7 @@
             appendDeviceLog('relay-connect', 'Opening relay connection...');
             ws.onopen = () => {
                 if (relayState.ws !== ws) return;
+                lastRelayReceiveAt = Date.now();
                 updateSyncIndicator('live');
                 clearTimeout(relayState.connectTimeoutTimer);
                 if (relayReconnectTimer) {
@@ -3258,12 +3296,14 @@
                 appendDeviceLog('relay-open', 'Relay connection established.');
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
                 startPresenceUpdates();
+                startRelayHeartbeat();
                 if (localStateDirty || pendingSnapshot) {
                     sendSnapshot(pendingSnapshotReason || (localStateDirty ? 'connect' : 'open'));
                 }
             };
             ws.onmessage = event => {
                 if (relayState.ws !== ws) return;
+                lastRelayReceiveAt = Date.now();
                 try {
                     handleRelayMessage(JSON.parse(event.data));
                 } catch (_) {}
@@ -3272,6 +3312,7 @@
                 if (relayState.ws !== ws) return;
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
+                stopRelayHeartbeat();
                 updateSyncIndicator('connecting');
                 appendDeviceLog('relay-close', 'Relay connection closed.');
                 if (!relayReconnectTimer) {
@@ -3531,8 +3572,7 @@
         };
 
         function markLocalStateChanged() {
-            syncState.lastLocalStateTs = Date.now();
-            localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+            updateLocalStateTimestamp();
             localStateDirty = true;
             queueSnapshot('local-change');
         }

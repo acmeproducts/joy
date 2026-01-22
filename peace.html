@@ -79,29 +79,48 @@
         <span class="material-symbols-outlined">settings</span>
     </button>
 
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(960px,92vw)] bg-black/50 backdrop-blur-xl rounded-2xl px-4 py-3 flex flex-col gap-3 text-white z-40 shadow-lg">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-[240px]">
-                <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-white/60">
-                    <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-                    <span id="local-status-label">Active</span>
-                </div>
-                <div class="text-sm font-semibold text-white/90 truncate" id="local-name-display">--</div>
-            </div>
-            <div class="flex items-center gap-2 flex-1 min-w-[240px]">
-                <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-white/20 bg-white/10 text-white rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
-                <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
-            </div>
-            <div class="text-[10px] uppercase tracking-wider text-white/70">Session</div>
-        </div>
-        <div class="flex items-center justify-between gap-3">
-            <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-white/80"></ul>
-            <button class="flex items-center justify-center gap-2 px-3 py-2 bg-white/10 text-white/80 text-xs font-semibold rounded-lg hover:bg-white/20 transition" id="session-log-btn">
-                <span class="material-symbols-outlined text-base">receipt_long</span>
-                Log
+    <button class="fixed bottom-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-semibold tracking-wide transition hover:bg-black/50 z-40 shadow-lg" id="session-beacon" type="button">
+        <span id="session-beacon-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="text-[10px] uppercase tracking-wider text-white/70">Session</span>
+        <span id="session-beacon-label" class="text-[11px] font-semibold">Active</span>
+        <span class="text-white/50">•</span>
+        <span id="session-beacon-count" class="text-[10px] text-white/70">Solo</span>
+        <span class="material-symbols-outlined text-base text-white/70">chevron_right</span>
+    </button>
+
+    <aside class="fixed top-0 left-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 -translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="session-panel">
+        <div class="p-6 flex justify-between items-center border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-700 tracking-wide uppercase">Session</h2>
+            <button class="text-gray-400 hover:text-gray-700 transition-colors" id="close-session-panel">
+                <span class="material-symbols-outlined text-3xl">close</span>
             </button>
         </div>
-    </div>
+        <div class="p-6 space-y-6 flex-1">
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-gray-400">
+                        <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span id="local-status-label">Active</span>
+                    </div>
+                    <div class="text-sm font-semibold text-gray-700 truncate" id="local-name-display">--</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
+                    <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
+                    <span>Peers</span>
+                    <button class="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition" id="session-log-btn">
+                        <span class="material-symbols-outlined text-base">receipt_long</span>
+                        Log
+                    </button>
+                </div>
+                <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-gray-600"></ul>
+            </div>
+        </div>
+    </aside>
 
     <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(360px,90vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -758,6 +777,7 @@
             ctx.scale(dpr, dpr);
             
             document.getElementById('settings-panel').style.height = `${window.innerHeight}px`;
+            document.getElementById('session-panel').style.height = `${window.innerHeight}px`;
         }
         window.addEventListener('resize', resize);
         window.addEventListener('orientationchange', () => { setTimeout(resize, 100); });
@@ -1304,6 +1324,10 @@
         const localStatusDot = document.getElementById('local-status-dot');
         const localStatusLabel = document.getElementById('local-status-label');
         const updateNameBtn = document.getElementById('update-name-btn');
+        const sessionBeacon = document.getElementById('session-beacon');
+        const sessionBeaconDot = document.getElementById('session-beacon-dot');
+        const sessionBeaconLabel = document.getElementById('session-beacon-label');
+        const sessionBeaconCount = document.getElementById('session-beacon-count');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -2786,6 +2810,8 @@
             const status = resolveLocalStatus();
             if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
             if (localStatusLabel) localStatusLabel.textContent = status.label;
+            if (sessionBeaconDot) sessionBeaconDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
+            if (sessionBeaconLabel) sessionBeaconLabel.textContent = status.label;
         }
 
         function updateLocalName(nextName) {
@@ -2847,10 +2873,19 @@
             const peers = Array.from(peerPresence.values());
             const now = Date.now();
             sessionStatusList.innerHTML = '';
+            if (sessionBeaconCount) {
+                if (peers.length === 0) {
+                    sessionBeaconCount.textContent = 'Solo';
+                } else if (peers.length === 1) {
+                    sessionBeaconCount.textContent = '1 peer';
+                } else {
+                    sessionBeaconCount.textContent = `${peers.length} peers`;
+                }
+            }
 
             if (peers.length === 0) {
                 const emptyItem = document.createElement('li');
-                emptyItem.className = 'text-[11px] text-white/60';
+                emptyItem.className = 'text-[11px] text-gray-500';
                 emptyItem.textContent = 'No peers yet.';
                 sessionStatusList.appendChild(emptyItem);
                 return;
@@ -2876,7 +2911,7 @@
 
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 transition text-xs text-white/90';
+                    button.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition text-xs text-gray-700';
                     button.title = 'Open chat';
                     button.addEventListener('click', () => {
                         openPeerModal(peer.id);
@@ -3335,9 +3370,23 @@
             i.src=dataUrl;
         });
 
-        const panel=document.getElementById('settings-panel');
-        document.getElementById('settings-trigger').onclick = ()=>panel.classList.remove('translate-x-full');
-        document.getElementById('close-btn').onclick = ()=>panel.classList.add('translate-x-full');
+        const settingsPanel = document.getElementById('settings-panel');
+        const sessionPanel = document.getElementById('session-panel');
+        document.getElementById('settings-trigger').onclick = () => {
+            settingsPanel.classList.remove('translate-x-full');
+            sessionPanel.classList.add('-translate-x-full');
+        };
+        document.getElementById('close-btn').onclick = () => settingsPanel.classList.add('translate-x-full');
+        if (sessionBeacon) {
+            sessionBeacon.onclick = () => {
+                sessionPanel.classList.remove('-translate-x-full');
+                settingsPanel.classList.add('translate-x-full');
+            };
+        }
+        const closeSessionPanelBtn = document.getElementById('close-session-panel');
+        if (closeSessionPanelBtn) {
+            closeSessionPanelBtn.onclick = () => sessionPanel.classList.add('-translate-x-full');
+        }
         document.getElementById('audio-toggle').onchange=e=>{
             ZenAudio.enabled=e.target.checked;
             appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
@@ -3415,7 +3464,8 @@
                 if (id === 'session-log') renderSessionLog();
                 el.classList.remove('invisible'); el.classList.add('visible');
                 content.classList.remove('scale-out'); content.classList.add('scale-in');
-                panel.classList.add('translate-x-full'); 
+                settingsPanel.classList.add('translate-x-full'); 
+                sessionPanel.classList.add('-translate-x-full');
             } else { 
                 el.classList.remove('visible'); el.classList.add('invisible');
                 content.classList.remove('scale-in'); content.classList.add('scale-out');
@@ -3827,7 +3877,7 @@
             recInd.style.opacity = '1'; 
             recBtn.innerText = "Stop"; 
             recBtn.classList.add('bg-red-100','text-red-700','animate-pulse'); 
-            panel.classList.add('translate-x-full');
+            settingsPanel.classList.add('translate-x-full');
         }
 
         function stopRecording() { 

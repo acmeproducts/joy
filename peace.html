@@ -1383,6 +1383,8 @@
         };
         const TAP_MIRROR_MAX_EVENTS = 12;
         const TAP_MIRROR_MAX_AGE_MS = 20000;
+        const DRAG_MIRROR_MAX_AGE_MS = 8000;
+        const PENDING_TRANSIENT_MAX_EVENTS = 60;
         const MAX_BG_DATA_URL_LENGTH = 900000;
         const MAX_BG_BLOB_BYTES = 700000;
         const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
@@ -1519,6 +1521,7 @@
         let chatTranslationDisplay = localStorage.getItem('garden_chat_display') || 'dual';
         const recentTapEvents = [];
         const seenTapIds = new Set();
+        const pendingTransientEvents = [];
         let pendingChatAttachments = [];
 
         function getUnreadChatTotal() {
@@ -2350,6 +2353,59 @@
             updateLocalStateTimestamp(event.ts || Date.now());
         }
 
+        function recordDragEvent(event) {
+            if (!event) return;
+            updateLocalStateTimestamp(event.ts || Date.now());
+        }
+
+        function getTransientEventMaxAge(event) {
+            if (!event) return TAP_MIRROR_MAX_AGE_MS;
+            if (event.type === 'drag') return DRAG_MIRROR_MAX_AGE_MS;
+            return TAP_MIRROR_MAX_AGE_MS;
+        }
+
+        function prunePendingTransientEvents(now = Date.now()) {
+            const freshEvents = pendingTransientEvents.filter(event => {
+                if (!event) return false;
+                const maxAge = getTransientEventMaxAge(event);
+                return !event.ts || now - event.ts <= maxAge;
+            });
+            pendingTransientEvents.length = 0;
+            pendingTransientEvents.push(...freshEvents);
+            while (pendingTransientEvents.length > PENDING_TRANSIENT_MAX_EVENTS) {
+                pendingTransientEvents.shift();
+            }
+        }
+
+        function queueTransientEvent(payload) {
+            if (!payload || (payload.type !== 'tap' && payload.type !== 'drag')) return;
+            const normalized = {
+                ...payload,
+                ts: payload.ts || Date.now(),
+                transient: true
+            };
+            pendingTransientEvents.push(normalized);
+            prunePendingTransientEvents();
+        }
+
+        function flushPendingTransientEvents() {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
+            const now = Date.now();
+            prunePendingTransientEvents(now);
+            if (pendingTransientEvents.length === 0) return;
+            const queued = pendingTransientEvents.slice();
+            pendingTransientEvents.length = 0;
+            queued.forEach(event => {
+                if (!event) return;
+                const maxAge = getTransientEventMaxAge(event);
+                if (event.ts && now - event.ts > maxAge) return;
+                if (!sendRelayMessage(event)) {
+                    pendingTransientEvents.push(event);
+                }
+            });
+            prunePendingTransientEvents(now);
+        }
+
         function applyRecentTaps(events = []) {
             if (!Array.isArray(events)) return;
             const now = Date.now();
@@ -2455,16 +2511,22 @@
                 }
 
                 if (Date.now() - lastRelayDragSend > RELAY_DRAG_THROTTLE_MS) {
-                    sendRelayMessage({
+                    const now = Date.now();
+                    const dragEvent = {
                         type: 'drag',
                         name: joinState.name || undefined,
                         x: x / width,
                         y: y / height,
+                        ts: now,
                         trail: config.currentTrail,
                         trailPayload,
                         transient: true
-                    });
-                    lastRelayDragSend = Date.now();
+                    };
+                    recordDragEvent(dragEvent);
+                    if (!sendRelayMessage(dragEvent)) {
+                        queueTransientEvent(dragEvent);
+                    }
+                    lastRelayDragSend = now;
                     noteLocalPresenceActivity('activity');
                 }
             }
@@ -2517,7 +2579,7 @@
                     seed
                 };
                 recordTapEvent(tapEvent);
-                sendRelayMessage({
+                const tapPayload = {
                     type: 'tap',
                     id: tapEvent.id,
                     name: joinState.name || undefined,
@@ -2530,8 +2592,12 @@
                     bloomPayload,
                     heartPayload,
                     cloudPayload,
-                    seed
-                });
+                    seed,
+                    ts: tapEvent.ts
+                };
+                if (!sendRelayMessage(tapPayload)) {
+                    queueTransientEvent(tapPayload);
+                }
                 noteLocalPresenceActivity('activity');
                 lastTap = now;
                 lastTapX = x;
@@ -3368,6 +3434,7 @@
                 }
                 appendDeviceLog('relay-open', 'Relay connection established.');
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
+                flushPendingTransientEvents();
                 startPresenceUpdates();
                 startRelayHeartbeat();
                 if (localStateDirty || pendingSnapshot) {

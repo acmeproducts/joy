@@ -80,7 +80,7 @@
     </button>
 
     <button class="fixed bottom-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-semibold tracking-wide transition hover:bg-black/50 z-40 shadow-lg" id="session-beacon" type="button">
-        <span id="session-beacon-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span id="session-beacon-dot" class="w-5 h-5 rounded-full border-2 border-transparent flex items-center justify-center text-[9px] font-semibold leading-none bg-slate-500/60 text-white/70"></span>
         <span class="text-[10px] uppercase tracking-wider text-white/70">Session</span>
         <span id="session-beacon-label" class="text-[11px] font-semibold">Active</span>
         <span class="text-white/50">•</span>
@@ -1500,6 +1500,7 @@
             } else {
                 document.title = baseTitle;
             }
+            updateSessionBeaconIndicator();
         }
 
         function clearUnreadChat() {
@@ -2810,8 +2811,8 @@
             const status = resolveLocalStatus();
             if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
             if (localStatusLabel) localStatusLabel.textContent = status.label;
-            if (sessionBeaconDot) sessionBeaconDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
             if (sessionBeaconLabel) sessionBeaconLabel.textContent = status.label;
+            updateSessionBeaconIndicator();
         }
 
         function updateLocalName(nextName) {
@@ -2882,6 +2883,7 @@
                     sessionBeaconCount.textContent = `${peers.length} peers`;
                 }
             }
+            updateSessionBeaconIndicator();
 
             if (peers.length === 0) {
                 const emptyItem = document.createElement('li');
@@ -2931,6 +2933,20 @@
             if (sessionLogOpen) {
                 renderSessionLog();
             }
+        }
+
+        function updateSessionBeaconIndicator() {
+            if (!sessionBeaconDot) return;
+            const peerCount = peerPresence.size;
+            const hasPeers = peerCount > 0;
+            const hasUnread = unreadChatCount > 0;
+            const baseClasses = 'w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-semibold leading-none';
+            const colorClasses = hasPeers
+                ? 'bg-emerald-400 text-emerald-950 border-transparent'
+                : 'bg-slate-500/60 text-white/70 border-transparent';
+            const alertClasses = hasUnread ? 'border-red-400' : 'border-transparent';
+            sessionBeaconDot.className = `${baseClasses} ${colorClasses} ${alertClasses}`;
+            sessionBeaconDot.textContent = hasPeers ? String(peerCount) : '';
         }
 
         function touchPeerPresence(message, source = 'activity') {

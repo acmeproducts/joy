@@ -1508,6 +1508,9 @@
         const unreadChatByPeer = new Map();
         let isWindowFocused = document.hasFocus ? document.hasFocus() : true;
         let chatWindowMinimized = false;
+        let remoteActivityCount = 0;
+        let lastRemoteActivityNotifyAt = 0;
+        const REMOTE_ACTIVITY_NOTIFY_COOLDOWN_MS = 15000;
         const translationCache = new Map();
         const pendingTranslations = new Set();
         let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
@@ -1557,6 +1560,33 @@
 
         function shouldAlertChat() {
             return document.hidden || !isWindowFocused;
+        }
+
+        function shouldAlertRemoteActivity() {
+            return document.hidden || !isWindowFocused;
+        }
+
+        function resetRemoteActivityNotifications() {
+            remoteActivityCount = 0;
+            lastRemoteActivityNotifyAt = 0;
+        }
+
+        function notifyRemoteActivity() {
+            if (!shouldAlertRemoteActivity()) return;
+            if (!window.Notification || Notification.permission !== 'granted') return;
+            remoteActivityCount += 1;
+            const now = Date.now();
+            if (now - lastRemoteActivityNotifyAt < REMOTE_ACTIVITY_NOTIFY_COOLDOWN_MS) return;
+            const count = remoteActivityCount;
+            remoteActivityCount = 0;
+            lastRemoteActivityNotifyAt = now;
+            const body = count > 1
+                ? `Remote activity while you were away (${count} interactions).`
+                : 'Remote activity while you were away.';
+            new Notification('Activity in Peace', {
+                body,
+                tag: 'remote-activity'
+            });
         }
 
         async function translateText(text, target) {
@@ -1636,12 +1666,14 @@
 
         function notifyChat(entry) {
             if (!shouldAlertChat()) return;
-            if (window.Notification && Notification.permission === 'granted') {
-                new Notification(entry.name || 'Peer', {
-                    body: entry.message || '',
-                    tag: `chat-${entry.ts || Date.now()}`
-                });
-            }
+            if (!window.Notification || Notification.permission !== 'granted') return;
+            const body = entry?.name
+                ? `${entry.name}: ${entry.message || ''}`
+                : (entry?.message || '');
+            new Notification('Message waiting', {
+                body,
+                tag: 'chat-waiting'
+            });
         }
 
         function isImageDataUrl(dataUrl) {
@@ -3198,6 +3230,7 @@
                     }
                     seenTapIds.add(message.id);
                 }
+                notifyRemoteActivity();
                 spawnRemoteTap(x, y, {
                     entType: message.entType || 'Bloom',
                     isDouble: Boolean(message.double),
@@ -3208,6 +3241,7 @@
                     cloudPayload: message.cloudPayload
                 });
             } else if (message.type === 'drag') {
+                notifyRemoteActivity();
                 spawnRemoteDrag(x, y, message.trail, message.trailPayload);
             }
         }
@@ -3648,6 +3682,7 @@
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
             if (!document.hidden) {
                 clearUnreadChat();
+                resetRemoteActivityNotifications();
                 if (shouldSkipAutoReload()) {
                     clearFilePickerActive();
                     return;
@@ -3662,6 +3697,7 @@
             updateLocalProfileUI();
             isWindowFocused = true;
             clearUnreadChat();
+            resetRemoteActivityNotifications();
             if (shouldSkipAutoReload()) {
                 clearFilePickerActive();
                 return;

@@ -79,13 +79,9 @@
         <span class="material-symbols-outlined">settings</span>
     </button>
 
-    <button class="fixed bottom-5 left-5 flex items-center gap-2 bg-black/40 backdrop-blur px-3 py-2 rounded-full text-white text-xs font-semibold tracking-wide transition hover:bg-black/50 z-40 shadow-lg" id="session-beacon" type="button">
-        <span id="session-beacon-dot" class="w-5 h-5 rounded-full border-2 border-transparent flex items-center justify-center text-[9px] font-semibold leading-none bg-slate-500/60 text-white/70"></span>
-        <span class="text-[10px] uppercase tracking-wider text-white/70">Session</span>
-        <span id="session-beacon-label" class="text-[11px] font-semibold">Active</span>
-        <span class="text-white/50">•</span>
-        <span id="session-beacon-count" class="text-[10px] text-white/70">Solo</span>
-        <span class="material-symbols-outlined text-base text-white/70">chevron_right</span>
+    <button class="fixed bottom-5 left-5 w-12 h-12 bg-black/40 backdrop-blur rounded-full flex items-center justify-center text-white text-xs font-semibold tracking-wide transition hover:bg-black/50 z-40 shadow-lg" id="session-beacon" type="button">
+        <span class="sr-only">Session</span>
+        <span id="session-beacon-dot" class="w-8 h-8 rounded-full border-2 border-transparent flex items-center justify-center text-[11px] font-semibold leading-none bg-slate-500/60 text-white/70">0</span>
     </button>
 
     <aside class="fixed top-0 left-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 -translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="session-panel">
@@ -128,9 +124,14 @@
                 <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Peer</div>
                 <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Connected: --</div>
             </div>
-            <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors">
-                <span class="material-symbols-outlined text-2xl">close</span>
-            </button>
+            <div class="flex items-center gap-1">
+                <button id="peer-chat-window-minimize" class="text-gray-400 hover:text-gray-700 transition-colors" title="Minimize chat">
+                    <span class="material-symbols-outlined text-2xl">remove</span>
+                </button>
+                <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat">
+                    <span class="material-symbols-outlined text-2xl">close</span>
+                </button>
+            </div>
         </div>
         <div class="px-4 py-3 space-y-3">
             <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
@@ -160,6 +161,11 @@
             </div>
         </div>
     </div>
+
+    <button id="peer-chat-minimized" class="fixed bottom-5 right-5 w-12 h-12 bg-black/40 backdrop-blur rounded-full flex items-center justify-center text-white shadow-lg transition hover:bg-black/50 z-40 hidden relative" type="button" title="Open chat">
+        <span class="material-symbols-outlined text-2xl">chat_bubble</span>
+        <span id="peer-chat-minimized-count" class="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center hidden">0</span>
+    </button>
 
     <aside class="fixed top-0 right-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="settings-panel">
         
@@ -1326,8 +1332,10 @@
         const updateNameBtn = document.getElementById('update-name-btn');
         const sessionBeacon = document.getElementById('session-beacon');
         const sessionBeaconDot = document.getElementById('session-beacon-dot');
-        const sessionBeaconLabel = document.getElementById('session-beacon-label');
-        const sessionBeaconCount = document.getElementById('session-beacon-count');
+        const peerChatWindow = document.getElementById('peer-chat-window');
+        const peerChatMinimized = document.getElementById('peer-chat-minimized');
+        const peerChatMinimizedCount = document.getElementById('peer-chat-minimized-count');
+        const peerChatWindowMinimize = document.getElementById('peer-chat-window-minimize');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1486,13 +1494,19 @@
 
         const baseTitle = document.title;
         let unreadChatCount = 0;
+        const unreadChatByPeer = new Map();
         let isWindowFocused = document.hasFocus ? document.hasFocus() : true;
+        let chatWindowMinimized = false;
         const translationCache = new Map();
         const pendingTranslations = new Set();
         let chatTranslationTarget = localStorage.getItem('garden_chat_translation') || '';
         const recentTapEvents = [];
         const seenTapIds = new Set();
         let pendingChatAttachments = [];
+
+        function getUnreadChatTotal() {
+            return Array.from(unreadChatByPeer.values()).reduce((total, count) => total + count, 0);
+        }
 
         function updateDocumentTitle() {
             if (unreadChatCount > 0) {
@@ -1501,16 +1515,32 @@
                 document.title = baseTitle;
             }
             updateSessionBeaconIndicator();
+            updateMinimizedChatBadge();
+        }
+
+        function refreshUnreadChat() {
+            unreadChatCount = getUnreadChatTotal();
+            updateDocumentTitle();
+            renderSessionStatus();
+        }
+
+        function clearUnreadForPeer(peerId) {
+            if (!peerId) return;
+            unreadChatByPeer.delete(peerId);
+            refreshUnreadChat();
         }
 
         function clearUnreadChat() {
-            unreadChatCount = 0;
-            updateDocumentTitle();
+            if (activePeerModalId && !chatWindowMinimized) {
+                clearUnreadForPeer(activePeerModalId);
+            }
         }
 
-        function incrementUnreadChat() {
-            unreadChatCount += 1;
-            updateDocumentTitle();
+        function incrementUnreadChat(peerId) {
+            if (!peerId) return;
+            const current = unreadChatByPeer.get(peerId) || 0;
+            unreadChatByPeer.set(peerId, current + 1);
+            refreshUnreadChat();
         }
 
         function shouldAlertChat() {
@@ -1856,6 +1886,31 @@
             return !hasNonAscii;
         }
 
+        function updateMinimizedChatBadge() {
+            if (!peerChatMinimizedCount) return;
+            const count = getUnreadChatTotal();
+            if (count > 0) {
+                peerChatMinimizedCount.textContent = String(count);
+                peerChatMinimizedCount.classList.remove('hidden');
+            } else {
+                peerChatMinimizedCount.classList.add('hidden');
+            }
+        }
+
+        function showPeerChatWindow() {
+            chatWindowMinimized = false;
+            if (peerChatWindow) peerChatWindow.classList.remove('hidden');
+            if (peerChatMinimized) peerChatMinimized.classList.add('hidden');
+        }
+
+        function minimizePeerChatWindow() {
+            if (!activePeerModalId) return;
+            chatWindowMinimized = true;
+            if (peerChatWindow) peerChatWindow.classList.add('hidden');
+            if (peerChatMinimized) peerChatMinimized.classList.remove('hidden');
+            updateMinimizedChatBadge();
+        }
+
         function openPeerModal(peerId) {
             const peer = peerPresence.get(peerId);
             if (!peer) return;
@@ -1865,14 +1920,13 @@
                 ? peer.disconnectedAt - connectedAt
                 : Date.now() - connectedAt;
             const name = peer.name || 'Unnamed device';
-            const chatWindow = document.getElementById('peer-chat-window');
             const chatName = document.getElementById('peer-chat-window-name');
             const chatMeta = document.getElementById('peer-chat-window-meta');
             if (chatName) chatName.textContent = name;
             if (chatMeta) {
                 chatMeta.textContent = `Connected: ${formatTimestamp(connectedAt)} • ${formatDuration(duration)}`;
             }
-            if (chatWindow) chatWindow.classList.remove('hidden');
+            showPeerChatWindow();
 
             document.getElementById('peer-modal-name').textContent = name;
             document.getElementById('peer-modal-meta').textContent = `Connected: ${formatTimestamp(connectedAt)}`;
@@ -1900,13 +1954,14 @@
             }
 
             renderPeerChat(peerId);
-            clearUnreadChat();
+            clearUnreadForPeer(peerId);
         }
 
         function closePeerModal() {
             activePeerModalId = null;
-            const chatWindow = document.getElementById('peer-chat-window');
-            if (chatWindow) chatWindow.classList.add('hidden');
+            chatWindowMinimized = false;
+            if (peerChatWindow) peerChatWindow.classList.add('hidden');
+            if (peerChatMinimized) peerChatMinimized.classList.add('hidden');
         }
 
         function renderPeerChat(peerId) {
@@ -2811,7 +2866,6 @@
             const status = resolveLocalStatus();
             if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
             if (localStatusLabel) localStatusLabel.textContent = status.label;
-            if (sessionBeaconLabel) sessionBeaconLabel.textContent = status.label;
             updateSessionBeaconIndicator();
         }
 
@@ -2874,15 +2928,6 @@
             const peers = Array.from(peerPresence.values());
             const now = Date.now();
             sessionStatusList.innerHTML = '';
-            if (sessionBeaconCount) {
-                if (peers.length === 0) {
-                    sessionBeaconCount.textContent = 'Solo';
-                } else if (peers.length === 1) {
-                    sessionBeaconCount.textContent = '1 peer';
-                } else {
-                    sessionBeaconCount.textContent = `${peers.length} peers`;
-                }
-            }
             updateSessionBeaconIndicator();
 
             if (peers.length === 0) {
@@ -2925,8 +2970,18 @@
                     nameSpan.className = 'font-medium truncate max-w-[120px]';
                     nameSpan.textContent = displayName;
 
+                    const unreadCount = unreadChatByPeer.get(peer.id) || 0;
+                    const badge = document.createElement('span');
+                    if (unreadCount > 0) {
+                        badge.className = 'ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700';
+                        badge.textContent = String(unreadCount);
+                    }
+
                     button.appendChild(dot);
                     button.appendChild(nameSpan);
+                    if (unreadCount > 0) {
+                        button.appendChild(badge);
+                    }
                     row.appendChild(button);
                     sessionStatusList.appendChild(row);
                 });
@@ -2940,13 +2995,13 @@
             const peerCount = peerPresence.size;
             const hasPeers = peerCount > 0;
             const hasUnread = unreadChatCount > 0;
-            const baseClasses = 'w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-semibold leading-none';
+            const baseClasses = 'w-8 h-8 rounded-full border-2 flex items-center justify-center text-[11px] font-semibold leading-none';
             const colorClasses = hasPeers
                 ? 'bg-emerald-400 text-emerald-950 border-transparent'
                 : 'bg-slate-500/60 text-white/70 border-transparent';
             const alertClasses = hasUnread ? 'border-red-400' : 'border-transparent';
             sessionBeaconDot.className = `${baseClasses} ${colorClasses} ${alertClasses}`;
-            sessionBeaconDot.textContent = hasPeers ? String(peerCount) : '';
+            sessionBeaconDot.textContent = String(peerCount);
         }
 
         function touchPeerPresence(message, source = 'activity') {
@@ -3083,12 +3138,15 @@
                 };
                 chatHistory.push(entry);
                 savePeerChat(peerId, chatHistory);
-                if (activePeerModalId === peerId) {
+                const isActivePeer = activePeerModalId === peerId;
+                if (isActivePeer && !chatWindowMinimized) {
                     renderPeerChat(peerId);
-                    clearUnreadChat();
-                } else if (shouldAlertChat()) {
-                    incrementUnreadChat();
-                    notifyChat(entry);
+                    clearUnreadForPeer(peerId);
+                } else {
+                    incrementUnreadChat(peerId);
+                    if (shouldAlertChat()) {
+                        notifyChat(entry);
+                    }
                 }
                 return;
             }
@@ -3562,6 +3620,15 @@
         const peerChatWindowClose = document.getElementById('peer-chat-window-close');
         if (peerChatWindowClose) {
             peerChatWindowClose.onclick = closePeerModal;
+        }
+        if (peerChatWindowMinimize) {
+            peerChatWindowMinimize.onclick = minimizePeerChatWindow;
+        }
+        if (peerChatMinimized) {
+            peerChatMinimized.onclick = () => {
+                showPeerChatWindow();
+                clearUnreadChat();
+            };
         }
         if (sessionLogBtn) {
             sessionLogBtn.onclick = () => {

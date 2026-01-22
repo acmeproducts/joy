@@ -1441,6 +1441,7 @@
         let relayReconnectTimer = null;
         let relayHeartbeatTimer = null;
         let lastRelayReceiveAt = Date.now();
+        let lastRelayActivityAt = Date.now();
         const RELAY_RECONNECT_DELAY_MS = 2500;
 
         function getPeerHistoryKey(peerId) {
@@ -3015,12 +3016,17 @@
                 .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
                 .forEach(peer => {
                     const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
-                    if (isStale && peer.state !== 'suspended') {
-                        peer.state = 'suspended';
-                        peer.disconnectedAt = now;
-                        recordPeerConnectionEnd(peer.id, now);
-                        queuePresencePulse('leave');
-                        appendDeviceLog('peer-timeout', `Peer ${peer.name || peer.id} timed out.`);
+                    if (isStale) {
+                        if (peer.state !== 'suspended') {
+                            peer.state = 'suspended';
+                            peer.disconnectedAt = now;
+                            recordPeerConnectionEnd(peer.id, now);
+                            queuePresencePulse('leave');
+                            appendDeviceLog('peer-timeout', `Peer ${peer.name || peer.id} timed out.`);
+                        }
+                        peer.active = false;
+                    } else {
+                        peer.active = peer.state !== 'suspended';
                     }
                     const status = isStale ? 'suspended' : (peer.state || 'active');
                     const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
@@ -3063,6 +3069,10 @@
             }
         }
 
+        function hasActivePeers() {
+            return Array.from(peerPresence.values()).some(peer => peer.active);
+        }
+
         function updateSessionBeaconIndicator() {
             if (!sessionBeaconDot) return;
             const peerCount = peerPresence.size;
@@ -3088,6 +3098,7 @@
                     id: peerId,
                     name,
                     state: 'active',
+                    active: true,
                     lastSeen: now,
                     connectedAt: now,
                     disconnectedAt: null
@@ -3103,11 +3114,15 @@
             }
             if (existing.state === 'suspended') {
                 existing.state = 'active';
+                existing.active = true;
                 existing.connectedAt = now;
                 existing.disconnectedAt = null;
                 recordPeerConnectionStart(peerId, now);
                 queuePresencePulse('join');
                 renderSessionStatus();
+            }
+            if (existing.state !== 'suspended') {
+                existing.active = true;
             }
         }
 
@@ -3123,10 +3138,12 @@
                 const now = message.ts || Date.now();
                 const wasSuspended = existing.state === 'suspended';
                 const incomingName = message.name || existing.name || null;
+                const nextState = message.state || existing.state || 'active';
                 peerPresence.set(message.from, {
                     id: message.from,
                     name: incomingName,
-                    state: message.state || existing.state || 'active',
+                    state: nextState,
+                    active: nextState !== 'suspended',
                     lastSeen: now,
                     connectedAt: existing.connectedAt || now,
                     disconnectedAt: existing.disconnectedAt || null
@@ -3160,6 +3177,7 @@
                 const now = message.ts || Date.now();
                 if (existing) {
                     existing.state = 'suspended';
+                    existing.active = false;
                     existing.disconnectedAt = now;
                     recordPeerConnectionEnd(message.from, now);
                     queuePresencePulse('leave');
@@ -3266,6 +3284,7 @@
             recordRelayEvent(message);
             const isOpen = relayState.ws && relayState.ws.readyState === WebSocket.OPEN;
             if (isOpen) {
+                lastRelayActivityAt = message.ts;
                 relayState.ws.send(JSON.stringify(message));
                 updateSyncIndicator('live');
                 return true;
@@ -3309,12 +3328,13 @@
             relayHeartbeatTimer = setInterval(() => {
                 const ws = relayState.ws;
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                if (peerPresence.size > 0 && Date.now() - lastRelayReceiveAt > RELAY_HEARTBEAT_STALE_MS) {
+                const hasPeers = hasActivePeers();
+                if (hasPeers && Date.now() - lastRelayActivityAt > RELAY_HEARTBEAT_STALE_MS) {
                     appendDeviceLog('relay-stale', 'No relay traffic detected; reconnecting.');
                     ws.close(4002, 'relay-stale');
                     return;
                 }
-                if (peerPresence.size > 0) {
+                if (hasPeers) {
                     sendRelayMessage({ type: 'ping', kind: 'probe' });
                 }
             }, RELAY_HEARTBEAT_INTERVAL_MS);
@@ -3339,6 +3359,7 @@
             ws.onopen = () => {
                 if (relayState.ws !== ws) return;
                 lastRelayReceiveAt = Date.now();
+                lastRelayActivityAt = lastRelayReceiveAt;
                 updateSyncIndicator('live');
                 clearTimeout(relayState.connectTimeoutTimer);
                 if (relayReconnectTimer) {
@@ -3359,6 +3380,7 @@
             ws.onmessage = event => {
                 if (relayState.ws !== ws) return;
                 lastRelayReceiveAt = Date.now();
+                lastRelayActivityAt = lastRelayReceiveAt;
                 try {
                     handleRelayMessage(JSON.parse(event.data));
                 } catch (_) {}

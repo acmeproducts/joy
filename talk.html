@@ -1,0 +1,2719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+    <title>Talk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
+    <style>
+        :root {
+            --keyboard-offset: 0px;
+            --composer-height: 0px;
+        }
+        body {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100dvh;
+        }
+        body.client-view {
+            height: 100dvh;
+            overflow: hidden;
+        }
+        .client-view .app-shell {
+            height: 100dvh;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .modal { transition: opacity 0.2s ease, visibility 0.2s ease; }
+        .modal.invisible { opacity: 0; visibility: hidden; pointer-events: none; }
+        .modal.visible { opacity: 1; visibility: visible; pointer-events: auto; }
+        .modal-content { transition: transform 0.2s ease; }
+        .scale-in { transform: scale(1); }
+        .scale-out { transform: scale(0.98); }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        .client-view .control-panel { display: none; }
+        .client-view #session-list-panel { display: none; }
+        .config-view .chat-app { display: none; }
+        .config-view .status-panel { display: none; }
+        .config-view .chat-composer,
+        .config-view #gear-fab { display: none; }
+        .chat-bubble { font-size: var(--bubble-font-size, 0.875rem); touch-action: pan-y; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .bubble-local { background: var(--bubble-local-bg, #eff6ff); color: var(--bubble-local-text, #1f2937); }
+        .bubble-peer { background: var(--bubble-peer-bg, #ffffff); color: var(--bubble-peer-text, #0f172a); }
+        .control-panel-body { max-height: 500px; opacity: 1; transition: max-height 0.25s ease, opacity 0.25s ease; overflow: hidden; }
+        .control-panel.collapsed .control-panel-body { max-height: 0; opacity: 0; }
+        .control-panel.collapsed .control-panel-toggle .toggle-icon { transform: rotate(180deg); }
+        .control-panel-toggle .toggle-icon { transition: transform 0.2s ease; }
+        .chat-app { padding-bottom: calc(var(--composer-height) + env(safe-area-inset-bottom) + var(--keyboard-offset)); }
+        .chat-composer { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-offset)); width: min(96vw, 720px); z-index: 40; }
+        .gear-fab { position: fixed; z-index: 50; }
+        .chat-bubble.swiping { transition: none; }
+        .chat-bubble.swipe-ready { box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); }
+        .typing-indicator { opacity: 0; transform: translateY(-4px); transition: opacity 0.7s ease, transform 0.7s ease; }
+        .typing-indicator.active { opacity: 1; transform: translateY(0); }
+        .message-indicator { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .reply-preview { border-left: 3px solid #60a5fa; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800">
+    <div class="app-shell max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6 min-h-screen">
+
+        <section id="control-panel" class="bg-white/90 border border-slate-200 rounded-2xl px-4 py-4 shadow-md control-panel backdrop-blur">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-xs uppercase tracking-wide text-slate-400">Control panel</p>
+                    <button id="control-panel-refresh" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100">
+                        <span class="material-symbols-outlined text-base">refresh</span>
+                        Refresh chat
+                    </button>
+                </div>
+                <button id="control-panel-toggle" class="control-panel-toggle flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100">
+                    <span class="control-panel-label">Collapse</span>
+                    <span class="material-symbols-outlined text-base toggle-icon">expand_less</span>
+                </button>
+            </div>
+            <div class="control-panel-body">
+                <div class="grid gap-3 md:grid-cols-[1.1fr_1.1fr_1.4fr_1.4fr_auto] md:items-end">
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex flex-col gap-1">
+                        Session name
+                        <input id="room-input" class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 bg-white" placeholder="talk">
+                    </label>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex flex-col gap-1">
+                        Language pair
+                        <select id="pair-select" class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 bg-white">
+                            <option value="en-th">English → Thai</option>
+                            <option value="en-zh">English → Chinese</option>
+                            <option value="en-vi">English → Viet</option>
+                            <option value="en-lo">English → Lao</option>
+                            <option value="en-ms">English → Malay</option>
+                            <option value="en-id">English → Indonesian</option>
+                            <option value="en-es">English → Spanish</option>
+                            <option value="en-it">English → Italian</option>
+                            <option value="en-en">English → English (no translation)</option>
+                        </select>
+                    </label>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex flex-col gap-1">
+                        Your device name
+                        <input id="name-input" class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 bg-white">
+                    </label>
+                    <label class="text-xs font-semibold uppercase tracking-wide text-slate-500 flex flex-col gap-1">
+                        Partner name
+                        <input id="peer-input" class="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 bg-white" placeholder="Partner">
+                    </label>
+                    <button id="launch-session" class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 whitespace-nowrap shadow-sm">Build &amp; launch</button>
+                </div>
+                <p class="text-xs text-slate-400 mt-2">Launching opens a standalone chat client in a new tab.</p>
+                <div class="mt-3 flex items-center justify-between text-xs text-slate-500 border border-slate-200 rounded-lg px-3 py-2 bg-white">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-base">notifications</span>
+                        Message waiting indicator
+                    </div>
+                    <label class="flex items-center gap-2">
+                        <input id="control-notifications-toggle" type="checkbox" class="h-4 w-4">
+                        <span>Enabled</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <section id="session-list-panel" class="bg-white/90 border border-slate-200 rounded-2xl px-4 py-4 shadow-md backdrop-blur">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <p class="text-xs uppercase tracking-wide text-slate-400">Running chats</p>
+                    <p class="text-sm font-semibold text-slate-700">Built &amp; launched sessions</p>
+                </div>
+                <span class="text-xs text-slate-400">Click a name to relaunch</span>
+            </div>
+            <div id="session-empty" class="text-xs text-slate-400 mt-3">No sessions launched yet.</div>
+            <ul id="session-list" class="mt-3 space-y-3"></ul>
+        </section>
+
+        <section class="bg-white/90 border border-slate-200 rounded-2xl px-4 py-3 shadow-md status-panel backdrop-blur">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-col gap-1">
+                    <p class="text-xs uppercase tracking-wide text-slate-400">Status</p>
+                    <p class="text-sm font-semibold" id="connection-status">Connecting…</p>
+                    <div class="flex flex-col gap-1 text-xs text-slate-400">
+                        <div id="typing-indicator" class="typing-indicator hidden">Partner is typing…</div>
+                        <div id="message-waiting" class="message-indicator hidden">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-semibold">
+                                <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                                <span id="message-waiting-count">Messages waiting</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-1 text-xs text-slate-500" id="peer-status">
+                    <div class="flex items-center gap-2">
+                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-400" id="local-presence-dot"></span>
+                        <span id="local-presence-label">Device 1 — --</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="h-2.5 w-2.5 rounded-full bg-slate-300" id="peer-presence-dot"></span>
+                        <span id="peer-presence-label">Device 2 — Waiting for partner…</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <main class="flex-1 min-h-0 bg-white/90 border border-slate-200 rounded-2xl shadow-md flex flex-col overflow-hidden chat-app backdrop-blur">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white/80">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span id="room-pill" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                        Session
+                    </span>
+                    <span id="pair-pill" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-semibold">
+                        Pair
+                    </span>
+                </div>
+                <span class="text-[11px] uppercase tracking-wide text-slate-400">Live chat</span>
+            </div>
+            <div id="chat-history" class="flex-1 overflow-y-auto px-4 py-4 space-y-3 no-scrollbar bg-gradient-to-b from-white/60 to-slate-50/60 rounded-2xl"></div>
+        </main>
+    </div>
+
+    <div id="chat-composer" class="chat-composer">
+        <div class="bg-white/95 border border-slate-200 rounded-2xl shadow-lg px-4 py-3 flex flex-col gap-3 backdrop-blur">
+            <div id="reply-preview" class="reply-preview hidden px-3 py-2 rounded-lg bg-slate-50 text-xs text-slate-600 flex items-start justify-between gap-3">
+                <div class="flex flex-col">
+                    <span class="text-[11px] uppercase tracking-wide text-slate-400">Replying to</span>
+                    <span id="reply-preview-text" class="font-semibold text-slate-600"></span>
+                </div>
+                <button id="reply-preview-clear" type="button" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="chat-attach" type="button" class="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100" title="Attach files">
+                    <span class="material-symbols-outlined text-base">attach_file</span>
+                </button>
+                <input id="chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
+                <textarea id="chat-input" rows="2" class="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300 resize-none" placeholder="Type your message… (Markdown, HTML, or RTF)"></textarea>
+                <button id="chat-send" class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">Send</button>
+            </div>
+            <div class="flex flex-col gap-2 text-xs text-slate-500" id="chat-attachments">
+                <div class="flex items-center justify-between">
+                    <span>No attachments selected.</span>
+                    <button id="chat-attachments-clear" type="button" class="hidden text-blue-600 hover:text-blue-800">Clear</button>
+                </div>
+                <div id="chat-attachments-alert" class="hidden text-rose-500"></div>
+                <div id="chat-attachments-preview" class="flex flex-wrap gap-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <button id="gear-fab" class="gear-fab w-12 h-12 rounded-full bg-white/90 border border-slate-200 shadow-lg flex items-center justify-center text-slate-600 hover:text-slate-800 hover:bg-white" aria-label="Open controls">
+        <span class="material-symbols-outlined text-[22px]">settings</span>
+    </button>
+
+    <div id="chat-attachment-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center invisible modal">
+        <div id="chat-attachment-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-2xl p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div class="min-w-0">
+                    <h3 id="chat-attachment-title" class="text-xl font-bold text-gray-800 truncate">Attachment</h3>
+                    <p id="chat-attachment-meta" class="text-xs text-gray-500 mt-1">--</p>
+                </div>
+                <button id="close-chat-attachment" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div id="chat-attachment-preview" class="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-[60vh] overflow-auto flex items-center justify-center"></div>
+            <div class="flex items-center justify-end gap-2 mt-4">
+                <button id="chat-attachment-download" class="px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition">Download</button>
+                <button id="chat-attachment-share" class="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition">Share</button>
+            </div>
+        </div>
+    </div>
+
+    <input id="drawer-import-input" type="file" accept="application/json" class="hidden">
+
+    <div id="controls-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center invisible modal">
+        <div id="controls-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800">Controls</h3>
+                <button id="close-controls" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="grid gap-3 text-sm">
+                <button id="drawer-refresh" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50">
+                    <span class="material-symbols-outlined text-base">refresh</span>
+                    Refresh chat
+                </button>
+                <label class="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600">
+                    <span class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-base">notifications</span>
+                        Message waiting indicator
+                    </span>
+                    <input id="notifications-toggle" type="checkbox" class="h-4 w-4">
+                </label>
+                <button id="drawer-import" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50">
+                    <span class="material-symbols-outlined text-base">upload_file</span>
+                    Import chat
+                </button>
+                <button id="drawer-export" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50">
+                    <span class="material-symbols-outlined text-base">download</span>
+                    Export chat
+                </button>
+                <button id="drawer-share" title="Share export" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50">
+                    <span class="material-symbols-outlined text-base">share</span>
+                    Share export
+                </button>
+                <button id="drawer-config" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50">
+                    <span class="material-symbols-outlined text-base">tune</span>
+                    Bubble style
+                </button>
+                <button id="drawer-clear" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-rose-100 text-rose-500 hover:text-rose-600 hover:bg-rose-50">
+                    <span class="material-symbols-outlined text-base">delete_sweep</span>
+                    Export &amp; clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="style-config-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center invisible modal">
+        <div id="style-config-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-xl p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800">Chat bubble style</h3>
+                <button id="close-style-config" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="grid gap-4 text-sm">
+                <label class="flex items-center justify-between gap-3">
+                    <span class="text-slate-600">Your bubble background</span>
+                    <input id="style-local-bg" type="color" class="h-9 w-20 border border-slate-200 rounded-lg">
+                </label>
+                <label class="flex items-center justify-between gap-3">
+                    <span class="text-slate-600">Your bubble text</span>
+                    <input id="style-local-text" type="color" class="h-9 w-20 border border-slate-200 rounded-lg">
+                </label>
+                <label class="flex items-center justify-between gap-3">
+                    <span class="text-slate-600">Partner bubble background</span>
+                    <input id="style-peer-bg" type="color" class="h-9 w-20 border border-slate-200 rounded-lg">
+                </label>
+                <label class="flex items-center justify-between gap-3">
+                    <span class="text-slate-600">Partner bubble text</span>
+                    <input id="style-peer-text" type="color" class="h-9 w-20 border border-slate-200 rounded-lg">
+                </label>
+                <label class="flex items-center justify-between gap-3">
+                    <span class="text-slate-600">Bubble font size</span>
+                    <input id="style-font-size" type="range" min="12" max="20" step="1" class="w-40">
+                </label>
+            </div>
+            <div class="flex justify-end gap-2 mt-5">
+                <button id="style-reset" class="px-3 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition">Reset</button>
+                <button id="style-save" class="px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition">Save</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
+        const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
+        const CHAT_MAX_LENGTH = 800;
+        const CHAT_COOLDOWN_MS = 1000;
+        const MAX_CHAT_ATTACHMENTS = 3;
+        const MAX_CHAT_ATTACHMENT_BYTES = 250000;
+        const CHAT_ATTACHMENT_MAX_DIMENSION = 1200;
+        const CHAT_ATTACHMENT_ALLOWED_MIME = new Set([
+            'application/pdf',
+            'text/html',
+            'audio/mpeg',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/wave',
+            'audio/vnd.wave',
+            'video/x-msvideo',
+            'video/mp4'
+        ]);
+        const CHAT_ATTACHMENT_EXTENSION_MAP = {
+            pdf: 'application/pdf',
+            html: 'text/html',
+            htm: 'text/html',
+            mp3: 'audio/mpeg',
+            wav: 'audio/wav',
+            avi: 'video/x-msvideo',
+            mp4: 'video/mp4'
+        };
+
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+        const defaultRoom = 'talk';
+        const defaultPair = 'en-th';
+        const allowedPairs = [
+            'en-th',
+            'en-zh',
+            'en-vi',
+            'en-lo',
+            'en-ms',
+            'en-id',
+            'en-es',
+            'en-it',
+            'en-en'
+        ];
+        const view = params.get('view') || 'config';
+        const isClientView = view === 'client';
+        let room = params.get('room') || defaultRoom;
+        let pair = allowedPairs.includes(params.get('pair')) ? params.get('pair') : defaultPair;
+        const parsePair = value => {
+            const parts = (value || '')
+                .toLowerCase()
+                .split('-')
+                .map(part => part.trim())
+                .filter(Boolean);
+            if (parts.length !== 2) {
+                return defaultPair.split('-');
+            }
+            return parts;
+        };
+        const normalizePair = value => {
+            const [fromLang, toLang] = parsePair(value);
+            return `${fromLang}-${toLang}`;
+        };
+        const buildSessionId = (roomName, pairValue) => `talk:${roomName}:${normalizePair(pairValue)}`;
+        const [langA, langB] = parsePair(pair);
+        pair = `${langA}-${langB}`;
+        params.set('room', room);
+        params.set('pair', `${langA}-${langB}`);
+        params.set('view', view);
+        history.replaceState(null, '', url.toString());
+
+        const RELAY_SESSION_ID = `talk:${room}:${langA}-${langB}`;
+        const DEVICE_ID_STORAGE_KEY = `talk_device_id_${RELAY_SESSION_ID}`;
+        let storedDeviceId = null;
+        const storage = (() => {
+            try {
+                const key = '__talk_storage_test__';
+                localStorage.setItem(key, '1');
+                localStorage.removeItem(key);
+                return localStorage;
+            } catch (_) {
+                return null;
+            }
+        })();
+
+        function readStorage(key) {
+            if (!storage) return null;
+            try {
+                return storage.getItem(key);
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function writeStorage(key, value) {
+            if (!storage) return;
+            try {
+                storage.setItem(key, value);
+            } catch (_) {}
+        }
+
+        function loadSessionList() {
+            const raw = readStorage(SESSION_LIST_STORAGE_KEY);
+            if (!raw) return [];
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        function saveSessionList(list) {
+            if (!storage) return;
+            const trimmed = list.slice(0, SESSION_LIST_LIMIT);
+            writeStorage(SESSION_LIST_STORAGE_KEY, JSON.stringify(trimmed));
+        }
+
+        function upsertSessionEntry(entry) {
+            if (!entry || !entry.id) return;
+            const list = loadSessionList();
+            const index = list.findIndex(item => item.id === entry.id);
+            const now = Date.now();
+            if (index === -1) {
+                const newEntry = {
+                    createdAt: now,
+                    updatedAt: now,
+                    unreadCount: 0,
+                    devices: [],
+                    ...entry
+                };
+                list.unshift(newEntry);
+            } else {
+                const current = list[index];
+                const updatedEntry = {
+                    ...current,
+                    ...entry,
+                    createdAt: current.createdAt || entry.createdAt || now,
+                    updatedAt: entry.updatedAt || current.updatedAt || now
+                };
+                list.splice(index, 1);
+                list.unshift(updatedEntry);
+            }
+            saveSessionList(list);
+            renderSessionList();
+        }
+
+        function removeSessionEntry(sessionId) {
+            if (!sessionId) return;
+            const list = loadSessionList().filter(item => item.id !== sessionId);
+            saveSessionList(list);
+            renderSessionList();
+        }
+
+        function formatDateTime(timestamp) {
+            if (!timestamp) return '--';
+            return new Date(timestamp).toLocaleString();
+        }
+
+        function formatElapsedMinutes(timestamp) {
+            if (!timestamp) return '--';
+            const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+            return minutes === 0 ? 'just now' : `${minutes} min ago`;
+        }
+
+        function buildSessionLaunchUrl(session) {
+            if (!session) return buildClientUrl({});
+            return buildClientUrl({
+                nextRoom: session.room || room,
+                nextPair: normalizePair(session.pair || pair),
+                nextName: session.name || joinName,
+                nextPeer: session.peer || peerName
+            });
+        }
+
+        function renderSessionList() {
+            if (!sessionList || !sessionEmpty || !sessionListPanel || isClientView) return;
+            const list = loadSessionList();
+            sessionList.innerHTML = '';
+            if (list.length === 0) {
+                sessionEmpty.classList.remove('hidden');
+                return;
+            }
+            sessionEmpty.classList.add('hidden');
+            list.forEach(entry => {
+                const item = document.createElement('li');
+                item.className = 'border border-slate-200 rounded-xl px-3 py-3 bg-white/80 shadow-sm';
+                const unreadBadge = entry.unreadCount > 0
+                    ? `<span class="inline-flex items-center justify-center min-w-[20px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">${entry.unreadCount}</span>`
+                    : '';
+                const devices = Array.isArray(entry.devices) ? entry.devices : [];
+                const now = Date.now();
+                const deviceDots = devices.map(device => {
+                    const isOnline = now - (device.lastSeen || 0) < PRESENCE_STALE_MS;
+                    const color = isOnline ? 'bg-emerald-400' : 'bg-slate-300';
+                    const title = escapeHtml(device.name || 'Device');
+                    return `<span class="h-2.5 w-2.5 rounded-full ${color}" title="${title}"></span>`;
+                }).join('');
+                const onlineCount = devices.filter(device => now - (device.lastSeen || 0) < PRESENCE_STALE_MS).length;
+                item.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <button class="session-launch text-left text-sm font-semibold text-slate-800 hover:text-blue-600" data-session-id="${escapeHtml(entry.id)}">
+                            ${escapeHtml(entry.room || 'Session')}
+                        </button>
+                        <div class="flex items-center gap-2">
+                            ${unreadBadge}
+                            <button class="session-remove text-slate-400 hover:text-rose-500" data-session-id="${escapeHtml(entry.id)}" aria-label="Remove session">✕</button>
+                        </div>
+                    </div>
+                    <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <span>Created: ${escapeHtml(formatDateTime(entry.createdAt))}</span>
+                        <span>Last updated: ${escapeHtml(formatDateTime(entry.updatedAt))}</span>
+                        <span class="text-slate-400">(${escapeHtml(formatElapsedMinutes(entry.updatedAt))})</span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <div class="flex items-center gap-1">${deviceDots || '<span class="h-2.5 w-2.5 rounded-full bg-slate-200"></span>'}</div>
+                        <span>${onlineCount} online</span>
+                    </div>
+                `;
+                sessionList.appendChild(item);
+            });
+        }
+
+        try {
+            storedDeviceId = readStorage(DEVICE_ID_STORAGE_KEY);
+        } catch (_) {}
+        let resolvedDeviceId = storedDeviceId;
+        if (!resolvedDeviceId) {
+            resolvedDeviceId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+            writeStorage(DEVICE_ID_STORAGE_KEY, resolvedDeviceId);
+        }
+        const RELAY_DEVICE_ID = resolvedDeviceId;
+        const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
+        const CHAT_STORAGE_KEY = `talk_chat_${RELAY_SESSION_ID}`;
+        const NAME_STORAGE_KEY = `talk_name_${RELAY_SESSION_ID}`;
+        const PEER_NAME_STORAGE_KEY = `talk_peer_name_${RELAY_SESSION_ID}`;
+        const STYLE_STORAGE_KEY = `talk_style_${RELAY_SESSION_ID}`;
+        const CONTROL_PANEL_STORAGE_KEY = `talk_control_panel_${RELAY_SESSION_ID}`;
+        const GEAR_STORAGE_KEY = `talk_gear_pos_${RELAY_SESSION_ID}`;
+        const NOTIFICATIONS_STORAGE_KEY = `talk_notifications_${RELAY_SESSION_ID}`;
+        const PEER_DEVICE_NAME_STORAGE_KEY = `talk_peer_device_names_${RELAY_SESSION_ID}`;
+        const SESSION_LIST_STORAGE_KEY = 'talk_sessions_v1';
+        const SESSION_LIST_LIMIT = 25;
+        const PRESENCE_STALE_MS = 120000;
+
+        function getDeviceType() {
+            const ua = navigator.userAgent || '';
+            if (/Mobi|Android|iPhone|iPad|iPod/i.test(ua)) return 'Mobile';
+            return 'Desktop';
+        }
+
+        function getBrowserName() {
+            const ua = navigator.userAgent || '';
+            if (ua.includes('Edg/')) return 'Edge';
+            if (ua.includes('OPR/') || ua.includes('Opera')) return 'Opera';
+            if (ua.includes('Chrome/') && !ua.includes('Edg/')) return 'Chrome';
+            if (ua.includes('Firefox/')) return 'Firefox';
+            if (ua.includes('Safari/') && !ua.includes('Chrome/')) return 'Safari';
+            return 'Browser';
+        }
+
+        function buildDefaultName() {
+            const device = getDeviceType();
+            const browser = getBrowserName();
+            const language = navigator.language || 'en';
+            const timestamp = new Date().toLocaleString();
+            return `${device} ${browser} ${language} ${timestamp}`;
+        }
+
+        function loadJoinName() {
+            const paramName = (params.get('name') || '').trim();
+            if (paramName) {
+                writeStorage(NAME_STORAGE_KEY, paramName);
+                return paramName;
+            }
+            const stored = readStorage(NAME_STORAGE_KEY);
+            if (stored) return stored;
+            const fallback = buildDefaultName();
+            writeStorage(NAME_STORAGE_KEY, fallback);
+            return fallback;
+        }
+
+        function loadPeerName() {
+            const paramPeer = (params.get('peer') || '').trim();
+            if (paramPeer) {
+                writeStorage(PEER_NAME_STORAGE_KEY, paramPeer);
+                return paramPeer;
+            }
+            const stored = readStorage(PEER_NAME_STORAGE_KEY);
+            if (stored) return stored;
+            return 'Partner';
+        }
+
+        let joinName = loadJoinName();
+        let peerName = loadPeerName();
+
+        const connectionStatus = document.getElementById('connection-status');
+        const peerStatus = document.getElementById('peer-status');
+        const roomPill = document.getElementById('room-pill');
+        const pairPill = document.getElementById('pair-pill');
+        const copyLinkButton = document.getElementById('copy-link');
+        const controlPanel = document.getElementById('control-panel');
+        const controlPanelToggle = document.getElementById('control-panel-toggle');
+        const controlPanelRefresh = document.getElementById('control-panel-refresh');
+        const controlNotificationsToggle = document.getElementById('control-notifications-toggle');
+        const sessionListPanel = document.getElementById('session-list-panel');
+        const sessionList = document.getElementById('session-list');
+        const sessionEmpty = document.getElementById('session-empty');
+        const roomInput = document.getElementById('room-input');
+        const pairSelect = document.getElementById('pair-select');
+        const nameInput = document.getElementById('name-input');
+        const peerInput = document.getElementById('peer-input');
+        const launchSessionButton = document.getElementById('launch-session');
+        const chatHistoryEl = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const chatSend = document.getElementById('chat-send');
+        const chatAttachmentButton = document.getElementById('chat-attach');
+        const chatAttachmentInput = document.getElementById('chat-attachments-input');
+        const chatAttachmentStatus = document.getElementById('chat-attachments');
+        const chatAttachmentClear = document.getElementById('chat-attachments-clear');
+        const chatAttachmentAlert = document.getElementById('chat-attachments-alert');
+        const chatAttachmentPreview = document.getElementById('chat-attachments-preview');
+        const drawerClear = document.getElementById('drawer-clear');
+        const drawerExport = document.getElementById('drawer-export');
+        const drawerRefresh = document.getElementById('drawer-refresh');
+        const drawerImport = document.getElementById('drawer-import');
+        const drawerImportInput = document.getElementById('drawer-import-input');
+        const drawerShare = document.getElementById('drawer-share');
+        const drawerConfig = document.getElementById('drawer-config');
+        const notificationsToggle = document.getElementById('notifications-toggle');
+        const controlsModal = document.getElementById('controls-modal');
+        const closeControls = document.getElementById('close-controls');
+        const gearFab = document.getElementById('gear-fab');
+        const chatComposer = document.getElementById('chat-composer');
+        const replyPreview = document.getElementById('reply-preview');
+        const replyPreviewText = document.getElementById('reply-preview-text');
+        const replyPreviewClear = document.getElementById('reply-preview-clear');
+        const styleLocalBg = document.getElementById('style-local-bg');
+        const styleLocalText = document.getElementById('style-local-text');
+        const stylePeerBg = document.getElementById('style-peer-bg');
+        const stylePeerText = document.getElementById('style-peer-text');
+        const styleFontSize = document.getElementById('style-font-size');
+        const styleReset = document.getElementById('style-reset');
+        const styleSave = document.getElementById('style-save');
+        const closeStyleConfig = document.getElementById('close-style-config');
+        const localPresenceLabel = document.getElementById('local-presence-label');
+        const localPresenceDot = document.getElementById('local-presence-dot');
+        const peerPresenceLabel = document.getElementById('peer-presence-label');
+        const peerPresenceDot = document.getElementById('peer-presence-dot');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const messageWaiting = document.getElementById('message-waiting');
+        const messageWaitingCount = document.getElementById('message-waiting-count');
+        const translationCache = new Map();
+        const pendingTranslations = new Map();
+        const relayState = { ws: null };
+        const outbox = [];
+        const peerPresence = new Map();
+        const peerTyping = new Map();
+        const peerTypingTimeouts = new Map();
+        const peerStyles = new Map();
+        const peerDeviceNames = new Map(Object.entries(loadPeerDeviceNames()));
+        let controlPanelCollapsed = false;
+        let notificationsEnabled = true;
+        let unreadCount = 0;
+        let replyContext = null;
+        let typingIndicatorTimer = null;
+        let reconnectDelayMs = 1000;
+        let reconnectTimer = null;
+
+        document.body.classList.add(isClientView ? 'client-view' : 'config-view');
+
+        const defaultBubbleStyles = {
+            localBg: '#eff6ff',
+            localText: '#1f2937',
+            peerBg: '#ffffff',
+            peerText: '#0f172a',
+            fontSize: 14
+        };
+
+        function applyBubbleStyles(styles) {
+            const root = document.documentElement;
+            root.style.setProperty('--bubble-local-bg', styles.localBg);
+            root.style.setProperty('--bubble-local-text', styles.localText);
+            root.style.setProperty('--bubble-peer-bg', styles.peerBg);
+            root.style.setProperty('--bubble-peer-text', styles.peerText);
+            root.style.setProperty('--bubble-font-size', `${styles.fontSize}px`);
+        }
+
+        function loadBubbleStyles() {
+            try {
+                const raw = readStorage(STYLE_STORAGE_KEY);
+                if (raw) {
+                    return { ...defaultBubbleStyles, ...JSON.parse(raw) };
+                }
+            } catch (_) {}
+            return { ...defaultBubbleStyles };
+        }
+
+        function saveBubbleStyles(styles) {
+            writeStorage(STYLE_STORAGE_KEY, JSON.stringify(styles));
+        }
+
+        function loadNotificationsSetting() {
+            try {
+                const raw = readStorage(NOTIFICATIONS_STORAGE_KEY);
+                if (raw === null) return true;
+                return raw !== 'false';
+            } catch (_) {
+                return true;
+            }
+        }
+
+        function loadPeerDeviceNames() {
+            try {
+                const raw = readStorage(PEER_DEVICE_NAME_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (_) {
+                return {};
+            }
+        }
+
+        function persistPeerDeviceNames(payload) {
+            writeStorage(PEER_DEVICE_NAME_STORAGE_KEY, JSON.stringify(payload));
+        }
+
+        function setNotificationsEnabled(enabled, { persist = true } = {}) {
+            notificationsEnabled = Boolean(enabled);
+            if (notificationsToggle) notificationsToggle.checked = notificationsEnabled;
+            if (controlNotificationsToggle) controlNotificationsToggle.checked = notificationsEnabled;
+            if (persist) {
+                writeStorage(NOTIFICATIONS_STORAGE_KEY, notificationsEnabled ? 'true' : 'false');
+            }
+            if (!notificationsEnabled) {
+                clearUnreadCount();
+                updateDocumentTitle();
+                if (messageWaiting) {
+                    messageWaiting.classList.add('hidden');
+                }
+            }
+        }
+
+        function resolvePeerName(deviceId, fallback = '') {
+            if (deviceId && peerDeviceNames.has(deviceId)) {
+                return peerDeviceNames.get(deviceId);
+            }
+            return fallback;
+        }
+
+        function rememberPeerName(deviceId, name) {
+            if (!deviceId) return;
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            if (peerDeviceNames.get(deviceId) === trimmed) return;
+            peerDeviceNames.set(deviceId, trimmed);
+            persistPeerDeviceNames(Object.fromEntries(peerDeviceNames));
+        }
+
+        let bubbleStyles = loadBubbleStyles();
+        applyBubbleStyles(bubbleStyles);
+        setNotificationsEnabled(loadNotificationsSetting(), { persist: false });
+        updateMessageWaitingIndicator();
+        updateDocumentTitle();
+
+        function getSenderStyle() {
+            return {
+                bg: bubbleStyles.localBg,
+                text: bubbleStyles.localText,
+                fontSize: bubbleStyles.fontSize
+            };
+        }
+
+        if (roomPill) roomPill.textContent = `Session: ${room}`;
+        if (pairPill) pairPill.textContent = `Pair: ${langA} ↔ ${langB}`;
+        if (roomInput) roomInput.value = room;
+        if (pairSelect) pairSelect.value = pair;
+        if (nameInput) nameInput.value = joinName;
+        if (peerInput) peerInput.value = peerName;
+
+        const languageNames = (() => {
+            try {
+                return new Intl.DisplayNames([navigator.language || 'en'], { type: 'language' });
+            } catch (_) {
+                return null;
+            }
+        })();
+
+        function languageLabel(code) {
+            if (languageNames) {
+                const label = languageNames.of(code);
+                if (label) return label;
+            }
+            return code.toUpperCase();
+        }
+
+        function updateConnectionStatus(state) {
+            connectionStatus.textContent = state;
+            updatePeerStatus();
+        }
+
+        function setTypingIndicator(active, labelText = 'Partner is typing…') {
+            if (!typingIndicator) return;
+            if (typingIndicatorTimer) {
+                clearTimeout(typingIndicatorTimer);
+                typingIndicatorTimer = null;
+            }
+            if (active) {
+                typingIndicator.textContent = labelText;
+                typingIndicator.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    typingIndicator.classList.add('active');
+                });
+            } else {
+                typingIndicator.classList.remove('active');
+                typingIndicatorTimer = setTimeout(() => {
+                    typingIndicator.classList.add('hidden');
+                }, 700);
+            }
+        }
+
+        function updateDocumentTitle() {
+            if (!notificationsEnabled) {
+                document.title = 'Talk';
+                return;
+            }
+            if (unreadCount > 0) {
+                document.title = `(${unreadCount}) Talk`;
+            } else {
+                document.title = 'Talk';
+            }
+        }
+
+        function updateMessageWaitingIndicator() {
+            if (!messageWaiting || !messageWaitingCount) return;
+            if (!notificationsEnabled || unreadCount <= 0) {
+                messageWaiting.classList.add('hidden');
+                return;
+            }
+            messageWaiting.classList.remove('hidden');
+            messageWaitingCount.textContent = unreadCount === 1 ? '1 message waiting' : `${unreadCount} messages waiting`;
+        }
+
+        function clearUnreadCount() {
+            unreadCount = 0;
+            updateMessageWaitingIndicator();
+            updateDocumentTitle();
+            if (isClientView) {
+                upsertSessionEntry({
+                    id: RELAY_SESSION_ID,
+                    room,
+                    pair,
+                    name: joinName,
+                    peer: peerName,
+                    unreadCount: 0
+                });
+            }
+        }
+
+        function incrementUnreadCount() {
+            if (!notificationsEnabled) return;
+            unreadCount += 1;
+            updateMessageWaitingIndicator();
+            updateDocumentTitle();
+            if (isClientView) {
+                upsertSessionEntry({
+                    id: RELAY_SESSION_ID,
+                    room,
+                    pair,
+                    name: joinName,
+                    peer: peerName,
+                    unreadCount
+                });
+            }
+        }
+
+        function isChatAtBottom() {
+            if (!chatHistoryEl) return true;
+            return chatHistoryEl.scrollHeight - chatHistoryEl.scrollTop - chatHistoryEl.clientHeight < 80;
+        }
+
+        function syncSessionPresence() {
+            if (!isClientView) return;
+            const now = Date.now();
+            const devices = [
+                {
+                    id: RELAY_DEVICE_ID,
+                    name: joinName || 'You',
+                    lastSeen: now,
+                    isLocal: true
+                }
+            ];
+            peerPresence.forEach((peer, deviceId) => {
+                devices.push({
+                    id: deviceId,
+                    name: peer?.name || peerName || 'Partner',
+                    lastSeen: peer?.lastSeen || now,
+                    isLocal: false
+                });
+            });
+            upsertSessionEntry({
+                id: RELAY_SESSION_ID,
+                room,
+                pair,
+                name: joinName,
+                peer: peerName,
+                devices
+            });
+        }
+
+        function updatePeerStatus() {
+            const typingPeers = Array.from(peerTyping.values())
+                .filter(peer => peer?.active)
+                .map(peer => peer?.name || 'Partner');
+            const connected = relayState.ws && relayState.ws.readyState === WebSocket.OPEN;
+            if (localPresenceLabel) {
+                localPresenceLabel.textContent = `Device 1 — ${joinName || 'You'}`;
+            }
+            if (localPresenceDot) {
+                localPresenceDot.className = `h-2.5 w-2.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-slate-300'}`;
+            }
+            if (peerPresence.size === 0) {
+                if (peerPresenceLabel) {
+                    peerPresenceLabel.textContent = 'Device 2 — Waiting for partner…';
+                }
+                if (peerPresenceDot) {
+                    peerPresenceDot.className = 'h-2.5 w-2.5 rounded-full bg-slate-300';
+                }
+            } else {
+                const names = Array.from(peerPresence.values()).map(peer => peer?.name || 'Partner');
+                if (peerPresenceLabel) {
+                    peerPresenceLabel.textContent = `Device 2 — ${names.join(', ')}`;
+                }
+                if (peerPresenceDot) {
+                    peerPresenceDot.className = 'h-2.5 w-2.5 rounded-full bg-emerald-400';
+                }
+            }
+            if (typingPeers.length) {
+                const label = typingPeers.length > 1
+                    ? `${typingPeers.length} people are typing…`
+                    : `${typingPeers[0]} is typing…`;
+                setTypingIndicator(true, label);
+            } else {
+                setTypingIndicator(false);
+            }
+            syncSessionPresence();
+        }
+
+        function updateControlPanelUI() {
+            if (!controlPanel || !controlPanelToggle) return;
+            controlPanel.classList.toggle('collapsed', controlPanelCollapsed);
+            const label = controlPanelToggle.querySelector('.control-panel-label');
+            if (label) {
+                label.textContent = controlPanelCollapsed ? 'Expand' : 'Collapse';
+            }
+        }
+
+        function buildClientUrl({ nextRoom = room, nextPair = pair, nextName = joinName, nextPeer = peerName } = {}) {
+            const clientUrl = new URL(window.location.href);
+            clientUrl.searchParams.set('room', nextRoom);
+            clientUrl.searchParams.set('pair', nextPair);
+            clientUrl.searchParams.set('view', 'client');
+            if (nextName) {
+                clientUrl.searchParams.set('name', nextName);
+            } else {
+                clientUrl.searchParams.delete('name');
+            }
+            if (nextPeer) {
+                clientUrl.searchParams.set('peer', nextPeer);
+            } else {
+                clientUrl.searchParams.delete('peer');
+            }
+            return clientUrl.toString();
+        }
+
+        function createEntryId() {
+            return (crypto.randomUUID ? crypto.randomUUID() : `entry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+        }
+
+        function normalizeChatEntry(entry) {
+            if (!entry || typeof entry !== 'object') return null;
+            return {
+                id: entry.id || createEntryId(),
+                from: entry.from,
+                name: entry.name,
+                deviceId: entry.deviceId || null,
+                message: entry.message || '',
+                attachments: Array.isArray(entry.attachments)
+                    ? entry.attachments.map(normalizeChatAttachment).filter(Boolean)
+                    : [],
+                ts: entry.ts || Date.now(),
+                translations: entry.translations || {},
+                deleted: Boolean(entry.deleted),
+                style: entry.style || null,
+                pending: Boolean(entry.pending),
+                replyTo: entry.replyTo || null
+            };
+        }
+
+        function saveChatHistory(history) {
+            const payload = history.slice(-200).map(normalizeChatEntry).filter(Boolean);
+            writeStorage(CHAT_STORAGE_KEY, JSON.stringify(payload));
+            if (isClientView) {
+                upsertSessionEntry({
+                    id: RELAY_SESSION_ID,
+                    room,
+                    pair,
+                    name: joinName,
+                    peer: peerName,
+                    updatedAt: Date.now()
+                });
+            }
+        }
+
+        function loadChatHistory() {
+            try {
+                const raw = readStorage(CHAT_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+                return Array.isArray(parsed) ? parsed.map(normalizeChatEntry).filter(Boolean) : [];
+            } catch (_) {
+                return [];
+            }
+        }
+
+        let chatHistory = loadChatHistory().map(entry => {
+            if (entry?.from === 'peer' && !entry.name) {
+                entry.name = resolvePeerName(entry.deviceId, peerName);
+            }
+            return entry;
+        });
+        let lastChatSentAt = 0;
+        let pendingChatAttachments = [];
+
+        function formatTimestamp(ts) {
+            if (!ts) return '--';
+            return new Date(ts).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' });
+        }
+
+        async function translateText(text, target) {
+            if (!text || !target) return null;
+            const cacheKey = `${target}|${text}`;
+            if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+            if (pendingTranslations.has(cacheKey)) {
+                return pendingTranslations.get(cacheKey);
+            }
+            const pendingPromise = (async () => {
+                try {
+                    const res = await fetch('https://libretranslate.de/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ q: text, source: 'auto', target, format: 'text' })
+                    });
+                    if (!res.ok) throw new Error('Translation failed');
+                    const data = await res.json();
+                    const translated = data?.translatedText || null;
+                    if (translated) {
+                        translationCache.set(cacheKey, translated);
+                    }
+                    return translated;
+                } catch (_) {
+                    try {
+                        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`);
+                        if (!res.ok) throw new Error('Translation fallback failed');
+                        const data = await res.json();
+                        const translated = Array.isArray(data?.[0])
+                            ? data[0].map(part => part?.[0]).filter(Boolean).join('')
+                            : null;
+                        if (translated) {
+                            translationCache.set(cacheKey, translated);
+                        }
+                        return translated;
+                    } catch (_) {
+                        return null;
+                    }
+                } finally {
+                    pendingTranslations.delete(cacheKey);
+                }
+            })();
+            pendingTranslations.set(cacheKey, pendingPromise);
+            return pendingPromise;
+        }
+
+        function escapeHtml(text) {
+            return (text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderMarkdown(text) {
+            let html = escapeHtml(text || '');
+            html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre class="bg-slate-900 text-slate-100 rounded p-2 text-[11px] overflow-auto"><code>${code}</code></pre>`);
+            html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-100 px-1 rounded">$1</code>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function renderPlainText(text) {
+            return escapeHtml(text || '').replace(/\n/g, '<br>');
+        }
+
+        function looksLikeHtml(text) {
+            return /<\/?[a-z][\s\S]*>/i.test(text || '');
+        }
+
+        function extractHtmlFragment(rawHtml) {
+            if (!rawHtml) return '';
+            try {
+                const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+                return doc.body ? doc.body.innerHTML : rawHtml;
+            } catch (_) {
+                return rawHtml;
+            }
+        }
+
+        function insertTextAtCursor(input, text) {
+            if (!input || typeof text !== 'string') return;
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const value = input.value || '';
+            input.value = `${value.slice(0, start)}${text}${value.slice(end)}`;
+            const nextCursor = start + text.length;
+            input.selectionStart = nextCursor;
+            input.selectionEnd = nextCursor;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function stripRtf(text) {
+            return (text || '')
+                .replace(/\\par[d]?/gi, '\n')
+                .replace(/\\'[0-9a-fA-F]{2}/g, match => String.fromCharCode(parseInt(match.slice(2), 16)))
+                .replace(/\\[a-z]+\d* ?/gi, '')
+                .replace(/[{}]/g, '')
+                .trim();
+        }
+
+        function renderChatContent(text) {
+            const raw = text || '';
+            if (!raw) return '';
+            if (raw.trim().startsWith('{\\rtf')) {
+                return renderPlainText(stripRtf(raw));
+            }
+            if (looksLikeHtml(raw)) {
+                return raw;
+            }
+            return renderMarkdown(raw);
+        }
+
+        function getReplySnippet(entry) {
+            if (!entry || entry.deleted) return 'Deleted message';
+            const raw = (entry.message || '').replace(/\s+/g, ' ').trim();
+            if (raw) {
+                return raw.length > 120 ? `${raw.slice(0, 120)}…` : raw;
+            }
+            if (Array.isArray(entry.attachments) && entry.attachments.length) {
+                return `[${entry.attachments.length} attachment${entry.attachments.length > 1 ? 's' : ''}]`;
+            }
+            return 'Message';
+        }
+
+        function updateReplyPreview() {
+            if (!replyPreview || !replyPreviewText) return;
+            if (!replyContext) {
+                replyPreview.classList.add('hidden');
+                replyPreviewText.textContent = '';
+                return;
+            }
+            replyPreview.classList.remove('hidden');
+            replyPreviewText.textContent = `${replyContext.name || 'Partner'}: ${replyContext.snippet}`;
+        }
+
+        function setReplyContext(entry) {
+            if (!entry) return;
+            replyContext = {
+                id: entry.id,
+                name: entry.name || (entry.from === 'local' ? joinName : peerName) || 'Partner',
+                snippet: getReplySnippet(entry),
+                from: entry.from
+            };
+            updateReplyPreview();
+        }
+
+        function clearReplyContext() {
+            replyContext = null;
+            updateReplyPreview();
+        }
+
+        function attachSwipeReplyHandler(bubble, entry) {
+            if (!bubble || !entry) return;
+            let pointerId = null;
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let isSwiping = false;
+
+            const resetSwipe = () => {
+                bubble.classList.remove('swiping', 'swipe-ready');
+                bubble.style.transform = '';
+            };
+
+            bubble.addEventListener('pointerdown', event => {
+                if (event.button !== 0) return;
+                if (event.target.closest('button')) return;
+                pointerId = event.pointerId;
+                bubble.setPointerCapture(pointerId);
+                startX = event.clientX;
+                startY = event.clientY;
+                currentX = 0;
+                isSwiping = false;
+            });
+
+            bubble.addEventListener('pointermove', event => {
+                if (pointerId !== event.pointerId) return;
+                const dx = event.clientX - startX;
+                const dy = event.clientY - startY;
+                if (!isSwiping) {
+                    if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+                    isSwiping = true;
+                }
+                currentX = Math.max(Math.min(dx, 90), -90);
+                bubble.classList.add('swiping');
+                bubble.style.transform = `translateX(${currentX}px)`;
+                if (Math.abs(currentX) > 60) {
+                    bubble.classList.add('swipe-ready');
+                } else {
+                    bubble.classList.remove('swipe-ready');
+                }
+            });
+
+            bubble.addEventListener('pointerup', event => {
+                if (pointerId !== event.pointerId) return;
+                bubble.releasePointerCapture(pointerId);
+                if (Math.abs(currentX) > 60) {
+                    setReplyContext(entry);
+                }
+                pointerId = null;
+                resetSwipe();
+            });
+
+            bubble.addEventListener('pointercancel', event => {
+                if (pointerId !== event.pointerId) return;
+                bubble.releasePointerCapture(pointerId);
+                pointerId = null;
+                resetSwipe();
+            });
+        }
+
+        function isLikelyLanguage(text, langCode) {
+            const normalized = (text || '').trim();
+            if (!normalized) return null;
+            if (langCode === 'th') {
+                return /[\u0E00-\u0E7F]/.test(normalized);
+            }
+            if (langCode === 'en') {
+                const hasLatin = /[A-Za-z]/.test(normalized);
+                const hasNonAscii = /[^\x00-\x7F]/.test(normalized);
+                return hasLatin && !hasNonAscii;
+            }
+            return null;
+        }
+
+        function detectOriginalLanguage(text) {
+            const isA = isLikelyLanguage(text, langA);
+            if (isA) return langA;
+            const isB = isLikelyLanguage(text, langB);
+            if (isB) return langB;
+            return null;
+        }
+
+        function isImageDataUrl(dataUrl) {
+            return typeof dataUrl === 'string' && dataUrl.startsWith('data:image/');
+        }
+
+        function isDataUrl(dataUrl) {
+            return typeof dataUrl === 'string' && dataUrl.startsWith('data:');
+        }
+
+        function getAttachmentMimeFromDataUrl(dataUrl) {
+            if (typeof dataUrl !== 'string') return '';
+            const match = dataUrl.match(/^data:([^;]+);/);
+            return match ? match[1] : '';
+        }
+
+        function isAllowedAttachmentMime(mime) {
+            if (!mime) return false;
+            if (mime.startsWith('image/')) return true;
+            return CHAT_ATTACHMENT_ALLOWED_MIME.has(mime);
+        }
+
+        function getAttachmentMime(att) {
+            if (!att) return '';
+            return getAttachmentMimeFromDataUrl(att.dataUrl) || att.mime || '';
+        }
+
+        function getAttachmentLabel(att) {
+            return att?.name || 'Attachment';
+        }
+
+        function formatBytes(bytes) {
+            if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let index = 0;
+            let value = bytes;
+            while (value >= 1024 && index < units.length - 1) {
+                value /= 1024;
+                index += 1;
+            }
+            return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+        }
+
+        function estimateDataUrlBytes(dataUrl) {
+            if (!dataUrl) return 0;
+            const base64 = dataUrl.split(',')[1] || '';
+            const padding = (base64.match(/=+$/) || [''])[0].length;
+            return Math.floor(base64.length * 3 / 4) - padding;
+        }
+
+        function normalizeChatAttachment(att) {
+            if (!att || !isDataUrl(att.dataUrl)) return null;
+            const mime = getAttachmentMimeFromDataUrl(att.dataUrl);
+            if (!mime || !isAllowedAttachmentMime(mime)) return null;
+            const size = estimateDataUrlBytes(att.dataUrl);
+            if (size > MAX_CHAT_ATTACHMENT_BYTES) return null;
+            return {
+                type: mime.startsWith('image/') ? 'image' : 'file',
+                dataUrl: att.dataUrl,
+                name: getAttachmentLabel(att),
+                mime,
+                size
+            };
+        }
+
+        function appendChatAttachments(container, attachments) {
+            const wrap = document.createElement('div');
+            wrap.className = 'grid grid-cols-2 gap-2 mt-2';
+            attachments.forEach(att => {
+                if (!att) return;
+                const mime = getAttachmentMime(att);
+                const isImage = isImageDataUrl(att.dataUrl) || mime.startsWith('image/');
+                const tile = document.createElement('button');
+                tile.type = 'button';
+                tile.className = 'group relative w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition overflow-hidden';
+                tile.title = 'Preview attachment';
+                if (isImage) {
+                    const img = document.createElement('img');
+                    img.src = att.dataUrl;
+                    img.alt = getAttachmentLabel(att);
+                    img.className = 'w-full h-24 object-cover';
+                    tile.appendChild(img);
+                } else {
+                    const shell = document.createElement('div');
+                    shell.className = 'flex items-center gap-3 p-3';
+                    const icon = document.createElement('span');
+                    icon.className = 'material-symbols-outlined text-blue-500';
+                    icon.textContent = 'description';
+                    const meta = document.createElement('div');
+                    meta.className = 'min-w-0';
+                    const name = document.createElement('div');
+                    name.className = 'text-xs font-semibold text-gray-700 truncate';
+                    name.textContent = getAttachmentLabel(att);
+                    const type = document.createElement('div');
+                    type.className = 'text-[10px] text-gray-500';
+                    const sizeLabel = att.size ? ` • ${formatBytes(att.size)}` : '';
+                    type.textContent = `${mime || 'Unknown'}${sizeLabel}`;
+                    meta.appendChild(name);
+                    meta.appendChild(type);
+                    shell.appendChild(icon);
+                    shell.appendChild(meta);
+                    tile.appendChild(shell);
+                }
+                tile.onclick = () => openChatAttachmentModal(att);
+                wrap.appendChild(tile);
+            });
+            if (wrap.children.length) {
+                container.appendChild(wrap);
+            }
+        }
+
+        function createChatAttachmentPreview(att) {
+            const mime = getAttachmentMime(att);
+            const isImage = mime.startsWith('image/') || isImageDataUrl(att.dataUrl);
+            if (isImage) {
+                const img = document.createElement('img');
+                img.src = att.dataUrl;
+                img.alt = getAttachmentLabel(att);
+                img.className = 'max-h-[55vh] rounded-lg shadow';
+                return img;
+            }
+            if (mime === 'application/pdf') {
+                const frame = document.createElement('iframe');
+                frame.src = att.dataUrl;
+                frame.className = 'w-full h-[55vh] rounded-lg';
+                frame.title = getAttachmentLabel(att);
+                return frame;
+            }
+            if (mime === 'text/html') {
+                const frame = document.createElement('iframe');
+                frame.src = att.dataUrl;
+                frame.sandbox = '';
+                frame.className = 'w-full h-[55vh] rounded-lg bg-white';
+                frame.title = getAttachmentLabel(att);
+                return frame;
+            }
+            if (mime.startsWith('audio/')) {
+                const audio = document.createElement('audio');
+                audio.src = att.dataUrl;
+                audio.controls = true;
+                audio.className = 'w-full';
+                return audio;
+            }
+            if (mime.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = att.dataUrl;
+                video.controls = true;
+                video.className = 'w-full rounded-lg';
+                return video;
+            }
+            const fallback = document.createElement('div');
+            fallback.className = 'text-sm text-gray-500';
+            fallback.textContent = 'Preview not available.';
+            return fallback;
+        }
+
+        function dataUrlToBlob(dataUrl) {
+            if (typeof dataUrl !== 'string') return null;
+            const [header, body] = dataUrl.split(',');
+            if (!body) return null;
+            const mimeMatch = header.match(/data:([^;]+);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+            const binary = atob(body);
+            const len = binary.length;
+            const buffer = new Uint8Array(len);
+            for (let i = 0; i < len; i += 1) {
+                buffer[i] = binary.charCodeAt(i);
+            }
+            return new Blob([buffer], { type: mime });
+        }
+
+        let currentAttachmentObjectUrl = null;
+
+        function openAttachmentInNewTab(att) {
+            if (currentAttachmentObjectUrl) {
+                URL.revokeObjectURL(currentAttachmentObjectUrl);
+                currentAttachmentObjectUrl = null;
+            }
+            const blob = dataUrlToBlob(att.dataUrl);
+            if (!blob) {
+                const link = document.createElement('a');
+                link.href = att.dataUrl;
+                link.download = getAttachmentLabel(att);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                return;
+            }
+            currentAttachmentObjectUrl = URL.createObjectURL(blob);
+            window.open(currentAttachmentObjectUrl, '_blank', 'noopener');
+        }
+
+        function openChatAttachmentModal(att) {
+            const modal = document.getElementById('chat-attachment-modal');
+            const preview = document.getElementById('chat-attachment-preview');
+            const title = document.getElementById('chat-attachment-title');
+            const meta = document.getElementById('chat-attachment-meta');
+            const downloadBtn = document.getElementById('chat-attachment-download');
+            const shareBtn = document.getElementById('chat-attachment-share');
+            if (!modal || !preview || !title || !meta || !downloadBtn || !shareBtn) return;
+            const mime = getAttachmentMime(att);
+            title.textContent = getAttachmentLabel(att);
+            const sizeLabel = att.size ? ` • ${formatBytes(att.size)}` : '';
+            meta.textContent = `${mime || 'Unknown'}${sizeLabel}`;
+            preview.innerHTML = '';
+            const previewContent = createChatAttachmentPreview(att);
+            previewContent.classList.add('cursor-pointer');
+            previewContent.title = 'Open attachment in new tab';
+            previewContent.addEventListener('click', () => {
+                openAttachmentInNewTab(att);
+            });
+            preview.appendChild(previewContent);
+            preview.onclick = () => {
+                openAttachmentInNewTab(att);
+            };
+            if (!navigator.share) {
+                shareBtn.disabled = true;
+                shareBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                shareBtn.disabled = false;
+                shareBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            downloadBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.href = att.dataUrl;
+                link.download = getAttachmentLabel(att);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+            shareBtn.onclick = async () => {
+                if (!navigator.share) return;
+                const blob = dataUrlToBlob(att.dataUrl);
+                if (!blob) return;
+                const fileName = getAttachmentLabel(att);
+                const file = new File([blob], fileName, { type: mime || blob.type || 'application/octet-stream' });
+                if (navigator.canShare && !navigator.canShare({ files: [file] })) return;
+                try {
+                    await navigator.share({ files: [file], title: fileName });
+                } catch (_) {}
+            };
+            toggleModal('chat-attachment', true);
+        }
+
+        function toggleModal(name, isOpen) {
+            const modal = document.getElementById(`${name}-modal`);
+            const content = document.getElementById(`${name}-content`);
+            if (!modal || !content) return;
+            if (isOpen) {
+                modal.classList.remove('invisible');
+                modal.classList.add('visible');
+                content.classList.remove('scale-out');
+                content.classList.add('scale-in');
+            } else {
+                modal.classList.add('invisible');
+                modal.classList.remove('visible');
+                content.classList.add('scale-out');
+                content.classList.remove('scale-in');
+                if (name === 'chat-attachment' && currentAttachmentObjectUrl) {
+                    URL.revokeObjectURL(currentAttachmentObjectUrl);
+                    currentAttachmentObjectUrl = null;
+                }
+            }
+        }
+
+        function compressChatAttachmentDataUrl(dataUrl, { maxDimension = CHAT_ATTACHMENT_MAX_DIMENSION, quality = 0.82 } = {}) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const maxSide = Math.max(img.width, img.height);
+                    const scale = maxSide > maxDimension ? (maxDimension / maxSide) : 1;
+                    const targetWidth = Math.max(1, Math.round(img.width * scale));
+                    const targetHeight = Math.max(1, Math.round(img.height * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        resolve(dataUrl);
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+                    resolve(canvas.toDataURL('image/jpeg', quality) || dataUrl);
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+
+        function renderChat() {
+            chatHistoryEl.innerHTML = '';
+            chatHistory.forEach((entry, index) => {
+                const bubble = document.createElement('div');
+                const isLocal = entry.from === 'local';
+                bubble.className = `chat-bubble px-3 py-2 rounded-2xl shadow-sm border ${isLocal ? 'bubble-local border-blue-100 ml-auto' : 'bubble-peer border-slate-200 mr-auto'} max-w-[90%]`;
+                if (entry.style) {
+                    bubble.style.background = entry.style.bg || '';
+                    bubble.style.color = entry.style.text || '';
+                    bubble.style.fontSize = entry.style.fontSize ? `${entry.style.fontSize}px` : '';
+                }
+
+                const headerLine = document.createElement('div');
+                headerLine.className = 'flex items-center justify-between text-[11px] font-semibold text-slate-400';
+                const label = document.createElement('span');
+                const senderName = entry.name
+                    || (isLocal ? joinName : resolvePeerName(entry.deviceId, peerName))
+                    || 'Device';
+                const pendingSuffix = entry.pending ? ' • Sending…' : '';
+                label.textContent = `${senderName} ${formatTimestamp(entry.ts)}${pendingSuffix}`;
+                if (isLocal && isClientView) {
+                    label.classList.add('cursor-pointer', 'hover:text-slate-500');
+                    label.title = 'Click to rename device';
+                    label.addEventListener('click', event => {
+                        event.stopPropagation();
+                        requestJoinNameUpdate();
+                    });
+                }
+                headerLine.appendChild(label);
+                if (!entry.deleted) {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.className = 'text-slate-300 hover:text-rose-400 text-[14px] leading-none';
+                    deleteBtn.textContent = '✕';
+                    deleteBtn.title = 'Delete post';
+                    deleteBtn.onclick = () => deleteChatEntry(entry.id);
+                    headerLine.appendChild(deleteBtn);
+                }
+
+                const messageLine = document.createElement('div');
+                messageLine.className = 'space-y-2 mt-1 mb-1';
+
+                if (entry.deleted) {
+                    const deletedLine = document.createElement('div');
+                    deletedLine.className = 'text-xs text-slate-400 italic';
+                    deletedLine.textContent = `Post deleted • ${formatTimestamp(entry.ts)}`;
+                    messageLine.appendChild(deletedLine);
+                } else {
+                    if (entry.replyTo) {
+                        const replyLine = document.createElement('div');
+                        replyLine.className = 'text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1';
+                        const replyName = entry.replyTo.name || 'Partner';
+                        const replyText = entry.replyTo.snippet || 'Message';
+                        replyLine.textContent = `↪ ${replyName}: ${replyText}`;
+                        messageLine.appendChild(replyLine);
+                    }
+                    const originalLanguage = detectOriginalLanguage(entry.message);
+                    const text = entry.message || '';
+                    entry.translations = entry.translations || {};
+
+                    const fillTranslated = async (target, node) => {
+                        const cacheKey = `${target}|${text}`;
+                        const cached = entry.translations[target] || translationCache.get(cacheKey);
+                        if (cached) {
+                            node.innerHTML = renderMarkdown(cached);
+                            return;
+                        }
+                        node.textContent = '…';
+                        const translated = await translateText(text, target);
+                        if (!translated) {
+                            node.textContent = 'Translation unavailable.';
+                            return;
+                        }
+                        entry.translations[target] = translated;
+                        saveChatHistory(chatHistory);
+                        node.innerHTML = renderMarkdown(translated);
+                    };
+
+                    if (langA === langB) {
+                        const singleColumn = document.createElement('div');
+                        singleColumn.className = 'text-xs border border-slate-200 rounded-lg px-2 py-2 bg-white/70';
+                        singleColumn.innerHTML = renderChatContent(text);
+                        messageLine.appendChild(singleColumn);
+                    } else {
+                        const table = document.createElement('table');
+                        table.className = 'w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden';
+                        const tbody = document.createElement('tbody');
+                        const messageRow = document.createElement('tr');
+                        const langAText = document.createElement('td');
+                        langAText.className = 'px-2 py-2 align-top border-r border-slate-200';
+                        const langBText = document.createElement('td');
+                        langBText.className = 'px-2 py-2 align-top';
+                        messageRow.appendChild(langAText);
+                        messageRow.appendChild(langBText);
+                        tbody.appendChild(messageRow);
+                        table.appendChild(tbody);
+
+                        if (originalLanguage === langA) {
+                            langAText.innerHTML = renderChatContent(text);
+                            fillTranslated(langB, langBText);
+                        } else if (originalLanguage === langB) {
+                            langBText.innerHTML = renderChatContent(text);
+                            fillTranslated(langA, langAText);
+                        } else {
+                            fillTranslated(langA, langAText);
+                            fillTranslated(langB, langBText);
+                        }
+
+                        messageLine.appendChild(table);
+                    }
+
+                    if (Array.isArray(entry.attachments) && entry.attachments.length) {
+                        appendChatAttachments(messageLine, entry.attachments);
+                    }
+                }
+
+                bubble.appendChild(headerLine);
+                bubble.appendChild(messageLine);
+                chatHistoryEl.appendChild(bubble);
+                attachSwipeReplyHandler(bubble, entry);
+            });
+            setTimeout(() => {
+                chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+            }, 0);
+        }
+
+        function deleteChatEntry(entryId) {
+            if (!entryId) return;
+            const entry = chatHistory.find(item => item.id === entryId);
+            if (!entry || entry.deleted) return;
+            entry.deleted = true;
+            entry.message = 'Post deleted.';
+            entry.attachments = [];
+            entry.pending = false;
+            saveChatHistory(chatHistory);
+            renderChat();
+            sendRelayMessage({ type: 'delete', id: entryId });
+        }
+
+        function sendRelayMessage(payload) {
+            const message = {
+                session: RELAY_SESSION_ID,
+                from: RELAY_CLIENT_ID,
+                deviceId: RELAY_DEVICE_ID,
+                ts: Date.now(),
+                ...payload
+            };
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                relayState.ws.send(JSON.stringify(message));
+                if (message.type === 'chat' && message.id) {
+                    markChatEntrySent(message.id);
+                }
+                return true;
+            }
+            if (outbox.length >= 50) {
+                outbox.shift();
+            }
+            outbox.push(message);
+            return false;
+        }
+
+        function handleRelayMessage(message) {
+            if (!message || message.session !== RELAY_SESSION_ID) return;
+            if (message.from === RELAY_CLIENT_ID) return;
+            const now = Date.now();
+            const senderDeviceId = message.deviceId || message.from;
+            if (message.type === 'presence' || message.type === 'hello') {
+                rememberPeerName(senderDeviceId, message.name);
+                peerPresence.set(senderDeviceId, {
+                    name: resolvePeerName(senderDeviceId, message.name || peerName || 'Partner'),
+                    lastSeen: now
+                });
+                if (message.style) {
+                    peerStyles.set(senderDeviceId, message.style);
+                }
+                updatePeerStatus();
+                return;
+            }
+            if (message.type === 'typing') {
+                if (message.active) {
+                    rememberPeerName(senderDeviceId, message.name);
+                    peerTyping.set(senderDeviceId, {
+                        active: true,
+                        name: resolvePeerName(senderDeviceId, message.name || peerName || 'Partner')
+                    });
+                    if (peerTypingTimeouts.has(senderDeviceId)) {
+                        clearTimeout(peerTypingTimeouts.get(senderDeviceId));
+                    }
+                    const timeoutId = setTimeout(() => {
+                        peerTyping.delete(senderDeviceId);
+                        peerTypingTimeouts.delete(senderDeviceId);
+                        updatePeerStatus();
+                    }, 2000);
+                    peerTypingTimeouts.set(senderDeviceId, timeoutId);
+                } else {
+                    peerTyping.delete(senderDeviceId);
+                    if (peerTypingTimeouts.has(senderDeviceId)) {
+                        clearTimeout(peerTypingTimeouts.get(senderDeviceId));
+                        peerTypingTimeouts.delete(senderDeviceId);
+                    }
+                }
+                updatePeerStatus();
+                return;
+            }
+            if (message.type === 'leave') {
+                peerPresence.delete(senderDeviceId);
+                peerTyping.delete(senderDeviceId);
+                if (peerTypingTimeouts.has(senderDeviceId)) {
+                    clearTimeout(peerTypingTimeouts.get(senderDeviceId));
+                    peerTypingTimeouts.delete(senderDeviceId);
+                }
+                peerStyles.delete(senderDeviceId);
+                updatePeerStatus();
+                return;
+            }
+            if (message.type === 'chat') {
+                rememberPeerName(senderDeviceId, message.name);
+                const attachments = Array.isArray(message.attachments)
+                    ? message.attachments.map(normalizeChatAttachment).filter(Boolean).slice(0, MAX_CHAT_ATTACHMENTS)
+                    : [];
+                chatHistory.push(normalizeChatEntry({
+                    id: message.id || createEntryId(),
+                    from: 'peer',
+                    name: resolvePeerName(senderDeviceId, message.name || peerName || 'Partner'),
+                    deviceId: senderDeviceId,
+                    message: message.text || '',
+                    attachments,
+                    replyTo: message.replyTo || null,
+                    style: message.style || peerStyles.get(senderDeviceId) || null,
+                    ts: message.ts || now
+                }));
+                saveChatHistory(chatHistory);
+                renderChat();
+                if (!document.hasFocus() || !isChatAtBottom()) {
+                    incrementUnreadCount();
+                }
+                return;
+            }
+            if (message.type === 'delete') {
+                const targetId = message.id;
+                if (!targetId) return;
+                const entry = chatHistory.find(item => item.id === targetId);
+                if (entry && !entry.deleted) {
+                    entry.deleted = true;
+                    entry.message = 'Post deleted.';
+                    entry.attachments = [];
+                    entry.pending = false;
+                    saveChatHistory(chatHistory);
+                    renderChat();
+                }
+                return;
+            }
+            if (message.type === 'sync-request') {
+                const since = Number(message.since) || 0;
+                const history = chatHistory.filter(entry => entry.ts > since).slice(-50);
+                sendRelayMessage({ type: 'sync-response', target: message.from, history });
+                return;
+            }
+            if (message.type === 'sync-response') {
+                if (message.target !== RELAY_CLIENT_ID) return;
+                if (!Array.isArray(message.history) || message.history.length === 0) return;
+                mergeChatHistory(message.history);
+            }
+        }
+
+        function connectRelay(force = false) {
+            if (relayState.ws && (relayState.ws.readyState === WebSocket.OPEN || relayState.ws.readyState === WebSocket.CONNECTING)) {
+                if (!force) {
+                    return;
+                }
+                relayState.ws.close();
+            }
+            if (reconnectTimer && !force) {
+                return;
+            }
+            if (reconnectTimer && force) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            updateConnectionStatus('Connecting…');
+            const url = new URL(RELAY_SIGNAL_WS_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            relayState.ws = new WebSocket(url.toString());
+            const ws = relayState.ws;
+            ws.onopen = () => {
+                if (relayState.ws !== ws) return;
+                updateConnectionStatus('Connected');
+                reconnectDelayMs = 1000;
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+                sendRelayMessage({ type: 'hello', name: joinName, style: getSenderStyle() });
+                sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
+                flushOutbox();
+                sendRelayMessage({ type: 'sync-request', since: getLatestChatTimestamp() });
+            };
+            ws.onmessage = event => {
+                if (relayState.ws !== ws) return;
+                try {
+                    handleRelayMessage(JSON.parse(event.data));
+                } catch (_) {}
+            };
+            ws.onclose = () => {
+                if (relayState.ws !== ws) return;
+                relayState.ws = null;
+                updateConnectionStatus('Offline');
+                scheduleReconnect();
+            };
+            ws.onerror = () => {
+                if (relayState.ws !== ws) return;
+                relayState.ws.close();
+            };
+        }
+
+        function scheduleReconnect() {
+            if (reconnectTimer) return;
+            const jitter = Math.floor(Math.random() * 400);
+            const delay = Math.min(reconnectDelayMs + jitter, 30000);
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                connectRelay(true);
+                reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
+            }, delay);
+        }
+
+        function flushOutbox() {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
+            while (outbox.length) {
+                const message = outbox.shift();
+                relayState.ws.send(JSON.stringify(message));
+                if (message.type === 'chat' && message.id) {
+                    markChatEntrySent(message.id);
+                }
+            }
+        }
+
+        function markChatEntrySent(entryId) {
+            const entry = chatHistory.find(item => item.id === entryId);
+            if (!entry || !entry.pending) return;
+            entry.pending = false;
+            saveChatHistory(chatHistory);
+            renderChat();
+        }
+
+        function getLatestChatTimestamp() {
+            if (!chatHistory.length) return 0;
+            return Math.max(...chatHistory.map(entry => entry.ts || 0));
+        }
+
+        function mergeChatHistory(incoming) {
+            const existing = new Map(chatHistory.map(entry => [entry.id, entry]));
+            incoming.map(normalizeChatEntry).filter(Boolean).forEach(entry => {
+                if (!existing.has(entry.id)) {
+                    existing.set(entry.id, entry);
+                }
+            });
+            chatHistory = Array.from(existing.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+            saveChatHistory(chatHistory);
+            renderChat();
+        }
+
+        setInterval(() => {
+            if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) return;
+            sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
+        }, 5000);
+
+        function setAttachmentAlert(message) {
+            if (!chatAttachmentAlert) return;
+            if (message) {
+                chatAttachmentAlert.textContent = message;
+                chatAttachmentAlert.classList.remove('hidden');
+            } else {
+                chatAttachmentAlert.textContent = '';
+                chatAttachmentAlert.classList.add('hidden');
+            }
+        }
+
+        function updateChatAttachmentUI() {
+            const label = chatAttachmentStatus.querySelector('span');
+            if (!label) return;
+            if (chatAttachmentPreview) {
+                chatAttachmentPreview.innerHTML = '';
+            }
+            if (pendingChatAttachments.length) {
+                label.textContent = `${pendingChatAttachments.length} attachment${pendingChatAttachments.length > 1 ? 's' : ''} ready.`;
+                chatAttachmentClear.classList.remove('hidden');
+                if (chatAttachmentPreview) {
+                    pendingChatAttachments.forEach((att, index) => {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'relative w-20 h-16 border border-slate-200 rounded-lg bg-white overflow-hidden flex items-center justify-center';
+                        const removeBtn = document.createElement('button');
+                        removeBtn.type = 'button';
+                        removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow';
+                        removeBtn.textContent = '✕';
+                        removeBtn.onclick = () => {
+                            pendingChatAttachments.splice(index, 1);
+                            updateChatAttachmentUI();
+                        };
+                        const mime = getAttachmentMime(att);
+                        if (mime.startsWith('image/') || isImageDataUrl(att.dataUrl)) {
+                            const img = document.createElement('img');
+                            img.src = att.dataUrl;
+                            img.alt = getAttachmentLabel(att);
+                            img.className = 'w-full h-full object-cover';
+                            wrapper.appendChild(img);
+                        } else {
+                            const icon = document.createElement('span');
+                            icon.className = 'material-symbols-outlined text-blue-500 text-lg';
+                            icon.textContent = 'description';
+                            wrapper.appendChild(icon);
+                        }
+                        wrapper.appendChild(removeBtn);
+                        chatAttachmentPreview.appendChild(wrapper);
+                    });
+                }
+            } else {
+                label.textContent = 'No attachments selected.';
+                chatAttachmentClear.classList.add('hidden');
+            }
+            setComposerMetrics();
+        }
+
+        function persistJoinName(rawName) {
+            const trimmed = (rawName || '').trim();
+            joinName = trimmed || buildDefaultName();
+            if (nameInput) nameInput.value = joinName;
+            writeStorage(NAME_STORAGE_KEY, joinName);
+            if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
+            }
+            updatePeerStatus();
+            if (isClientView) {
+                upsertSessionEntry({
+                    id: RELAY_SESSION_ID,
+                    room,
+                    pair,
+                    name: joinName,
+                    peer: peerName
+                });
+            }
+        }
+
+        function updateLocalChatNames() {
+            let changed = false;
+            chatHistory.forEach(entry => {
+                if (entry.from === 'local' && entry.name !== joinName) {
+                    entry.name = joinName;
+                    changed = true;
+                }
+            });
+            if (changed) {
+                saveChatHistory(chatHistory);
+                renderChat();
+            }
+        }
+
+        function requestJoinNameUpdate() {
+            if (!isClientView) return;
+            const nextName = window.prompt('Update device name', joinName);
+            if (nextName === null) return;
+            persistJoinName(nextName);
+            updateLocalChatNames();
+        }
+
+        function persistPeerName(rawName) {
+            const trimmed = (rawName || '').trim();
+            peerName = trimmed || 'Partner';
+            if (peerInput) peerInput.value = peerName;
+            writeStorage(PEER_NAME_STORAGE_KEY, peerName);
+            updatePeerStatus();
+            if (isClientView) {
+                upsertSessionEntry({
+                    id: RELAY_SESSION_ID,
+                    room,
+                    pair,
+                    name: joinName,
+                    peer: peerName
+                });
+            }
+        }
+
+        let isDraggingGear = false;
+        let gearDragStart = null;
+        let isTyping = false;
+        let typingTimeout = null;
+
+        function setComposerMetrics() {
+            if (!chatComposer) return;
+            const height = chatComposer.getBoundingClientRect().height;
+            document.documentElement.style.setProperty('--composer-height', `${Math.max(0, height)}px`);
+        }
+
+        function updateViewportMetrics() {
+            const viewport = window.visualViewport;
+            if (!viewport) {
+                document.documentElement.style.setProperty('--keyboard-offset', '0px');
+                return;
+            }
+            const offset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+            document.documentElement.style.setProperty('--keyboard-offset', `${offset}px`);
+        }
+
+        function clampGearPosition(x, y) {
+            if (!gearFab) return { x, y };
+            const rect = gearFab.getBoundingClientRect();
+            const width = rect.width || 48;
+            const height = rect.height || 48;
+            const maxX = Math.max(8, window.innerWidth - width - 8);
+            const maxY = Math.max(8, window.innerHeight - height - 8);
+            return {
+                x: Math.min(Math.max(8, x), maxX),
+                y: Math.min(Math.max(8, y), maxY)
+            };
+        }
+
+        function setGearPosition(x, y) {
+            if (!gearFab) return;
+            const clamped = clampGearPosition(x, y);
+            gearFab.style.left = `${clamped.x}px`;
+            gearFab.style.top = `${clamped.y}px`;
+        }
+
+        function loadGearPosition() {
+            const fallback = { x: window.innerWidth - 72, y: window.innerHeight - 200 };
+            try {
+                const raw = readStorage(GEAR_STORAGE_KEY);
+                if (!raw) return fallback;
+                const parsed = JSON.parse(raw);
+                if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y)) {
+                    return parsed;
+                }
+            } catch (_) {}
+            return fallback;
+        }
+
+        function saveGearPosition(position) {
+            writeStorage(GEAR_STORAGE_KEY, JSON.stringify(position));
+        }
+
+        function setTypingState(active) {
+            if (!isClientView) return;
+            if (active === isTyping) return;
+            isTyping = active;
+            sendRelayMessage({ type: 'typing', active, name: joinName });
+            if (!active && typingTimeout) {
+                clearTimeout(typingTimeout);
+                typingTimeout = null;
+            }
+        }
+
+        function openStyleConfig() {
+            if (!styleLocalBg || !styleLocalText || !stylePeerBg || !stylePeerText || !styleFontSize) return;
+            styleLocalBg.value = bubbleStyles.localBg;
+            styleLocalText.value = bubbleStyles.localText;
+            stylePeerBg.value = bubbleStyles.peerBg;
+            stylePeerText.value = bubbleStyles.peerText;
+            styleFontSize.value = bubbleStyles.fontSize;
+            toggleModal('style-config', true);
+        }
+
+        function getFileExtension(filename) {
+            if (!filename) return '';
+            const parts = filename.split('.');
+            if (parts.length < 2) return '';
+            return parts.pop().toLowerCase();
+        }
+
+        function readFileAsDataUrl(file, mimeOverride) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    let result = reader.result;
+                    if (typeof result === 'string' && mimeOverride && result.startsWith('data:;base64,')) {
+                        const base64 = result.split(',')[1];
+                        result = `data:${mimeOverride};base64,${base64}`;
+                    }
+                    resolve(result);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        chatAttachmentButton.onclick = () => chatAttachmentInput.click();
+        chatAttachmentInput.onchange = async () => {
+            const files = Array.from(chatAttachmentInput.files || []);
+            if (!files.length) return;
+            setAttachmentAlert('');
+            let skippedTooLarge = 0;
+            let skippedUnsupported = 0;
+            for (const file of files) {
+                if (pendingChatAttachments.length >= MAX_CHAT_ATTACHMENTS) {
+                    break;
+                }
+                const ext = getFileExtension(file.name);
+                const inferredMime = CHAT_ATTACHMENT_EXTENSION_MAP[ext] || '';
+                const fileMime = file.type || inferredMime;
+                if (!isAllowedAttachmentMime(fileMime)) {
+                    skippedUnsupported += 1;
+                    continue;
+                }
+                try {
+                    const dataUrl = await readFileAsDataUrl(file, inferredMime);
+                    let finalDataUrl = dataUrl;
+                    let finalMime = fileMime;
+                    if (fileMime.startsWith('image/')) {
+                        finalDataUrl = await compressChatAttachmentDataUrl(dataUrl);
+                        finalMime = 'image/jpeg';
+                    }
+                    const bytes = estimateDataUrlBytes(finalDataUrl);
+                    if (bytes > MAX_CHAT_ATTACHMENT_BYTES) {
+                        skippedTooLarge += 1;
+                        continue;
+                    }
+                    pendingChatAttachments.push({
+                        type: finalMime.startsWith('image/') ? 'image' : 'file',
+                        dataUrl: finalDataUrl,
+                        name: file.name,
+                        size: bytes,
+                        mime: finalMime
+                    });
+                } catch (_) {}
+            }
+            chatAttachmentInput.value = '';
+            if (skippedTooLarge || skippedUnsupported) {
+                const messages = [];
+                if (skippedTooLarge) {
+                    messages.push(`${skippedTooLarge} attachment${skippedTooLarge > 1 ? 's are' : ' is'} too large to send.`);
+                }
+                if (skippedUnsupported) {
+                    messages.push(`${skippedUnsupported} attachment${skippedUnsupported > 1 ? 's were' : ' was'} not supported.`);
+                }
+                setAttachmentAlert(messages.join(' '));
+            }
+            updateChatAttachmentUI();
+        };
+
+        chatAttachmentClear.onclick = () => {
+            pendingChatAttachments = [];
+            setAttachmentAlert('');
+            updateChatAttachmentUI();
+        };
+
+        if (nameInput) {
+            nameInput.addEventListener('change', event => {
+                persistJoinName(event.target.value);
+            });
+            nameInput.addEventListener('blur', event => {
+                persistJoinName(event.target.value);
+            });
+        }
+        if (peerInput) {
+            peerInput.addEventListener('change', event => {
+                persistPeerName(event.target.value);
+            });
+            peerInput.addEventListener('blur', event => {
+                persistPeerName(event.target.value);
+            });
+        }
+
+        if (chatInput) {
+            chatInput.addEventListener('focus', () => setComposerMetrics());
+        }
+
+        function buildExportPayload() {
+            return {
+                room,
+                pair,
+                exportedAt: new Date().toISOString(),
+                history: chatHistory
+            };
+        }
+
+        function triggerExportDownload(payload) {
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `talk-${room}-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        if (drawerClear) {
+            drawerClear.addEventListener('click', () => {
+                triggerExportDownload(buildExportPayload());
+                chatHistory = [];
+                saveChatHistory(chatHistory);
+                renderChat();
+            });
+        }
+
+        if (drawerExport) {
+            drawerExport.addEventListener('click', () => {
+                triggerExportDownload(buildExportPayload());
+            });
+        }
+
+        function refreshChatHistory() {
+            chatHistory = loadChatHistory();
+            renderChat();
+            updatePeerStatus();
+        }
+
+        if (drawerRefresh) {
+            drawerRefresh.addEventListener('click', () => {
+                refreshChatHistory();
+                connectRelay(true);
+            });
+        }
+
+        if (controlPanelRefresh) {
+            controlPanelRefresh.addEventListener('click', () => {
+                refreshChatHistory();
+                connectRelay(true);
+            });
+        }
+
+        if (drawerImport && drawerImportInput) {
+            drawerImport.addEventListener('click', () => drawerImportInput.click());
+            drawerImportInput.addEventListener('change', async () => {
+                const file = drawerImportInput.files?.[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const payload = JSON.parse(text);
+                    const importedHistory = Array.isArray(payload?.history)
+                        ? payload.history.map(normalizeChatEntry).filter(Boolean)
+                        : [];
+                    chatHistory = importedHistory;
+                    saveChatHistory(chatHistory);
+                    renderChat();
+                } catch (_) {}
+                drawerImportInput.value = '';
+            });
+        }
+
+        if (drawerShare) {
+            drawerShare.addEventListener('click', async () => {
+                const payload = buildExportPayload();
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+                const file = new File([blob], `talk-${room}.json`, { type: 'application/json' });
+                if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+                    try {
+                        await navigator.share({ files: [file], title: `Talk export (${room})` });
+                        return;
+                    } catch (_) {}
+                }
+                try {
+                    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                    const originalTitle = drawerShare.getAttribute('title') || 'Share export';
+                    drawerShare.classList.add('text-emerald-500', 'border-emerald-100');
+                    drawerShare.setAttribute('title', 'Copied!');
+                    setTimeout(() => {
+                        drawerShare.classList.remove('text-emerald-500', 'border-emerald-100');
+                        drawerShare.setAttribute('title', originalTitle);
+                    }, 1500);
+                } catch (_) {}
+            });
+        }
+
+        if (drawerConfig) {
+            drawerConfig.addEventListener('click', () => {
+                openStyleConfig();
+            });
+        }
+
+        if (notificationsToggle) {
+            notificationsToggle.addEventListener('change', event => {
+                setNotificationsEnabled(event.target.checked);
+            });
+        }
+
+        if (controlNotificationsToggle) {
+            controlNotificationsToggle.addEventListener('change', event => {
+                setNotificationsEnabled(event.target.checked);
+            });
+        }
+
+        if (styleSave) {
+            styleSave.addEventListener('click', () => {
+                bubbleStyles = {
+                    localBg: styleLocalBg.value,
+                    localText: styleLocalText.value,
+                    peerBg: stylePeerBg.value,
+                    peerText: stylePeerText.value,
+                    fontSize: Number(styleFontSize.value)
+                };
+                saveBubbleStyles(bubbleStyles);
+                applyBubbleStyles(bubbleStyles);
+                if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                    sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
+                }
+                toggleModal('style-config', false);
+                renderChat();
+            });
+        }
+
+        if (styleReset) {
+            styleReset.addEventListener('click', () => {
+                bubbleStyles = { ...defaultBubbleStyles };
+                saveBubbleStyles(bubbleStyles);
+                applyBubbleStyles(bubbleStyles);
+                if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
+                    sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
+                }
+                openStyleConfig();
+                renderChat();
+            });
+        }
+
+        if (closeStyleConfig) {
+            closeStyleConfig.addEventListener('click', () => toggleModal('style-config', false));
+        }
+
+        if (replyPreviewClear) {
+            replyPreviewClear.addEventListener('click', () => {
+                clearReplyContext();
+            });
+        }
+
+        const styleConfigModal = document.getElementById('style-config-modal');
+        if (styleConfigModal) {
+            styleConfigModal.addEventListener('click', event => {
+                if (event.target.id === 'style-config-modal') {
+                    toggleModal('style-config', false);
+                }
+            });
+        }
+
+        if (controlsModal) {
+            controlsModal.addEventListener('click', event => {
+                if (event.target.id === 'controls-modal') {
+                    toggleModal('controls', false);
+                }
+            });
+        }
+
+        if (closeControls) {
+            closeControls.addEventListener('click', () => toggleModal('controls', false));
+        }
+
+        if (gearFab) {
+            const initial = loadGearPosition();
+            setGearPosition(initial.x, initial.y);
+            gearFab.addEventListener('pointerdown', event => {
+                gearFab.setPointerCapture(event.pointerId);
+                const left = parseFloat(gearFab.style.left) || initial.x;
+                const top = parseFloat(gearFab.style.top) || initial.y;
+                gearDragStart = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    originX: left,
+                    originY: top
+                };
+                isDraggingGear = false;
+            });
+            gearFab.addEventListener('pointermove', event => {
+                if (!gearDragStart) return;
+                const dx = event.clientX - gearDragStart.startX;
+                const dy = event.clientY - gearDragStart.startY;
+                if (Math.abs(dx) + Math.abs(dy) > 4) {
+                    isDraggingGear = true;
+                }
+                setGearPosition(gearDragStart.originX + dx, gearDragStart.originY + dy);
+            });
+            const finishGearDrag = event => {
+                if (!gearDragStart) return;
+                if (gearDragStart.pointerId !== event.pointerId) return;
+                gearFab.releasePointerCapture(event.pointerId);
+                const left = parseFloat(gearFab.style.left) || 0;
+                const top = parseFloat(gearFab.style.top) || 0;
+                saveGearPosition({ x: left, y: top });
+                gearDragStart = null;
+                if (!isDraggingGear) {
+                    toggleModal('controls', true);
+                }
+                isDraggingGear = false;
+            };
+            gearFab.addEventListener('pointerup', finishGearDrag);
+            gearFab.addEventListener('pointercancel', finishGearDrag);
+        }
+
+        if (sessionList && sessionListPanel && !isClientView) {
+            renderSessionList();
+            sessionList.addEventListener('click', event => {
+                const removeButton = event.target.closest('.session-remove');
+                if (removeButton) {
+                    const sessionId = removeButton.dataset.sessionId;
+                    removeSessionEntry(sessionId);
+                    return;
+                }
+                const launchButton = event.target.closest('.session-launch');
+                if (launchButton) {
+                    const sessionId = launchButton.dataset.sessionId;
+                    const sessions = loadSessionList();
+                    const session = sessions.find(item => item.id === sessionId);
+                    const clientUrl = buildSessionLaunchUrl(session);
+                    window.open(clientUrl, '_blank', 'noopener');
+                }
+            });
+            window.addEventListener('storage', event => {
+                if (event.key === SESSION_LIST_STORAGE_KEY) {
+                    renderSessionList();
+                }
+            });
+            setInterval(renderSessionList, 60000);
+        }
+
+        if (launchSessionButton) {
+            launchSessionButton.onclick = () => {
+                const nextRoom = (roomInput?.value || '').trim() || defaultRoom;
+                const nextPair = allowedPairs.includes(pairSelect?.value) ? pairSelect.value : defaultPair;
+                const nextName = (nameInput?.value || '').trim() || joinName;
+                const nextPeer = (peerInput?.value || '').trim() || peerName;
+                persistJoinName(nextName);
+                persistPeerName(nextPeer);
+                const sessionId = buildSessionId(nextRoom, nextPair);
+                upsertSessionEntry({
+                    id: sessionId,
+                    room: nextRoom,
+                    pair: normalizePair(nextPair),
+                    name: nextName,
+                    peer: nextPeer,
+                    updatedAt: Date.now()
+                });
+                const clientUrl = buildClientUrl({ nextRoom, nextPair, nextName, nextPeer });
+                window.open(clientUrl, '_blank', 'noopener');
+            };
+        }
+
+        chatSend.onclick = () => {
+            if (!isClientView) return;
+            const text = (chatInput.value || '').trim();
+            if (!text && pendingChatAttachments.length === 0) return;
+            if (text.length > CHAT_MAX_LENGTH) return;
+            const now = Date.now();
+            if (now - lastChatSentAt < CHAT_COOLDOWN_MS) return;
+            const attachments = pendingChatAttachments.slice();
+            const entryId = createEntryId();
+            const entry = {
+                id: entryId,
+                from: 'local',
+                name: joinName,
+                message: text,
+                attachments,
+                replyTo: replyContext ? { ...replyContext } : null,
+                style: getSenderStyle(),
+                ts: now,
+                pending: true
+            };
+            chatHistory.push(entry);
+            saveChatHistory(chatHistory);
+            renderChat();
+            lastChatSentAt = now;
+            sendRelayMessage({
+                type: 'chat',
+                id: entryId,
+                text,
+                attachments,
+                name: joinName,
+                replyTo: replyContext ? { ...replyContext } : null,
+                style: getSenderStyle()
+            });
+            setTypingState(false);
+            chatInput.value = '';
+            pendingChatAttachments = [];
+            setAttachmentAlert('');
+            updateChatAttachmentUI();
+            clearReplyContext();
+        };
+
+        if (controlPanel && controlPanelToggle) {
+            try {
+                const storedPanelState = readStorage(CONTROL_PANEL_STORAGE_KEY);
+                controlPanelCollapsed = storedPanelState === 'collapsed';
+            } catch (_) {}
+            updateControlPanelUI();
+            controlPanelToggle.addEventListener('click', () => {
+                controlPanelCollapsed = !controlPanelCollapsed;
+                updateControlPanelUI();
+                writeStorage(CONTROL_PANEL_STORAGE_KEY, controlPanelCollapsed ? 'collapsed' : 'expanded');
+            });
+        }
+
+        chatInput.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                chatSend.click();
+            }
+        });
+        chatInput.addEventListener('paste', event => {
+            const clipboard = event.clipboardData;
+            if (!clipboard) return;
+            const html = clipboard.getData('text/html');
+            const rtf = clipboard.getData('text/rtf');
+            if (html) {
+                event.preventDefault();
+                const fragment = extractHtmlFragment(html).trim();
+                if (fragment) {
+                    insertTextAtCursor(chatInput, fragment);
+                }
+                return;
+            }
+            if (rtf) {
+                event.preventDefault();
+                insertTextAtCursor(chatInput, rtf.trim());
+            }
+        });
+        chatInput.addEventListener('input', () => {
+            if (!isClientView) return;
+            setTypingState(true);
+            if (typingTimeout) {
+                clearTimeout(typingTimeout);
+            }
+            typingTimeout = setTimeout(() => {
+                setTypingState(false);
+            }, 1200);
+        });
+        chatInput.addEventListener('blur', () => {
+            if (!isClientView) return;
+            setTypingState(false);
+        });
+
+        if (chatHistoryEl) {
+            chatHistoryEl.addEventListener('scroll', () => {
+                if (isChatAtBottom() && document.hasFocus()) {
+                    clearUnreadCount();
+                }
+            });
+        }
+
+        if (localPresenceLabel && isClientView) {
+            localPresenceLabel.classList.add('cursor-pointer');
+            localPresenceLabel.title = 'Click to rename device';
+            localPresenceLabel.addEventListener('click', () => {
+                requestJoinNameUpdate();
+            });
+        }
+
+        document.getElementById('close-chat-attachment').onclick = () => toggleModal('chat-attachment', false);
+        document.getElementById('chat-attachment-modal').addEventListener('click', event => {
+            if (event.target.id === 'chat-attachment-modal') {
+                toggleModal('chat-attachment', false);
+            }
+        });
+
+        if (copyLinkButton) {
+            copyLinkButton.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(buildClientUrl({ nextName: peerName, nextPeer: joinName }));
+                    copyLinkButton.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyLinkButton.innerHTML = '<span class="material-symbols-outlined text-sm">link</span>Copy link';
+                    }, 1500);
+                } catch (_) {}
+            };
+        }
+
+        setComposerMetrics();
+        updateViewportMetrics();
+        window.addEventListener('resize', () => {
+            setComposerMetrics();
+            updateViewportMetrics();
+            if (gearFab) {
+                const left = parseFloat(gearFab.style.left) || 0;
+                const top = parseFloat(gearFab.style.top) || 0;
+                setGearPosition(left, top);
+            }
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                updateViewportMetrics();
+                setComposerMetrics();
+            });
+            window.visualViewport.addEventListener('scroll', updateViewportMetrics);
+        }
+        updateChatAttachmentUI();
+        updateReplyPreview();
+        updatePeerStatus();
+        if (isClientView) {
+            upsertSessionEntry({
+                id: RELAY_SESSION_ID,
+                room,
+                pair,
+                name: joinName,
+                peer: peerName,
+                updatedAt: Date.now()
+            });
+            if (navigator.storage && navigator.storage.persist) {
+                navigator.storage.persist().catch(() => {});
+            }
+            renderChat();
+            connectRelay();
+            window.addEventListener('focus', () => {
+                connectRelay();
+                if (isChatAtBottom()) {
+                    clearUnreadCount();
+                }
+            });
+            window.addEventListener('online', connectRelay);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    connectRelay();
+                    if (isChatAtBottom()) {
+                        clearUnreadCount();
+                    }
+                }
+            });
+            window.addEventListener('pagehide', () => {
+                saveChatHistory(chatHistory);
+            });
+            window.addEventListener('beforeunload', () => {
+                setTypingState(false);
+                sendRelayMessage({ type: 'leave', name: joinName });
+            });
+            setInterval(() => {
+                if (!relayState.ws || relayState.ws.readyState === WebSocket.CLOSED) {
+                    connectRelay();
+                }
+            }, 2000);
+        }
+        setInterval(() => {
+            const now = Date.now();
+            let changed = false;
+            peerPresence.forEach((value, key) => {
+                if (now - (value.lastSeen || 0) > 15000) {
+                    peerPresence.delete(key);
+                    peerTyping.delete(key);
+                    if (peerTypingTimeouts.has(key)) {
+                        clearTimeout(peerTypingTimeouts.get(key));
+                        peerTypingTimeouts.delete(key);
+                    }
+                    peerStyles.delete(key);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                updatePeerStatus();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

@@ -166,9 +166,13 @@
                 <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
                 <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
             </div>
-            <div class="flex items-center justify-between text-[10px] text-gray-400" id="peer-chat-attachments">
-                <span>No attachments selected.</span>
-                <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
+            <div class="flex flex-col gap-2 text-[10px] text-gray-400" id="peer-chat-attachments">
+                <div class="flex items-center justify-between">
+                    <span>No attachments selected.</span>
+                    <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
+                </div>
+                <div id="peer-chat-attachments-alert" class="hidden text-rose-500"></div>
+                <div id="peer-chat-attachments-preview" class="flex flex-wrap gap-2"></div>
             </div>
         </div>
     </div>
@@ -1488,6 +1492,28 @@
             } catch (_) {}
         }
 
+        function createChatEntryId() {
+            return (crypto.randomUUID ? crypto.randomUUID() : `entry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+        }
+
+        function normalizeChatEntry(entry) {
+            if (!entry || typeof entry !== 'object') return null;
+            return {
+                id: entry.id || createChatEntryId(),
+                from: entry.from,
+                name: entry.name,
+                message: entry.message || '',
+                attachments: Array.isArray(entry.attachments)
+                    ? entry.attachments.map(normalizeChatAttachment).filter(Boolean)
+                    : [],
+                ts: entry.ts || Date.now(),
+                translations: entry.translations || {},
+                deleted: Boolean(entry.deleted),
+                pending: Boolean(entry.pending),
+                status: entry.status || null
+            };
+        }
+
         function loadPeerChat(peerId) {
             if (peerChatHistory.has(peerId)) return peerChatHistory.get(peerId);
             let history = [];
@@ -1497,14 +1523,20 @@
             } catch (_) {
                 history = [];
             }
-            peerChatHistory.set(peerId, history);
-            return history;
+            const normalized = Array.isArray(history)
+                ? history.map(normalizeChatEntry).filter(Boolean)
+                : [];
+            peerChatHistory.set(peerId, normalized);
+            return normalized;
         }
 
         function savePeerChat(peerId, history) {
-            peerChatHistory.set(peerId, history);
+            const payload = Array.isArray(history)
+                ? history.map(normalizeChatEntry).filter(Boolean)
+                : [];
+            peerChatHistory.set(peerId, payload);
             try {
-                localStorage.setItem(getPeerChatKey(peerId), JSON.stringify(history.slice(-200)));
+                localStorage.setItem(getPeerChatKey(peerId), JSON.stringify(payload.slice(-200)));
             } catch (_) {}
         }
 
@@ -1544,6 +1576,100 @@
         const seenTapIds = new Set();
         const pendingTransientEvents = [];
         let pendingChatAttachments = [];
+        const chatStatusOrder = {
+            pending: 0,
+            sent: 1,
+            ack: 2,
+            read: 3
+        };
+
+        function getStoredPeerChatIds() {
+            const ids = new Set(peerChatHistory.keys());
+            const prefix = `${getPeerChatKey('')}`;
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key || !key.startsWith(prefix)) continue;
+                ids.add(key.slice(prefix.length));
+            }
+            return Array.from(ids).filter(Boolean);
+        }
+
+        function updateChatEntryStatus(peerId, entryId, nextStatus) {
+            if (!peerId || !entryId) return;
+            const chatHistory = loadPeerChat(peerId);
+            const entry = chatHistory.find(item => item.id === entryId);
+            if (!entry || entry.from !== 'local') return;
+            const currentStatus = entry.status || (entry.pending ? 'pending' : 'sent');
+            if ((chatStatusOrder[nextStatus] ?? 0) <= (chatStatusOrder[currentStatus] ?? 0)) return;
+            entry.status = nextStatus;
+            entry.pending = nextStatus === 'pending';
+            savePeerChat(peerId, chatHistory);
+            if (activePeerModalId === peerId) {
+                renderPeerChat(peerId);
+            }
+        }
+
+        function markChatEntrySent(peerId, entryId) {
+            updateChatEntryStatus(peerId, entryId, 'sent');
+        }
+
+        function getLatestChatTimestamp(peerId) {
+            const chatHistory = loadPeerChat(peerId);
+            if (!chatHistory.length) return 0;
+            return Math.max(...chatHistory.map(entry => entry.ts || 0));
+        }
+
+        function mergeChatHistory(peerId, incoming) {
+            if (!peerId || !Array.isArray(incoming) || incoming.length === 0) return;
+            const existing = new Map(loadPeerChat(peerId).map(entry => [entry.id, entry]));
+            incoming.map(normalizeChatEntry).filter(Boolean).forEach(entry => {
+                if (!existing.has(entry.id)) {
+                    existing.set(entry.id, entry);
+                }
+            });
+            const merged = Array.from(existing.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+            savePeerChat(peerId, merged);
+            if (activePeerModalId === peerId) {
+                renderPeerChat(peerId);
+            }
+        }
+
+        function requestChatSync(peerId) {
+            if (!peerId) return;
+            sendRelayMessage({ type: 'sync-request', to: peerId, since: getLatestChatTimestamp(peerId) });
+        }
+
+        function sendChatReadReceipt(peerId) {
+            if (!peerId) return;
+            const chatHistory = loadPeerChat(peerId);
+            const lastPeerMessage = [...chatHistory].reverse().find(entry => entry.from === 'peer' && entry.id);
+            if (lastPeerMessage) {
+                sendRelayMessage({ type: 'chat-read', to: peerId, id: lastPeerMessage.id });
+            }
+        }
+
+        function updateLocalChatNames() {
+            const peerIds = getStoredPeerChatIds();
+            let changed = false;
+            peerIds.forEach(peerId => {
+                const chatHistory = loadPeerChat(peerId);
+                let peerChanged = false;
+                chatHistory.forEach(entry => {
+                    if (entry.from === 'local' && entry.name !== joinState.name) {
+                        entry.name = joinState.name;
+                        peerChanged = true;
+                    }
+                });
+                if (peerChanged) {
+                    savePeerChat(peerId, chatHistory);
+                    if (activePeerModalId === peerId) {
+                        renderPeerChat(peerId);
+                    }
+                    changed = true;
+                }
+            });
+            return changed;
+        }
 
         function getUnreadChatTotal() {
             return Array.from(unreadChatByPeer.values()).reduce((total, count) => total + count, 0);
@@ -2006,6 +2132,7 @@
 
             renderPeerChat(peerId);
             clearUnreadForPeer(peerId);
+            sendChatReadReceipt(peerId);
         }
 
         function closePeerModal() {
@@ -2031,65 +2158,107 @@
                 bubble.className = entry.from === 'local'
                     ? 'bg-blue-100 text-blue-800 p-2 rounded-lg text-xs ml-auto max-w-[85%]'
                     : 'bg-gray-200 text-gray-700 p-2 rounded-lg text-xs mr-auto max-w-[85%]';
-                const nameLine = document.createElement('div');
-                nameLine.className = 'font-semibold text-[10px] uppercase';
-                nameLine.textContent = entry.from === 'local'
-                    ? (joinState.name || 'You')
+                const headerLine = document.createElement('div');
+                headerLine.className = 'flex items-center justify-between text-[10px] uppercase font-semibold text-gray-500';
+                const label = document.createElement('span');
+                const senderName = entry.from === 'local'
+                    ? (entry.name || joinState.name || 'You')
                     : (entry.name || 'Peer');
+                const status = entry.from === 'local'
+                    ? (entry.status || (entry.pending ? 'pending' : 'sent'))
+                    : null;
+                const statusMap = {
+                    pending: 'Sending…',
+                    sent: 'Sent',
+                    ack: 'Ack',
+                    read: 'Read'
+                };
+                const statusText = status && statusMap[status] ? ` • ${statusMap[status]}` : '';
+                label.textContent = `${senderName} • ${formatTimestamp(entry.ts)}${statusText}`;
+                headerLine.appendChild(label);
+                if (!entry.deleted) {
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.type = 'button';
+                    deleteBtn.className = 'text-gray-300 hover:text-rose-400 text-[14px] leading-none';
+                    deleteBtn.textContent = '✕';
+                    deleteBtn.title = 'Delete post';
+                    deleteBtn.onclick = () => deleteChatEntry(peerId, entry.id);
+                    headerLine.appendChild(deleteBtn);
+                }
                 const messageLine = document.createElement('div');
                 messageLine.className = 'space-y-2 break-words';
-                if (showDual) {
-                    const dual = document.createElement('div');
-                    dual.className = 'grid grid-cols-2 gap-2';
-                    const original = document.createElement('div');
-                    original.innerHTML = renderMarkdown(messageText);
-                    const translated = document.createElement('div');
-                    translated.className = 'text-gray-500';
-                    if (!messageText) {
-                        translated.textContent = '';
-                    } else {
-                        const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
-                        if (cached) {
-                            translated.innerHTML = renderMarkdown(cached);
-                        } else {
-                            translated.textContent = '…';
-                            queueChatTranslation(entry, translationTarget, peerId, chatHistory);
-                        }
-                    }
-                    dual.appendChild(original);
-                    dual.appendChild(translated);
-                    messageLine.appendChild(dual);
-                } else if (showTranslation) {
-                    if (!messageText) {
-                        messageLine.textContent = '';
-                    } else {
-                        const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
-                        if (cached) {
-                            messageLine.innerHTML = renderMarkdown(cached);
-                        } else {
-                            messageLine.textContent = '…';
-                            queueChatTranslation(entry, translationTarget, peerId, chatHistory);
-                        }
-                    }
+                if (entry.deleted) {
+                    const deletedLine = document.createElement('div');
+                    deletedLine.className = 'text-[10px] text-gray-400 italic';
+                    deletedLine.textContent = `Post deleted • ${formatTimestamp(entry.ts)}`;
+                    messageLine.appendChild(deletedLine);
                 } else {
-                    messageLine.innerHTML = renderMarkdown(messageText);
+                    if (showDual) {
+                        const dual = document.createElement('div');
+                        dual.className = 'grid grid-cols-2 gap-2';
+                        const original = document.createElement('div');
+                        original.innerHTML = renderMarkdown(messageText);
+                        const translated = document.createElement('div');
+                        translated.className = 'text-gray-500';
+                        if (!messageText) {
+                            translated.textContent = '';
+                        } else {
+                            const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
+                            if (cached) {
+                                translated.innerHTML = renderMarkdown(cached);
+                            } else {
+                                translated.textContent = '…';
+                                queueChatTranslation(entry, translationTarget, peerId, chatHistory);
+                            }
+                        }
+                        dual.appendChild(original);
+                        dual.appendChild(translated);
+                        messageLine.appendChild(dual);
+                    } else if (showTranslation) {
+                        if (!messageText) {
+                            messageLine.textContent = '';
+                        } else {
+                            const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
+                            if (cached) {
+                                messageLine.innerHTML = renderMarkdown(cached);
+                            } else {
+                                messageLine.textContent = '…';
+                                queueChatTranslation(entry, translationTarget, peerId, chatHistory);
+                            }
+                        }
+                    } else {
+                        messageLine.innerHTML = renderMarkdown(messageText);
+                    }
+                    if (Array.isArray(entry.attachments) && entry.attachments.length) {
+                        appendChatAttachments(messageLine, entry.attachments, {
+                            allowDelete: entry.from === 'local',
+                            peerId,
+                            entryIndex
+                        });
+                    }
                 }
-                if (Array.isArray(entry.attachments) && entry.attachments.length) {
-                    appendChatAttachments(messageLine, entry.attachments, {
-                        allowDelete: entry.from === 'local',
-                        peerId,
-                        entryIndex
-                    });
-                }
-                const timeLine = document.createElement('div');
-                timeLine.className = 'text-[10px] text-gray-400 mt-1';
-                timeLine.textContent = formatTimestamp(entry.ts);
-                bubble.appendChild(nameLine);
+                bubble.appendChild(headerLine);
                 bubble.appendChild(messageLine);
-                bubble.appendChild(timeLine);
                 chatBox.appendChild(bubble);
             });
             chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function deleteChatEntry(peerId, entryId) {
+            if (!peerId || !entryId) return;
+            const chatHistory = loadPeerChat(peerId);
+            const entry = chatHistory.find(item => item.id === entryId);
+            if (!entry || entry.deleted) return;
+            entry.deleted = true;
+            entry.message = 'Post deleted.';
+            entry.attachments = [];
+            entry.pending = false;
+            entry.status = entry.status || 'sent';
+            savePeerChat(peerId, chatHistory);
+            if (activePeerModalId === peerId) {
+                renderPeerChat(peerId);
+            }
+            sendRelayMessage({ type: 'delete', to: peerId, id: entryId });
         }
 
         function recordPeerConnectionStart(peerId, ts) {
@@ -3042,6 +3211,7 @@
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
             } catch (_) {}
             updateLocalProfileUI();
+            updateLocalChatNames();
             sendPresence('rename');
             appendDeviceLog('identity', `Updated display name to "${trimmed}".`);
         }
@@ -3255,6 +3425,7 @@
                     queuePresencePulse('join');
                     appendDeviceLog('peer-join', `Peer ${incomingName || message.from} joined.`);
                     sendSnapshot('peer-join', message.from);
+                    requestChatSync(message.from);
                 } else if (wasSuspended && message.state === 'active') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.connectedAt = now;
@@ -3263,6 +3434,7 @@
                     queuePresencePulse('join');
                     appendDeviceLog('peer-return', `Peer ${incomingName || message.from} returned.`);
                     sendSnapshot('peer-return', message.from);
+                    requestChatSync(message.from);
                 } else if (message.state === 'suspended' && existing.state !== 'suspended') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.disconnectedAt = now;
@@ -3327,25 +3499,79 @@
                         .filter(Boolean)
                         .slice(0, MAX_CHAT_ATTACHMENTS)
                     : [];
-                const entry = {
+                const entry = normalizeChatEntry({
+                    id: message.id || createChatEntryId(),
                     from: 'peer',
                     name: message.name || peerPresence.get(peerId)?.name || 'Peer',
                     message: message.text || '',
                     attachments,
                     ts: message.ts || Date.now()
-                };
+                });
                 chatHistory.push(entry);
                 savePeerChat(peerId, chatHistory);
+                if (entry?.id) {
+                    sendRelayMessage({ type: 'chat-ack', to: peerId, id: entry.id });
+                }
                 const isActivePeer = activePeerModalId === peerId;
                 if (isActivePeer && isPeerChatOpen()) {
                     renderPeerChat(peerId);
                     clearUnreadForPeer(peerId);
+                    if (entry?.id) {
+                        sendRelayMessage({ type: 'chat-read', to: peerId, id: entry.id });
+                    }
                 } else {
                     incrementUnreadChat(peerId);
                     if (shouldAlertChat()) {
                         notifyChat(entry);
                     }
                 }
+                return;
+            }
+            if (message.type === 'chat-ack') {
+                updateChatEntryStatus(message.from, message.id, 'ack');
+                return;
+            }
+            if (message.type === 'chat-read') {
+                updateChatEntryStatus(message.from, message.id, 'read');
+                return;
+            }
+            if (message.type === 'delete') {
+                const peerId = message.from;
+                const chatHistory = loadPeerChat(peerId);
+                const entry = chatHistory.find(item => item.id === message.id);
+                if (entry && !entry.deleted) {
+                    entry.deleted = true;
+                    entry.message = 'Post deleted.';
+                    entry.attachments = [];
+                    entry.pending = false;
+                    savePeerChat(peerId, chatHistory);
+                    if (activePeerModalId === peerId) {
+                        renderPeerChat(peerId);
+                    }
+                }
+                return;
+            }
+            if (message.type === 'sync-request') {
+                const peerId = message.from;
+                const since = Number(message.since) || 0;
+                const history = loadPeerChat(peerId).filter(entry => entry.ts > since).slice(-50);
+                sendRelayMessage({ type: 'sync-response', to: peerId, target: message.from, history });
+                return;
+            }
+            if (message.type === 'sync-response') {
+                if (message.target !== RELAY_CLIENT_ID) return;
+                if (!Array.isArray(message.history) || message.history.length === 0) return;
+                const incoming = message.history.map(entry => {
+                    const normalized = normalizeChatEntry(entry);
+                    if (!normalized) return null;
+                    if (normalized.from === 'local') {
+                        normalized.from = 'peer';
+                    } else if (normalized.from === 'peer') {
+                        normalized.from = 'local';
+                    }
+                    return normalized;
+                }).filter(Boolean);
+                mergeChatHistory(message.from, incoming);
                 return;
             }
 
@@ -3389,6 +3615,9 @@
                 lastRelayActivityAt = message.ts;
                 relayState.ws.send(JSON.stringify(message));
                 updateSyncIndicator('live');
+                if (message.type === 'chat' && message.id && message.to) {
+                    markChatEntrySent(message.to, message.id);
+                }
                 return true;
             }
             const isTransient = payload.transient
@@ -3483,6 +3712,7 @@
                 sendRelayMessage({ type: 'reattach', transient: true });
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
                 fetchRelayBackfill('reconnect');
+                Array.from(peerPresence.keys()).forEach(peerId => requestChatSync(peerId));
                 flushPendingTransientEvents();
                 startPresenceUpdates();
                 startRelayHeartbeat();
@@ -3966,15 +4196,60 @@
         const chatAttachmentInput = document.getElementById('peer-chat-attachments-input');
         const chatAttachmentStatus = document.getElementById('peer-chat-attachments');
         const chatAttachmentClear = document.getElementById('peer-chat-attachments-clear');
+        const chatAttachmentAlert = document.getElementById('peer-chat-attachments-alert');
+        const chatAttachmentPreview = document.getElementById('peer-chat-attachments-preview');
+
+        function setAttachmentAlert(message) {
+            if (!chatAttachmentAlert) return;
+            if (message) {
+                chatAttachmentAlert.textContent = message;
+                chatAttachmentAlert.classList.remove('hidden');
+            } else {
+                chatAttachmentAlert.textContent = '';
+                chatAttachmentAlert.classList.add('hidden');
+            }
+        }
 
         function updateChatAttachmentUI() {
             if (!chatAttachmentStatus) return;
             const label = chatAttachmentStatus.querySelector('span');
             if (!label) return;
+            if (chatAttachmentPreview) {
+                chatAttachmentPreview.innerHTML = '';
+            }
             if (pendingChatAttachments.length) {
                 label.textContent = `${pendingChatAttachments.length} attachment${pendingChatAttachments.length > 1 ? 's' : ''} ready.`;
                 if (chatAttachmentClear) {
                     chatAttachmentClear.classList.remove('hidden');
+                }
+                if (chatAttachmentPreview) {
+                    pendingChatAttachments.forEach((att, index) => {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'relative w-20 h-16 border border-gray-200 rounded-lg bg-white overflow-hidden flex items-center justify-center';
+                        const removeBtn = document.createElement('button');
+                        removeBtn.type = 'button';
+                        removeBtn.className = 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow';
+                        removeBtn.textContent = '✕';
+                        removeBtn.onclick = () => {
+                            pendingChatAttachments.splice(index, 1);
+                            updateChatAttachmentUI();
+                        };
+                        const mime = getAttachmentMime(att);
+                        if (mime.startsWith('image/') || isImageDataUrl(att.dataUrl)) {
+                            const img = document.createElement('img');
+                            img.src = att.dataUrl;
+                            img.alt = getAttachmentLabel(att);
+                            img.className = 'w-full h-full object-cover';
+                            wrapper.appendChild(img);
+                        } else {
+                            const icon = document.createElement('span');
+                            icon.className = 'material-symbols-outlined text-blue-500 text-lg';
+                            icon.textContent = 'description';
+                            wrapper.appendChild(icon);
+                        }
+                        wrapper.appendChild(removeBtn);
+                        chatAttachmentPreview.appendChild(wrapper);
+                    });
                 }
             } else {
                 label.textContent = 'No attachments selected.';
@@ -4019,16 +4294,18 @@
             chatAttachmentInput.onchange = async () => {
                 const files = Array.from(chatAttachmentInput.files || []);
                 if (!files.length) return;
+                setAttachmentAlert('');
+                let skippedTooLarge = 0;
+                let skippedUnsupported = 0;
                 for (const file of files) {
                     if (pendingChatAttachments.length >= MAX_CHAT_ATTACHMENTS) {
-                        showUiNotice(`Up to ${MAX_CHAT_ATTACHMENTS} attachments allowed.`);
                         break;
                     }
                     const ext = getFileExtension(file.name);
                     const inferredMime = CHAT_ATTACHMENT_EXTENSION_MAP[ext] || '';
                     const fileMime = file.type || inferredMime;
                     if (!isAllowedAttachmentMime(fileMime)) {
-                        showUiNotice('Only images, PDF, HTML, MP3, WAV, AVI, or MP4 files are supported.');
+                        skippedUnsupported += 1;
                         continue;
                     }
                     try {
@@ -4041,7 +4318,7 @@
                         }
                         const bytes = estimateDataUrlBytes(finalDataUrl);
                         if (bytes > MAX_CHAT_ATTACHMENT_BYTES) {
-                            showUiNotice('Attachment too large.');
+                            skippedTooLarge += 1;
                             continue;
                         }
                         pendingChatAttachments.push({
@@ -4051,17 +4328,26 @@
                             size: bytes,
                             mime: finalMime
                         });
-                    } catch (_) {
-                        showUiNotice('Failed to attach file.');
-                    }
+                    } catch (_) {}
                 }
                 chatAttachmentInput.value = '';
+                if (skippedTooLarge || skippedUnsupported) {
+                    const messages = [];
+                    if (skippedTooLarge) {
+                        messages.push(`${skippedTooLarge} attachment${skippedTooLarge > 1 ? 's are' : ' is'} too large to send.`);
+                    }
+                    if (skippedUnsupported) {
+                        messages.push(`${skippedUnsupported} attachment${skippedUnsupported > 1 ? 's were' : ' was'} not supported.`);
+                    }
+                    setAttachmentAlert(messages.join(' '));
+                }
                 updateChatAttachmentUI();
             };
         }
         if (chatAttachmentClear) {
             chatAttachmentClear.onclick = () => {
                 pendingChatAttachments = [];
+                setAttachmentAlert('');
                 updateChatAttachmentUI();
             };
         }
@@ -4082,12 +4368,16 @@
             }
             const chatHistory = loadPeerChat(activePeerModalId);
             const attachments = pendingChatAttachments.slice();
+            const entryId = createChatEntryId();
             chatHistory.push({
+                id: entryId,
                 from: 'local',
                 name: joinState.name,
                 message: text,
                 attachments,
-                ts: Date.now()
+                ts: Date.now(),
+                pending: true,
+                status: 'pending'
             });
             savePeerChat(activePeerModalId, chatHistory);
             renderPeerChat(activePeerModalId);
@@ -4095,6 +4385,7 @@
             const sent = sendRelayMessage({
                 type: 'chat',
                 to: activePeerModalId,
+                id: entryId,
                 text,
                 attachments,
                 name: joinState.name
@@ -4105,6 +4396,7 @@
             }
             input.value = '';
             pendingChatAttachments = [];
+            setAttachmentAlert('');
             updateChatAttachmentUI();
         };
         document.getElementById('peer-chat-input').addEventListener('keydown', (event) => {
@@ -4253,6 +4545,7 @@
         }
 
         updateLocalProfileUI();
+        updateLocalChatNames();
         appendDeviceLog('session', 'Session initialized.');
 
         connectRelay();

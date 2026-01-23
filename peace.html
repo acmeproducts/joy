@@ -1319,6 +1319,7 @@
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
         const SESSION_LOG_STORAGE_KEY = 'relax_session_log_entries';
         const SESSION_LOG_MAX_ENTRIES = 400;
+        const RELAY_SEQ_STORAGE_KEY = `relax_relay_seq_${RELAY_SESSION_ID}`;
         const relayState = { ws: null, connectTimeoutTimer: null };
         let pendingSnapshot = false;
         let pendingSnapshotReason = null;
@@ -1444,7 +1445,11 @@
         let relayHeartbeatTimer = null;
         let lastRelayReceiveAt = Date.now();
         let lastRelayActivityAt = Date.now();
-        const RELAY_RECONNECT_DELAY_MS = 2500;
+        let relayReconnectAttempts = 0;
+        const RELAY_RECONNECT_BASE_MS = 1200;
+        const RELAY_RECONNECT_MAX_MS = 20000;
+        const RELAY_RECONNECT_JITTER = 0.3;
+        let lastRelaySeq = Number(localStorage.getItem(RELAY_SEQ_STORAGE_KEY)) || 0;
 
         function getPeerHistoryKey(peerId) {
             return `relax_peer_history_${RELAY_SESSION_ID}_${peerId}`;
@@ -1505,6 +1510,15 @@
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = totalSeconds % 60;
             return `${minutes}m ${seconds}s`;
+        }
+
+        function updateLastRelaySeq(seq) {
+            if (!Number.isFinite(seq)) return;
+            if (seq <= lastRelaySeq) return;
+            lastRelaySeq = seq;
+            try {
+                localStorage.setItem(RELAY_SEQ_STORAGE_KEY, String(lastRelaySeq));
+            } catch (_) {}
         }
 
         const baseTitle = document.title;
@@ -2712,6 +2726,26 @@
             } catch (_) {}
         }
 
+        async function fetchRelayBackfill(reason = 'reconnect') {
+            if (!Number.isFinite(lastRelaySeq) || lastRelaySeq <= 0) return;
+            const url = new URL(RELAY_SIGNAL_HTTP_URL);
+            url.searchParams.set('session', RELAY_SESSION_ID);
+            url.searchParams.set('client', RELAY_CLIENT_ID);
+            url.searchParams.set('since', String(lastRelaySeq));
+            try {
+                const res = await fetch(url.toString());
+                if (!res.ok) return;
+                const messages = await res.json();
+                if (!Array.isArray(messages) || messages.length === 0) return;
+                messages.forEach(message => {
+                    try {
+                        handleRelayMessage(message);
+                    } catch (_) {}
+                });
+                appendDeviceLog('relay-backfill', `Fetched ${messages.length} missed messages (${reason}).`, { skipPipelineLog: true });
+            } catch (_) {}
+        }
+
         function sendSnapshot(reason = 'snapshot', targetId = null) {
             const stateTs = syncState.lastLocalStateTs || Date.now();
             const state = buildSyncState({ includeBackground: true });
@@ -3197,6 +3231,9 @@
             if (message.from && message.from === RELAY_CLIENT_ID) return;
             if (message.to && message.to !== RELAY_CLIENT_ID) return;
 
+            if (Number.isFinite(message.seq)) {
+                updateLastRelaySeq(message.seq);
+            }
             recordRelayEvent(message);
 
             if (message.type === 'presence') {
@@ -3395,15 +3432,25 @@
                 const ws = relayState.ws;
                 if (!ws || ws.readyState !== WebSocket.OPEN) return;
                 const hasPeers = hasActivePeers();
-                if (hasPeers && Date.now() - lastRelayActivityAt > RELAY_HEARTBEAT_STALE_MS) {
+                if (hasPeers && Date.now() - lastRelayReceiveAt > RELAY_HEARTBEAT_STALE_MS) {
                     appendDeviceLog('relay-stale', 'No relay traffic detected; reconnecting.');
                     ws.close(4002, 'relay-stale');
                     return;
                 }
-                if (hasPeers) {
-                    sendRelayMessage({ type: 'ping', kind: 'probe' });
-                }
+                sendRelayMessage({ type: 'ping', kind: hasPeers ? 'probe' : 'keepalive', transient: true });
             }, RELAY_HEARTBEAT_INTERVAL_MS);
+        }
+
+        function scheduleRelayReconnect() {
+            if (relayReconnectTimer) return;
+            relayReconnectAttempts += 1;
+            const jitter = 1 + (Math.random() * 2 - 1) * RELAY_RECONNECT_JITTER;
+            const baseDelay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** (relayReconnectAttempts - 1)));
+            const delay = Math.max(0, Math.round(baseDelay * jitter));
+            relayReconnectTimer = setTimeout(() => {
+                relayReconnectTimer = null;
+                connectRelay();
+            }, delay);
         }
 
         function connectRelay() {
@@ -3432,8 +3479,11 @@
                     clearTimeout(relayReconnectTimer);
                     relayReconnectTimer = null;
                 }
+                relayReconnectAttempts = 0;
                 appendDeviceLog('relay-open', 'Relay connection established.');
+                sendRelayMessage({ type: 'reattach', transient: true });
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
+                fetchRelayBackfill('reconnect');
                 flushPendingTransientEvents();
                 startPresenceUpdates();
                 startRelayHeartbeat();
@@ -3459,12 +3509,7 @@
                 stopRelayHeartbeat();
                 updateSyncIndicator('connecting');
                 appendDeviceLog('relay-close', 'Relay connection closed.');
-                if (!relayReconnectTimer) {
-                    relayReconnectTimer = setTimeout(() => {
-                        relayReconnectTimer = null;
-                        connectRelay();
-                    }, RELAY_RECONNECT_DELAY_MS);
-                }
+                scheduleRelayReconnect();
             };
             ws.onerror = () => {
                 if (relayState.ws !== ws) return;
@@ -3775,6 +3820,7 @@
                 connectRelay();
             }
             fetchSnapshot(reason);
+            fetchRelayBackfill(reason);
         }
         document.addEventListener('visibilitychange', () => {
             localPresenceState = getLocalPresenceState();

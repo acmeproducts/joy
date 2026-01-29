@@ -353,6 +353,7 @@
         ];
         const view = params.get('view') || 'config';
         const isClientView = view === 'client';
+        const initialNameParam = (params.get('name') || '').trim();
         let room = params.get('room') || defaultRoom;
         let pair = allowedPairs.includes(params.get('pair')) ? params.get('pair') : defaultPair;
         const parsePair = value => {
@@ -376,6 +377,7 @@
         params.set('room', room);
         params.set('pair', `${langA}-${langB}`);
         params.set('view', view);
+        params.delete('name');
         history.replaceState(null, '', url.toString());
 
         const RELAY_SESSION_ID = `talk:${room}:${langA}-${langB}`;
@@ -477,7 +479,6 @@
             return buildClientUrl({
                 nextRoom: session.room || room,
                 nextPair: normalizePair(session.pair || pair),
-                nextName: session.name || joinName,
                 nextPeer: session.peer || peerName
             });
         }
@@ -542,6 +543,7 @@
         const RELAY_CLIENT_ID = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12));
         const CHAT_STORAGE_KEY = `talk_chat_${RELAY_SESSION_ID}`;
         const NAME_STORAGE_KEY = `talk_name_${RELAY_SESSION_ID}`;
+        const GLOBAL_NAME_STORAGE_KEY = 'talk_name_global_v1';
         const PEER_NAME_STORAGE_KEY = `talk_peer_name_${RELAY_SESSION_ID}`;
         const STYLE_STORAGE_KEY = `talk_style_${RELAY_SESSION_ID}`;
         const CONTROL_PANEL_STORAGE_KEY = `talk_control_panel_${RELAY_SESSION_ID}`;
@@ -577,14 +579,20 @@
         }
 
         function loadJoinName() {
-            const paramName = (params.get('name') || '').trim();
-            if (paramName) {
-                writeStorage(NAME_STORAGE_KEY, paramName);
-                return paramName;
+            if (initialNameParam) {
+                writeStorage(GLOBAL_NAME_STORAGE_KEY, initialNameParam);
+                writeStorage(NAME_STORAGE_KEY, initialNameParam);
+                return initialNameParam;
             }
-            const stored = readStorage(NAME_STORAGE_KEY);
-            if (stored) return stored;
+            const storedGlobal = readStorage(GLOBAL_NAME_STORAGE_KEY);
+            if (storedGlobal) return storedGlobal;
+            const storedSession = readStorage(NAME_STORAGE_KEY);
+            if (storedSession) {
+                writeStorage(GLOBAL_NAME_STORAGE_KEY, storedSession);
+                return storedSession;
+            }
             const fallback = buildDefaultName();
+            writeStorage(GLOBAL_NAME_STORAGE_KEY, fallback);
             writeStorage(NAME_STORAGE_KEY, fallback);
             return fallback;
         }
@@ -963,16 +971,12 @@
             }
         }
 
-        function buildClientUrl({ nextRoom = room, nextPair = pair, nextName = joinName, nextPeer = peerName } = {}) {
+        function buildClientUrl({ nextRoom = room, nextPair = pair, nextPeer = peerName } = {}) {
             const clientUrl = new URL(window.location.href);
             clientUrl.searchParams.set('room', nextRoom);
             clientUrl.searchParams.set('pair', nextPair);
             clientUrl.searchParams.set('view', 'client');
-            if (nextName) {
-                clientUrl.searchParams.set('name', nextName);
-            } else {
-                clientUrl.searchParams.delete('name');
-            }
+            clientUrl.searchParams.delete('name');
             if (nextPeer) {
                 clientUrl.searchParams.set('peer', nextPeer);
             } else {
@@ -1996,6 +2000,7 @@
             const trimmed = (rawName || '').trim();
             joinName = trimmed || buildDefaultName();
             if (nameInput) nameInput.value = joinName;
+            writeStorage(GLOBAL_NAME_STORAGE_KEY, joinName);
             writeStorage(NAME_STORAGE_KEY, joinName);
             if (relayState.ws && relayState.ws.readyState === WebSocket.OPEN) {
                 sendRelayMessage({ type: 'presence', name: joinName, style: getSenderStyle() });
@@ -2470,6 +2475,10 @@
                     const sessionId = launchButton.dataset.sessionId;
                     const sessions = loadSessionList();
                     const session = sessions.find(item => item.id === sessionId);
+                    if (session) {
+                        persistJoinName(session.name || joinName);
+                        persistPeerName(session.peer || peerName);
+                    }
                     const clientUrl = buildSessionLaunchUrl(session);
                     window.open(clientUrl, '_blank', 'noopener');
                 }
@@ -2499,7 +2508,7 @@
                     peer: nextPeer,
                     updatedAt: Date.now()
                 });
-                const clientUrl = buildClientUrl({ nextRoom, nextPair, nextName, nextPeer });
+                const clientUrl = buildClientUrl({ nextRoom, nextPair, nextPeer });
                 window.open(clientUrl, '_blank', 'noopener');
             };
         }
@@ -2623,7 +2632,7 @@
         if (copyLinkButton) {
             copyLinkButton.onclick = async () => {
                 try {
-                    await navigator.clipboard.writeText(buildClientUrl({ nextName: peerName, nextPeer: joinName }));
+                    await navigator.clipboard.writeText(buildClientUrl({ nextPeer: joinName }));
                     copyLinkButton.textContent = 'Copied!';
                     setTimeout(() => {
                         copyLinkButton.innerHTML = '<span class="material-symbols-outlined text-sm">link</span>Copy link';

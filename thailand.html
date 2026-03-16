@@ -2,905 +2,1718 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dual-Zone Time Mapper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Dual-Zone Radial Time Mapper</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: rgba(17, 24, 39, 0.94);
-      --panel-2: #1f2937;
-      --line: #334155;
-      --line-2: #475569;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --accent: #f8fafc;
-      --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+      --bg-a: #07111f;
+      --bg-b: #102139;
+      --bg-c: #17324d;
+      --panel: rgba(10, 20, 34, 0.72);
+      --panel-strong: rgba(7, 15, 28, 0.9);
+      --line: rgba(255,255,255,0.12);
+      --line-strong: rgba(255,255,255,0.22);
+      --text: #edf5ff;
+      --muted: #b7c8df;
+      --accent: #67d8ff;
+      --accent-2: #8ea8ff;
+      --ring-local: #dff4ff;
+      --ring-remote: #efe8ff;
+      --tick: rgba(145, 177, 214, 0.44);
+      --tick-active: #ffcc62;
+      --shadow: 0 18px 48px rgba(0,0,0,0.35);
+      --glass: blur(16px);
+      --radius: 18px;
+      --card-w: min(42vw, 270px);
+      --dial-max: 720px;
+      --dial-scale: 1;
+      --font-scale: 1;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    :root.theme-ocean {
+      --bg-a: #07111f;
+      --bg-b: #102139;
+      --bg-c: #17324d;
+      --panel: rgba(10, 20, 34, 0.72);
+      --panel-strong: rgba(7, 15, 28, 0.9);
+      --text: #edf5ff;
+      --muted: #b7c8df;
+      --accent: #67d8ff;
+      --accent-2: #8ea8ff;
+      --ring-local: #dff4ff;
+      --ring-remote: #efe8ff;
+      --tick: rgba(145, 177, 214, 0.44);
+      --tick-active: #ffcc62;
+    }
+
+    :root.theme-ember {
+      --bg-a: #170c0b;
+      --bg-b: #311816;
+      --bg-c: #4d2722;
+      --panel: rgba(38, 20, 18, 0.72);
+      --panel-strong: rgba(24, 12, 10, 0.9);
+      --text: #fff4ef;
+      --muted: #e7c7ba;
+      --accent: #ff8b5d;
+      --accent-2: #ffc36f;
+      --ring-local: #fff3ea;
+      --ring-remote: #fff0dc;
+      --tick: rgba(255, 192, 150, 0.4);
+      --tick-active: #75deff;
+    }
+
+    :root.theme-forest {
+      --bg-a: #08140f;
+      --bg-b: #12271d;
+      --bg-c: #1c3a2d;
+      --panel: rgba(15, 36, 28, 0.72);
+      --panel-strong: rgba(9, 19, 15, 0.9);
+      --text: #f2fff8;
+      --muted: #c2ddce;
+      --accent: #62e6b7;
+      --accent-2: #9bd77e;
+      --ring-local: #ebfff7;
+      --ring-remote: #f7fff0;
+      --tick: rgba(154, 203, 186, 0.42);
+      --tick-active: #ffd566;
+    }
+
+    :root.theme-plum {
+      --bg-a: #140815;
+      --bg-b: #2a1231;
+      --bg-c: #422049;
+      --panel: rgba(34, 16, 40, 0.72);
+      --panel-strong: rgba(18, 8, 22, 0.9);
+      --text: #fcf3ff;
+      --muted: #dfc5ec;
+      --accent: #d58cff;
+      --accent-2: #8cb4ff;
+      --ring-local: #f7edff;
+      --ring-remote: #eef3ff;
+      --tick: rgba(178, 154, 214, 0.42);
+      --tick-active: #9cffdf;
     }
 
     * { box-sizing: border-box; }
 
-    body {
+    html, body {
       margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: linear-gradient(180deg, #020617 0%, var(--bg) 100%);
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(255,255,255,0.09), transparent 22%),
+        radial-gradient(circle at 82% 8%, rgba(255,255,255,0.06), transparent 18%),
+        linear-gradient(180deg, var(--bg-b) 0%, var(--bg-a) 62%, #050b15 100%);
       color: var(--text);
-      min-height: 100vh;
+      font-family: Inter, Arial, Helvetica, sans-serif;
+      touch-action: manipulation;
     }
 
-    button, input, select { font: inherit; }
+    body {
+      overflow-x: hidden;
+    }
+
+    button, input, select {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      border-radius: 14px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,0.05);
+      border-radius: 14px;
+      padding: 11px 12px;
+      outline: none;
+    }
+
+    select option {
+      background: #13233b;
+      color: var(--text);
+    }
 
     .app {
-      width: min(1200px, calc(100% - 24px));
+      position: relative;
+      min-height: 100svh;
+      max-width: 980px;
       margin: 0 auto;
-      padding: 16px 0 32px;
+      padding: calc(var(--safe-top) + 10px) 10px calc(var(--safe-bottom) + 14px);
+      display: flex;
+      flex-direction: column;
     }
 
-    .title-card,
-    .clock-card,
-    .status-card,
-    .footer-card,
-    .drawer-panel {
-      background: var(--panel);
-      border: 1px solid rgba(71, 85, 105, 0.45);
-      border-radius: 20px;
-      box-shadow: var(--shadow);
-    }
-
-    .topbar {
+    .menu-row {
+      position: relative;
+      z-index: 3;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
+      justify-content: flex-start;
+      margin-bottom: 4px;
+      min-height: 44px;
     }
 
-    .title-card {
-      padding: 16px;
-      flex: 1;
-      min-width: 0;
-    }
-
-    h1, h2, h3, p { margin: 0; }
-
-    h1 {
-      font-size: 1.25rem;
-      margin-bottom: 6px;
-      letter-spacing: 0.01em;
-    }
-
-    .subtext {
-      color: var(--muted);
-      line-height: 1.45;
-      font-size: 0.95rem;
-    }
-
-    .menu-btn {
-      width: 56px;
-      height: 56px;
-      border-radius: 16px;
-      border: 1px solid var(--line-2);
-      background: rgba(11, 18, 32, 0.95);
-      color: var(--text);
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      cursor: pointer;
-      flex: 0 0 auto;
+      box-shadow: var(--shadow);
     }
 
-    .menu-btn span,
-    .menu-btn span::before,
-    .menu-btn span::after {
-      display: block;
+    .icon-btn svg {
       width: 20px;
-      height: 2px;
-      background: var(--text);
-      border-radius: 999px;
-      content: '';
-      position: relative;
+      height: 20px;
+      display: block;
     }
 
-    .menu-btn span::before { top: -6px; position: absolute; }
-    .menu-btn span::after { top: 6px; position: absolute; }
+    .dial-shell {
+      position: relative;
+      width: min(100%, var(--dial-max));
+      margin: 0 auto;
+      transform: scale(var(--dial-scale));
+      transform-origin: top center;
+      z-index: 1;
+    }
 
-    .clock-card {
-      padding: 12px;
+    .dial-card {
+      border-radius: 28px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      box-shadow: var(--shadow);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
       overflow: hidden;
     }
 
-    .clock-wrap {
+    .dial-wrap {
       position: relative;
       aspect-ratio: 1 / 1;
       width: 100%;
-      max-width: 760px;
-      margin: 0 auto;
+      max-height: min(72svh, 720px);
+    }
+
+    .center-controls {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    .center-row {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(7, 16, 28, 0.44), rgba(7, 16, 28, 0.26));
+      box-shadow: 0 18px 36px rgba(0,0,0,0.22);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .step-btn,
+    .center-swap {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+      box-shadow: none;
+    }
+
+    .step-btn {
+      font-size: 1.8rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .center-swap svg {
+      width: 20px;
+      height: 20px;
     }
 
     svg {
+      display: block;
       width: 100%;
       height: 100%;
-      display: block;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    .status-strip {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-      grid-template-columns: 1fr;
+    .cards-layer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--safe-bottom) + 14px);
+      pointer-events: none;
+      z-index: 4;
     }
 
-    .status-card {
-      padding: 12px;
+    .cards-inner {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 10px;
+      position: relative;
+      min-height: 140px;
     }
 
-    .status-card h3 {
-      font-size: 0.9rem;
-      margin-bottom: 8px;
+    .info-card,
+    .swap-wrap {
+      pointer-events: auto;
     }
 
-    .status-line {
-      font-size: 0.93rem;
-      line-height: 1.45;
+    .info-card {
+      position: absolute;
+      bottom: 0;
+      width: var(--card-w);
+      min-height: 112px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 12px 12px 13px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      box-shadow: var(--shadow);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
+    }
+
+    .info-card.local { left: 10px; }
+    .info-card.remote { right: 10px; text-align: right; }
+
+    .mini-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
       color: var(--muted);
+      margin-bottom: 6px;
     }
 
-    .status-line strong { color: var(--text); }
-
-    .footer-card {
-      padding: 12px 16px;
-      margin-top: 16px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      line-height: 1.5;
+    .zone-btn,
+    .time-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      border-radius: 0;
+      max-width: 100%;
+      text-align: inherit;
     }
 
-    .pill {
-      display: inline-block;
-      padding: 4px 8px;
-      border: 1px solid rgba(71, 85, 105, 0.5);
-      border-radius: 999px;
-      font-size: 0.75rem;
+    .zone-btn {
+      font-size: 0.95rem;
+      font-weight: 700;
       color: var(--text);
-      margin-left: 8px;
+      margin-bottom: 7px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .drawer-backdrop {
+    .remote .zone-btn,
+    .remote .time-btn {
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .time-btn {
+      font-size: clamp(1.1rem, 2.8vw, 1.4rem);
+      font-weight: 800;
+      line-height: 1.12;
+      margin-bottom: 4px;
+    }
+
+    .date-line,
+    .status-line {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .status-line { margin-top: 4px; }
+
+    .swap-wrap {
+      position: absolute;
+      left: 50%;
+      bottom: 6px;
+      transform: translateX(-50%);
+    }
+
+    .swap-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow);
+    }
+
+    .swap-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .sheet-backdrop,
+    .drawer-backdrop,
+    .dialog-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(2, 6, 23, 0.68);
+      background: rgba(2, 8, 18, 0.72);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
-      z-index: 20;
+      transition: opacity 0.18s ease;
+      z-index: 30;
     }
 
-    .drawer-backdrop.open {
+    .sheet-backdrop.open,
+    .drawer-backdrop.open,
+    .dialog-backdrop.open {
       opacity: 1;
       pointer-events: auto;
     }
 
-    .drawer {
+    .drawer,
+    .sheet,
+    .dialog {
       position: fixed;
+      z-index: 31;
+      transition: transform 0.22s ease;
+    }
+
+    .drawer {
       top: 0;
       right: 0;
-      width: min(440px, 100vw);
+      width: min(360px, 100vw);
       height: 100vh;
-      padding: 14px;
       transform: translateX(100%);
-      transition: transform 0.22s ease;
-      z-index: 30;
+      padding: 12px;
       display: flex;
     }
 
     .drawer.open { transform: translateX(0); }
 
-    .drawer-panel {
-      width: 100%;
+    .sheet {
+      left: 0;
+      right: 0;
+      bottom: 0;
+      transform: translateY(103%);
+      padding: 12px;
       display: flex;
-      flex-direction: column;
+      justify-content: center;
+    }
+
+    .sheet.open { transform: translateY(0); }
+
+    .dialog {
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: scale(0.97);
+      opacity: 0;
+      pointer-events: none;
+      padding: 16px;
+    }
+
+    .dialog.open {
+      transform: scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .panel {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03));
+      box-shadow: var(--shadow);
+      backdrop-filter: var(--glass);
+      -webkit-backdrop-filter: var(--glass);
       overflow: hidden;
     }
 
-    .drawer-header {
+    .drawer .panel { display: flex; flex-direction: column; }
+    .sheet .panel { width: min(560px, 100%); max-height: min(88svh, 760px); display: flex; flex-direction: column; }
+    .dialog .panel { width: min(420px, 100%); }
+
+    .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 16px 16px 12px;
-      border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .drawer-title {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
-    .close-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      border: 1px solid var(--line-2);
-      background: #0b1220;
-      color: var(--text);
-      cursor: pointer;
-    }
-
-    .drawer-tabs {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      padding: 12px 16px;
-      border-bottom: 1px solid rgba(71, 85, 105, 0.3);
-    }
-
-    .tab-btn,
-    .action-btn,
-    .mode-btn,
-    input,
-    select {
-      width: 100%;
-      border-radius: 12px;
-      border: 1px solid var(--line-2);
-      background: #0b1220;
-      color: var(--text);
-      padding: 12px 14px;
-      outline: none;
-    }
-
-    .tab-btn,
-    .action-btn,
-    .mode-btn,
-    .close-btn {
-      font-weight: 600;
-      cursor: pointer;
-      background: linear-gradient(180deg, #162033 0%, #0b1220 100%);
-    }
-
-    .tab-btn.active,
-    .mode-btn.active {
-      border-color: #e2e8f0;
-      background: linear-gradient(180deg, #1e293b 0%, #111827 100%);
-    }
-
-    input:focus, select:focus, .tab-btn:focus, .action-btn:focus, .mode-btn:focus, .menu-btn:focus, .close-btn:focus {
-      border-color: #cbd5e1;
-      box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.12);
-    }
-
-    .drawer-body {
-      flex: 1;
-      overflow: auto;
-      padding: 16px;
-    }
-
-    .tab-panel { display: none; }
-    .tab-panel.active { display: grid; gap: 14px; }
-
-    .group {
-      display: grid;
-      gap: 10px;
-      padding: 14px;
-      background: rgba(11, 18, 32, 0.68);
-      border: 1px solid rgba(71, 85, 105, 0.28);
-      border-radius: 16px;
-    }
-
-    .group-title {
+    .panel-title {
       font-size: 0.95rem;
-      font-weight: 700;
+      font-weight: 800;
+      letter-spacing: 0.03em;
     }
 
-    .field {
-      display: grid;
-      gap: 6px;
+    .panel-body {
+      padding: 16px;
+      overflow: auto;
     }
+
+    .field { margin-bottom: 15px; }
 
     label {
-      font-size: 0.85rem;
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.81rem;
       color: var(--muted);
     }
 
-    .button-row,
-    .step-grid,
-    .mini-grid {
+    .segmented {
       display: grid;
-      gap: 10px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
-    .step-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    .segmented button.active {
+      border-color: rgba(255,255,255,0.3);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14);
+      color: var(--tick-active);
     }
 
-    .hint {
+    .range-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 0.8rem;
       color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.4;
     }
 
-    @media (min-width: 900px) {
-      .status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    input[type="range"] {
+      border: 0;
+      background: transparent;
+      padding: 0;
+    }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .about-copy {
+      font-size: 0.9rem;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .result-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      max-height: 48svh;
+      overflow: auto;
+    }
+
+    .result-item {
+      width: 100%;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .result-item span,
+    .result-item small {
+      display: block;
+    }
+
+    .result-item small {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 3px;
+    }
+
+    .icon-inline {
+      width: 14px;
+      height: 14px;
+      display: inline-flex;
+      color: rgba(220, 228, 239, 0.78);
+      vertical-align: -1px;
+      flex: 0 0 auto;
+    }
+
+    .dialog-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      .cards-inner {
+        min-height: 150px;
+        padding: 0 8px;
+      }
+
+      .info-card.local { left: 8px; }
+      .info-card.remote { right: 8px; }
+      .info-card {
+        width: min(43vw, 220px);
+        min-height: 108px;
+        padding: 10px 10px 11px;
+      }
+
+      .swap-wrap {
+        bottom: 10px;
+      }
+
+      .swap-btn {
+        width: 48px;
+        height: 48px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .cards-inner {
+        min-height: 170px;
+      }
+
+      .info-card {
+        width: min(42vw, 186px);
+      }
+
+      .zone-btn {
+        font-size: 0.88rem;
+      }
+
+      .time-btn {
+        font-size: 1.04rem;
+      }
+
+      .date-line,
+      .status-line {
+        font-size: 0.76rem;
+      }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <div class="topbar">
-      <div class="title-card">
-        <h1>Dual-Zone Time Mapper</h1>
-        <p class="subtext">One shared instant rendered through two time zones. Outer ring is the primary zone. Inner ring is the secondary zone. Open the menu to change zones, set hypothetical times, and step through dates and times.</p>
-      </div>
-      <button id="menuBtn" class="menu-btn" aria-label="Open configuration menu" aria-expanded="false" aria-controls="configDrawer"><span></span></button>
+    <div class="menu-row">
+      <button id="menuBtn" class="icon-btn" aria-label="Open settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16"></path>
+          <path d="M4 12h16"></path>
+          <path d="M4 17h16"></path>
+        </svg>
+      </button>
     </div>
 
-    <section class="clock-card">
-      <div class="clock-wrap">
-        <svg id="clockSvg" viewBox="0 0 800 800" aria-label="Dual time zone radial clock"></svg>
-      </div>
-      <div class="status-strip">
-        <div class="status-card">
-          <h3 id="primaryStatusTitle">Primary</h3>
-          <div id="primaryStatus" class="status-line"></div>
+    <main class="dial-shell">
+      <div class="dial-card">
+        <div class="dial-wrap">
+          <svg id="dialSvg" viewBox="0 0 800 800" aria-label="Dual-zone radial time mapper"></svg>
+          <div class="center-controls">
+            <div class="center-row">
+              <button id="minusBtn" class="step-btn" type="button" aria-label="Go back one hour">−</button>
+              <button id="swapBtn" class="swap-btn center-swap" type="button" aria-label="Swap local and remote zones">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M7 7h11"></path>
+                  <path d="m14 4 4 3-4 3"></path>
+                  <path d="M17 17H6"></path>
+                  <path d="m10 14-4 3 4 3"></path>
+                </svg>
+              </button>
+              <button id="plusBtn" class="step-btn" type="button" aria-label="Go forward one hour">+</button>
+            </div>
+          </div>
         </div>
-        <div class="status-card">
-          <h3 id="secondaryStatusTitle">Secondary</h3>
-          <div id="secondaryStatus" class="status-line"></div>
-        </div>
       </div>
-    </section>
+    </main>
+  </div>
 
-    <div class="footer-card">
-      Internal clock engine uses one absolute instant and converts it into each zone. That keeps both rings synchronized during live updates, manual edits, and both date and time stepping. Day-state labels show whether the secondary zone is on the previous day, same day, or next day relative to the primary zone for the current shared instant.
+  <div class="cards-layer" aria-hidden="false">
+    <div class="cards-inner">
+      <section class="info-card local">
+        <div class="mini-label">Local</div>
+        <button id="localZoneBtn" class="zone-btn" type="button"></button>
+        <button id="localTimeBtn" class="time-btn" type="button"></button>
+        <div id="localDateLine" class="date-line"></div>
+        <div id="localStatusLine" class="status-line"></div>
+      </section>
+
+      <section class="info-card remote remote">
+        <div class="mini-label">Remote</div>
+        <button id="remoteZoneBtn" class="zone-btn" type="button"></button>
+        <button id="remoteTimeBtn" class="time-btn" type="button"></button>
+        <div id="remoteDateLine" class="date-line"></div>
+        <div id="remoteStatusLine" class="status-line"></div>
+      </section>
     </div>
   </div>
 
   <div id="drawerBackdrop" class="drawer-backdrop"></div>
-  <aside id="configDrawer" class="drawer" aria-hidden="true">
-    <div class="drawer-panel">
-      <div class="drawer-header">
-        <div class="drawer-title">Configuration</div>
-        <button id="closeDrawerBtn" class="close-btn" aria-label="Close configuration menu">×</button>
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Display settings</div>
+        <button id="closeDrawerBtn" class="icon-btn" type="button" aria-label="Close settings">×</button>
       </div>
-      <div class="drawer-tabs">
-        <button class="tab-btn active" data-tab="zones">Zones</button>
-        <button class="tab-btn" data-tab="reference">Reference</button>
-        <button class="tab-btn" data-tab="step">Step</button>
-      </div>
-      <div class="drawer-body">
-        <section id="tab-zones" class="tab-panel active">
-          <div class="group">
-            <div class="group-title">Primary zone</div>
-            <div class="field">
-              <label for="primaryZone">Time zone</label>
-              <select id="primaryZone"></select>
-            </div>
+      <div class="panel-body">
+        <div class="field">
+          <label>Time format</label>
+          <div class="segmented">
+            <button id="formatAmpmBtn" type="button">AM / PM</button>
+            <button id="format24Btn" type="button">24 hour</button>
           </div>
-          <div class="group">
-            <div class="group-title">Secondary zone</div>
-            <div class="field">
-              <label for="secondaryZone">Time zone</label>
-              <select id="secondaryZone"></select>
-            </div>
-          </div>
-          <div class="group">
-            <div class="mini-grid">
-              <button id="swapZonesBtn" class="action-btn">Swap zones</button>
-              <button id="syncNowBtn" class="action-btn">Snap to now</button>
-            </div>
-            <div class="hint">Use the other tabs to set a hypothetical instant and move it forward or backward.</div>
-          </div>
-        </section>
+        </div>
 
-        <section id="tab-reference" class="tab-panel">
-          <div class="group">
-            <div class="group-title">Mode</div>
-            <div class="button-row">
-              <button id="liveModeBtn" class="mode-btn active">Live mode</button>
-              <button id="referenceModeBtn" class="mode-btn">Reference mode</button>
-            </div>
-          </div>
-          <div class="group">
-            <div class="group-title">Set from primary zone</div>
-            <div class="field">
-              <label for="primaryDateTime">Reference date and time in primary zone</label>
-              <input id="primaryDateTime" type="datetime-local" step="60" />
-            </div>
-            <button id="applyPrimary" class="action-btn">Apply primary reference</button>
-          </div>
-          <div class="group">
-            <div class="group-title">Set from secondary zone</div>
-            <div class="field">
-              <label for="secondaryDateTime">Reference date and time in secondary zone</label>
-              <input id="secondaryDateTime" type="datetime-local" step="60" />
-            </div>
-            <button id="applySecondary" class="action-btn">Apply secondary reference</button>
-          </div>
-        </section>
+        <div class="field">
+          <label for="themeSelect">Theme</label>
+          <select id="themeSelect">
+            <option value="ocean">Ocean</option>
+            <option value="ember">Ember</option>
+            <option value="forest">Forest</option>
+            <option value="plum">Plum</option>
+          </select>
+        </div>
 
-        <section id="tab-step" class="tab-panel">
-          <div class="group">
-            <div class="group-title">Time stepping</div>
-            <div class="step-grid">
-              <button class="step-btn action-btn" data-ms="-86400000">-1 day</button>
-              <button class="step-btn action-btn" data-ms="-3600000">-1 hour</button>
-              <button class="step-btn action-btn" data-ms="-900000">-15 min</button>
-              <button class="step-btn action-btn" data-ms="900000">+15 min</button>
-              <button class="step-btn action-btn" data-ms="3600000">+1 hour</button>
-              <button class="step-btn action-btn" data-ms="86400000">+1 day</button>
+
+        <div class="field">
+          <label>Theme and highlight colors</label>
+          <div class="color-grid">
+            <div class="color-swatch">
+              <small>Theme base</small>
+              <input id="themeColorInput" type="color" value="#67d8ff" />
+            </div>
+            <div class="color-swatch">
+              <small>Current time</small>
+              <input id="currentColorInput" type="color" value="#ffb347" />
+            </div>
+            <div class="color-swatch">
+              <small>Selected time</small>
+              <input id="selectedColorInput" type="color" value="#ff8a00" />
             </div>
           </div>
-          <div class="group">
-            <div class="group-title">Date stepping by local zone</div>
-            <div class="mini-grid">
-              <button class="jump-btn action-btn" data-target="primary" data-amount="-1">Primary -1 day</button>
-              <button class="jump-btn action-btn" data-target="primary" data-amount="1">Primary +1 day</button>
-              <button class="jump-btn action-btn" data-target="secondary" data-amount="-1">Secondary -1 day</button>
-              <button class="jump-btn action-btn" data-target="secondary" data-amount="1">Secondary +1 day</button>
-            </div>
-            <div class="hint">These preserve the local clock time in the selected zone and move the calendar day from that zone’s perspective.</div>
+        </div>
+
+        <div class="field">
+          <label for="dialScaleRange">Circle scale</label>
+          <input id="dialScaleRange" type="range" min="82" max="118" step="1" />
+          <div class="range-row"><span>Compact</span><span id="dialScaleValue">100%</span></div>
+        </div>
+
+        <div class="field">
+          <label for="fontScaleRange">Number and font scale</label>
+          <input id="fontScaleRange" type="range" min="80" max="132" step="1" />
+          <div class="range-row"><span>Smaller</span><span id="fontScaleValue">100%</span></div>
+        </div>
+
+        <div class="action-row">
+          <button id="snapNowBtn" type="button">Snap to now</button>
+          <button id="resetBtn" type="button">Reset</button>
+        </div>
+
+        <div class="field" style="margin-top:16px;">
+          <label>About</label>
+          <div class="about-copy">
+            One shared instant is rendered in two time zones. The outer ring shows local time. The inner ring shows remote time. Tap the dial to rotate to a different local hour. Tap a zone or time card value to edit directly.
           </div>
-        </section>
+        </div>
       </div>
     </div>
   </aside>
 
+  <div id="sheetBackdrop" class="sheet-backdrop"></div>
+  <section id="sheet" class="sheet" aria-hidden="true">
+    <div class="panel">
+      <div class="panel-head">
+        <div id="sheetTitle" class="panel-title">Select</div>
+        <button id="closeSheetBtn" class="icon-btn" type="button" aria-label="Close panel">×</button>
+      </div>
+      <div class="panel-body">
+        <div id="zoneSheetMode">
+          <div class="field">
+            <label for="zoneSearchInput">Search time zones</label>
+            <input id="zoneSearchInput" type="text" autocomplete="off" placeholder="Search city, region, or zone" />
+          </div>
+          <div id="zoneResults" class="result-list"></div>
+        </div>
+        <div id="timeSheetMode">
+          <div class="field">
+            <label for="timeSheetInput">Date and time</label>
+            <input id="timeSheetInput" type="datetime-local" step="60" />
+          </div>
+          <button id="applyTimeSheetBtn" type="button">Apply</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="dialogBackdrop" class="dialog-backdrop"></div>
+  <section id="zoneDialog" class="dialog" aria-hidden="true">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Zone search is not available</div>
+        <button id="closeDialogBtn" class="icon-btn" type="button" aria-label="Close dialog">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="about-copy">
+          This browser does not expose the full IANA time zone list. The app will still work with its built-in zone set, but searchable selection will be limited.
+        </div>
+        <div class="dialog-actions">
+          <button id="dialogOkBtn" type="button">OK</button>
+          <button id="dialogResetBtn" type="button">Reset zones</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
   <script>
-    const state = {
-      primaryZone: 'America/Los_Angeles',
-      secondaryZone: 'Asia/Kuala_Lumpur',
-      mode: 'live',
-      referenceInstant: new Date(),
-      liveTimer: null,
-      drawerOpen: false,
-      activeTab: 'zones'
-    };
+    (function () {
+      'use strict';
 
-    const els = {
-      menuBtn: document.getElementById('menuBtn'),
-      closeDrawerBtn: document.getElementById('closeDrawerBtn'),
-      drawer: document.getElementById('configDrawer'),
-      drawerBackdrop: document.getElementById('drawerBackdrop'),
-      primaryZone: document.getElementById('primaryZone'),
-      secondaryZone: document.getElementById('secondaryZone'),
-      primaryDateTime: document.getElementById('primaryDateTime'),
-      secondaryDateTime: document.getElementById('secondaryDateTime'),
-      applyPrimary: document.getElementById('applyPrimary'),
-      applySecondary: document.getElementById('applySecondary'),
-      liveModeBtn: document.getElementById('liveModeBtn'),
-      referenceModeBtn: document.getElementById('referenceModeBtn'),
-      syncNowBtn: document.getElementById('syncNowBtn'),
-      swapZonesBtn: document.getElementById('swapZonesBtn'),
-      clockSvg: document.getElementById('clockSvg'),
-      primaryStatusTitle: document.getElementById('primaryStatusTitle'),
-      secondaryStatusTitle: document.getElementById('secondaryStatusTitle'),
-      primaryStatus: document.getElementById('primaryStatus'),
-      secondaryStatus: document.getElementById('secondaryStatus')
-    };
-
-    const zoneNames = typeof Intl.supportedValuesOf === 'function'
-      ? Intl.supportedValuesOf('timeZone')
-      : [
-          'America/Los_Angeles','America/New_York','Europe/London','Europe/Paris',
-          'Asia/Kuala_Lumpur','Asia/Singapore','Asia/Tokyo','Asia/Dubai','Australia/Sydney','UTC'
-        ];
-
-    function populateZones() {
-      const favorites = [
-        'America/Los_Angeles',
-        'America/New_York',
-        'UTC',
-        'Europe/London',
-        'Europe/Paris',
-        'Asia/Dubai',
-        'Asia/Kuala_Lumpur',
-        'Asia/Singapore',
-        'Asia/Tokyo',
-        'Australia/Sydney'
-      ];
-
-      const unique = [...new Set([...favorites, ...zoneNames])];
-      [els.primaryZone, els.secondaryZone].forEach(select => {
-        select.innerHTML = '';
-        unique.forEach(zone => {
-          const option = document.createElement('option');
-          option.value = zone;
-          option.textContent = zone.replace(/_/g, ' ');
-          select.appendChild(option);
-        });
-      });
-
-      els.primaryZone.value = state.primaryZone;
-      els.secondaryZone.value = state.secondaryZone;
-    }
-
-    function getInstant() {
-      return state.mode === 'live' ? new Date() : new Date(state.referenceInstant);
-    }
-
-    function partsForZone(date, timeZone) {
-      const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hourCycle: 'h23',
-        weekday: 'short'
-      });
-      const parts = formatter.formatToParts(date);
-      const map = {};
-      for (const part of parts) {
-        if (part.type !== 'literal') map[part.type] = part.value;
-      }
-      return {
-        year: Number(map.year),
-        month: Number(map.month),
-        day: Number(map.day),
-        hour: Number(map.hour),
-        minute: Number(map.minute),
-        second: Number(map.second),
-        weekday: map.weekday
+      const STORAGE_KEY = 'dual-zone-radial-mapper-v4';
+      const PRESET_THEME_COLORS = {
+        ocean: '#67d8ff',
+        ember: '#ff8b5d',
+        forest: '#62e6b7',
+        plum: '#d58cff'
       };
-    }
 
-    function getOffsetMinutes(date, timeZone) {
-      const p = partsForZone(date, timeZone);
-      const utcEquivalent = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
-      return (utcEquivalent - date.getTime()) / 60000;
-    }
+      const DEFAULTS = {
+        localZone: 'America/Los_Angeles',
+        remoteZone: 'Asia/Kuala_Lumpur',
+        theme: 'ocean',
+        themeColor: PRESET_THEME_COLORS.ocean,
+        currentTimeColor: '#ffb347',
+        selectedTimeColor: '#ff8a00',
+        timeFormat: 'ampm',
+        dialScale: 100,
+        fontScale: 100,
+        mode: 'live',
+        referenceInstant: null
+      };
 
-    function zonedLocalToUtc(localStr, timeZone) {
-      const match = localStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-      if (!match) return null;
-      const [, y, mo, d, h, mi] = match.map(Number);
-      let guess = new Date(Date.UTC(y, mo - 1, d, h, mi, 0));
-      let offset = getOffsetMinutes(guess, timeZone);
-      guess = new Date(guess.getTime() - offset * 60000);
-      const offset2 = getOffsetMinutes(guess, timeZone);
-      if (offset2 !== offset) {
-        guess = new Date(guess.getTime() - (offset2 - offset) * 60000);
-      }
-      return guess;
-    }
+      const state = {
+        localZone: DEFAULTS.localZone,
+        remoteZone: DEFAULTS.remoteZone,
+        theme: DEFAULTS.theme,
+        themeColor: DEFAULTS.themeColor,
+        currentTimeColor: DEFAULTS.currentTimeColor,
+        selectedTimeColor: DEFAULTS.selectedTimeColor,
+        timeFormat: DEFAULTS.timeFormat,
+        dialScale: DEFAULTS.dialScale,
+        fontScale: DEFAULTS.fontScale,
+        mode: DEFAULTS.mode,
+        referenceInstant: new Date(),
+        sheetMode: null,
+        sheetTarget: null,
+        timerId: null,
+        animationId: null
+      };
 
-    function localInputValue(date, timeZone) {
-      const p = partsForZone(date, timeZone);
-      const pad = n => String(n).padStart(2, '0');
-      return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
-    }
+      const els = {
+        dialSvg: document.getElementById('dialSvg'),
+        menuBtn: document.getElementById('menuBtn'),
+        minusBtn: document.getElementById('minusBtn'),
+        plusBtn: document.getElementById('plusBtn'),
+        swapBtn: document.getElementById('swapBtn'),
+        localZoneBtn: document.getElementById('localZoneBtn'),
+        remoteZoneBtn: document.getElementById('remoteZoneBtn'),
+        localTimeBtn: document.getElementById('localTimeBtn'),
+        remoteTimeBtn: document.getElementById('remoteTimeBtn'),
+        localDateLine: document.getElementById('localDateLine'),
+        remoteDateLine: document.getElementById('remoteDateLine'),
+        localStatusLine: document.getElementById('localStatusLine'),
+        remoteStatusLine: document.getElementById('remoteStatusLine'),
+        drawer: document.getElementById('drawer'),
+        drawerBackdrop: document.getElementById('drawerBackdrop'),
+        closeDrawerBtn: document.getElementById('closeDrawerBtn'),
+        formatAmpmBtn: document.getElementById('formatAmpmBtn'),
+        format24Btn: document.getElementById('format24Btn'),
+        themeSelect: document.getElementById('themeSelect'),
+        themeColorInput: document.getElementById('themeColorInput'),
+        currentColorInput: document.getElementById('currentColorInput'),
+        selectedColorInput: document.getElementById('selectedColorInput'),
+        dialScaleRange: document.getElementById('dialScaleRange'),
+        fontScaleRange: document.getElementById('fontScaleRange'),
+        dialScaleValue: document.getElementById('dialScaleValue'),
+        fontScaleValue: document.getElementById('fontScaleValue'),
+        snapNowBtn: document.getElementById('snapNowBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        sheet: document.getElementById('sheet'),
+        sheetBackdrop: document.getElementById('sheetBackdrop'),
+        closeSheetBtn: document.getElementById('closeSheetBtn'),
+        sheetTitle: document.getElementById('sheetTitle'),
+        zoneSheetMode: document.getElementById('zoneSheetMode'),
+        timeSheetMode: document.getElementById('timeSheetMode'),
+        zoneSearchInput: document.getElementById('zoneSearchInput'),
+        zoneResults: document.getElementById('zoneResults'),
+        timeSheetInput: document.getElementById('timeSheetInput'),
+        applyTimeSheetBtn: document.getElementById('applyTimeSheetBtn'),
+        zoneDialog: document.getElementById('zoneDialog'),
+        dialogBackdrop: document.getElementById('dialogBackdrop'),
+        closeDialogBtn: document.getElementById('closeDialogBtn'),
+        dialogOkBtn: document.getElementById('dialogOkBtn'),
+        dialogResetBtn: document.getElementById('dialogResetBtn')
+      };
 
-    function readableZoneTime(date, timeZone) {
-      return new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true,
-        timeZoneName: 'short'
-      }).format(date);
-    }
-
-    function compareDayState(date, baseZone, compareZone) {
-      const a = partsForZone(date, baseZone);
-      const b = partsForZone(date, compareZone);
-      const keyA = Date.UTC(a.year, a.month - 1, a.day);
-      const keyB = Date.UTC(b.year, b.month - 1, b.day);
-      const diffDays = Math.round((keyB - keyA) / 86400000);
-      if (diffDays < 0) return 'Previous day';
-      if (diffDays > 0) return 'Next day';
-      return 'Same day';
-    }
-
-    function zoneHourFraction(date, timeZone) {
-      const p = partsForZone(date, timeZone);
-      return p.hour + p.minute / 60 + p.second / 3600;
-    }
-
-    function zoneHourAngle(hourFraction) {
-      return (hourFraction / 24) * Math.PI * 2 - Math.PI / 2;
-    }
-
-    function polar(cx, cy, r, angle) {
-      return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
-    }
-
-    function createSvgEl(tag, attrs = {}) {
-      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-      for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
-      return el;
-    }
-
-    function drawClock(date) {
-      const svg = els.clockSvg;
-      svg.innerHTML = '';
-
-      const cx = 400;
-      const cy = 400;
-      const outerR = 330;
-      const innerR = 230;
-      const outerMarkerIn = 286;
-      const innerMarkerIn = 196;
-
-      svg.appendChild(createSvgEl('circle', { cx, cy, r: 372, fill: '#08111f', stroke: '#334155', 'stroke-width': 2 }));
-      svg.appendChild(createSvgEl('circle', { cx, cy, r: outerR, fill: 'none', stroke: '#94a3b8', 'stroke-width': 2.5 }));
-      svg.appendChild(createSvgEl('circle', { cx, cy, r: innerR, fill: 'none', stroke: '#64748b', 'stroke-width': 2.5 }));
-      svg.appendChild(createSvgEl('circle', { cx, cy, r: 108, fill: 'none', stroke: '#1e293b', 'stroke-width': 1.5, 'stroke-dasharray': '6 8' }));
-
-      for (let i = 0; i < 24; i++) {
-        const angle = zoneHourAngle(i);
-        const isMajor = i % 6 === 0;
-        const outerA = polar(cx, cy, outerR, angle);
-        const outerB = polar(cx, cy, isMajor ? outerMarkerIn - 10 : outerMarkerIn, angle);
-        svg.appendChild(createSvgEl('line', {
-          x1: outerA.x, y1: outerA.y, x2: outerB.x, y2: outerB.y,
-          stroke: isMajor ? '#e2e8f0' : '#64748b', 'stroke-width': isMajor ? 3 : 1.4
-        }));
-
-        const innerA = polar(cx, cy, innerR, angle);
-        const innerB = polar(cx, cy, isMajor ? innerMarkerIn - 10 : innerMarkerIn, angle);
-        svg.appendChild(createSvgEl('line', {
-          x1: innerA.x, y1: innerA.y, x2: innerB.x, y2: innerB.y,
-          stroke: isMajor ? '#cbd5e1' : '#475569', 'stroke-width': isMajor ? 3 : 1.4
-        }));
-
-        const outerLabelPos = polar(cx, cy, 305, angle);
-        const outerText = createSvgEl('text', {
-          x: outerLabelPos.x, y: outerLabelPos.y + 6,
-          'text-anchor': 'middle', 'font-size': isMajor ? 22 : 16, fill: '#e5e7eb', 'font-family': 'Arial, sans-serif'
-        });
-        outerText.textContent = String(i).padStart(2, '0');
-        svg.appendChild(outerText);
-
-        const innerLabelPos = polar(cx, cy, 170, angle);
-        const innerText = createSvgEl('text', {
-          x: innerLabelPos.x, y: innerLabelPos.y + 5,
-          'text-anchor': 'middle', 'font-size': isMajor ? 19 : 14, fill: '#cbd5e1', 'font-family': 'Arial, sans-serif'
-        });
-        innerText.textContent = String(i).padStart(2, '0');
-        svg.appendChild(innerText);
-      }
-
-      const primaryAngle = zoneHourAngle(zoneHourFraction(date, state.primaryZone));
-      const secondaryAngle = zoneHourAngle(zoneHourFraction(date, state.secondaryZone));
-
-      const outerEnd = polar(cx, cy, 265, primaryAngle);
-      const outerEnd2 = polar(cx, cy, 315, primaryAngle);
-      svg.appendChild(createSvgEl('line', {
-        x1: cx, y1: cy, x2: outerEnd.x, y2: outerEnd.y,
-        stroke: '#f8fafc', 'stroke-width': 8, 'stroke-linecap': 'round'
-      }));
-      svg.appendChild(createSvgEl('line', {
-        x1: outerEnd.x, y1: outerEnd.y, x2: outerEnd2.x, y2: outerEnd2.y,
-        stroke: '#f8fafc', 'stroke-width': 8, 'stroke-linecap': 'round'
-      }));
-      const outerTipLeft = polar(outerEnd2.x, outerEnd2.y, 16, primaryAngle + Math.PI * 0.83);
-      const outerTipRight = polar(outerEnd2.x, outerEnd2.y, 16, primaryAngle - Math.PI * 0.83);
-      svg.appendChild(createSvgEl('polygon', {
-        points: `${outerEnd2.x},${outerEnd2.y} ${outerTipLeft.x},${outerTipLeft.y} ${outerTipRight.x},${outerTipRight.y}`,
-        fill: '#f8fafc'
-      }));
-
-      const innerEnd = polar(cx, cy, 170, secondaryAngle);
-      const innerEnd2 = polar(cx, cy, 214, secondaryAngle);
-      svg.appendChild(createSvgEl('line', {
-        x1: cx, y1: cy, x2: innerEnd.x, y2: innerEnd.y,
-        stroke: '#cbd5e1', 'stroke-width': 7, 'stroke-linecap': 'round'
-      }));
-      svg.appendChild(createSvgEl('line', {
-        x1: innerEnd.x, y1: innerEnd.y, x2: innerEnd2.x, y2: innerEnd2.y,
-        stroke: '#cbd5e1', 'stroke-width': 7, 'stroke-linecap': 'round'
-      }));
-      const innerTipLeft = polar(innerEnd2.x, innerEnd2.y, 14, secondaryAngle + Math.PI * 0.83);
-      const innerTipRight = polar(innerEnd2.x, innerEnd2.y, 14, secondaryAngle - Math.PI * 0.83);
-      svg.appendChild(createSvgEl('polygon', {
-        points: `${innerEnd2.x},${innerEnd2.y} ${innerTipLeft.x},${innerTipLeft.y} ${innerTipRight.x},${innerTipRight.y}`,
-        fill: '#cbd5e1'
-      }));
-
-      const primaryParts = partsForZone(date, state.primaryZone);
-      const secondaryParts = partsForZone(date, state.secondaryZone);
-      const modeText = state.mode === 'live' ? 'LIVE' : 'REFERENCE';
-      const centerRows = [
-        `${modeText}`,
-        `${String(primaryParts.hour).padStart(2, '0')}:${String(primaryParts.minute).padStart(2, '0')} ${state.primaryZone}`,
-        `${String(secondaryParts.hour).padStart(2, '0')}:${String(secondaryParts.minute).padStart(2, '0')} ${state.secondaryZone}`
+      const BUILTIN_ZONES = [
+        'America/Los_Angeles', 'America/Vancouver', 'America/Denver', 'America/Chicago', 'America/New_York',
+        'America/Toronto', 'America/Sao_Paulo', 'UTC', 'Europe/London', 'Europe/Dublin', 'Europe/Paris',
+        'Europe/Berlin', 'Europe/Madrid', 'Europe/Rome', 'Europe/Athens', 'Europe/Helsinki', 'Africa/Johannesburg',
+        'Asia/Dubai', 'Asia/Karachi', 'Asia/Kolkata', 'Asia/Dhaka', 'Asia/Bangkok', 'Asia/Singapore',
+        'Asia/Kuala_Lumpur', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul', 'Australia/Perth',
+        'Australia/Sydney', 'Pacific/Auckland'
       ];
-      [364, 400, 436].forEach((y, idx) => {
-        const t = createSvgEl('text', {
-          x: 400,
-          y,
-          'text-anchor': 'middle',
-          'font-size': idx === 0 ? 18 : 16,
-          fill: idx === 0 ? '#94a3b8' : '#e5e7eb',
-          'font-family': 'Arial, sans-serif',
-          'font-weight': idx === 0 ? '700' : '500'
-        });
-        t.textContent = centerRows[idx];
-        svg.appendChild(t);
-      });
 
-      const labelPrimary = createSvgEl('text', {
-        x: 400, y: 90, 'text-anchor': 'middle', 'font-size': 18, fill: '#f8fafc', 'font-family': 'Arial, sans-serif', 'font-weight': '700'
-      });
-      labelPrimary.textContent = `Outer · ${state.primaryZone}`;
-      svg.appendChild(labelPrimary);
+      const favoriteZones = [
+        'America/Los_Angeles', 'America/New_York', 'UTC', 'Europe/London', 'Europe/Paris',
+        'Asia/Dubai', 'Asia/Kuala_Lumpur', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'
+      ];
 
-      const labelSecondary = createSvgEl('text', {
-        x: 400, y: 720, 'text-anchor': 'middle', 'font-size': 18, fill: '#cbd5e1', 'font-family': 'Arial, sans-serif', 'font-weight': '700'
-      });
-      labelSecondary.textContent = `Inner · ${state.secondaryZone}`;
-      svg.appendChild(labelSecondary);
+      let warnedZoneList = false;
+      const allZones = getSupportedZones();
 
-      svg.appendChild(createSvgEl('circle', { cx, cy, r: 10, fill: '#e2e8f0', stroke: '#020617', 'stroke-width': 3 }));
-    }
-
-    function render() {
-      const instant = getInstant();
-      drawClock(instant);
-
-      els.primaryZone.value = state.primaryZone;
-      els.secondaryZone.value = state.secondaryZone;
-      els.primaryDateTime.value = localInputValue(instant, state.primaryZone);
-      els.secondaryDateTime.value = localInputValue(instant, state.secondaryZone);
-
-      els.liveModeBtn.classList.toggle('active', state.mode === 'live');
-      els.referenceModeBtn.classList.toggle('active', state.mode === 'reference');
-
-      const dayState = compareDayState(instant, state.primaryZone, state.secondaryZone);
-      const reverseDayState = compareDayState(instant, state.secondaryZone, state.primaryZone);
-
-      els.primaryStatusTitle.textContent = `Primary: ${state.primaryZone}`;
-      els.secondaryStatusTitle.textContent = `Secondary: ${state.secondaryZone}`;
-
-      els.primaryStatus.innerHTML = `
-        <strong>${readableZoneTime(instant, state.primaryZone)}</strong><br>
-        Secondary relative to primary: <strong>${dayState}</strong>
-      `;
-
-      els.secondaryStatus.innerHTML = `
-        <strong>${readableZoneTime(instant, state.secondaryZone)}</strong><br>
-        Primary relative to secondary: <strong>${reverseDayState}</strong>
-      `;
-
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === state.activeTab));
-      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `tab-${state.activeTab}`));
-      els.drawer.classList.toggle('open', state.drawerOpen);
-      els.drawer.setAttribute('aria-hidden', String(!state.drawerOpen));
-      els.drawerBackdrop.classList.toggle('open', state.drawerOpen);
-      els.menuBtn.setAttribute('aria-expanded', String(state.drawerOpen));
-    }
-
-    function startLive() {
-      stopLive();
-      state.liveTimer = setInterval(() => {
-        if (state.mode === 'live') render();
-      }, 1000);
-    }
-
-    function stopLive() {
-      if (state.liveTimer) {
-        clearInterval(state.liveTimer);
-        state.liveTimer = null;
+      function safeStorageGet() {
+        try { return window.localStorage.getItem(STORAGE_KEY); } catch (error) { return null; }
       }
-    }
 
-    function setMode(mode) {
-      if (mode === 'reference' && state.mode === 'live') state.referenceInstant = new Date();
-      state.mode = mode;
-      render();
-    }
+      function safeStorageSet(value) {
+        try { window.localStorage.setItem(STORAGE_KEY, value); } catch (error) {}
+      }
 
-    function setReferenceFromZone(target) {
-      const isPrimary = target === 'primary';
-      const value = isPrimary ? els.primaryDateTime.value : els.secondaryDateTime.value;
-      const zone = isPrimary ? state.primaryZone : state.secondaryZone;
-      const utcDate = zonedLocalToUtc(value, zone);
-      if (!utcDate || Number.isNaN(utcDate.getTime())) return;
-      state.referenceInstant = utcDate;
-      state.mode = 'reference';
-      render();
-    }
+      function safeStorageRemove() {
+        try { window.localStorage.removeItem(STORAGE_KEY); } catch (error) {}
+      }
 
-    function stepByMs(ms) {
-      const base = getInstant();
-      state.referenceInstant = new Date(base.getTime() + ms);
-      state.mode = 'reference';
-      render();
-    }
+      function getSupportedZones() {
+        try {
+          if (typeof Intl.supportedValuesOf === 'function') {
+            const values = Intl.supportedValuesOf('timeZone');
+            if (Array.isArray(values) && values.length) {
+              return Array.from(new Set(favoriteZones.concat(values)));
+            }
+          }
+        } catch (error) {}
+        warnedZoneList = true;
+        return Array.from(new Set(favoriteZones.concat(BUILTIN_ZONES)));
+      }
 
-    function stepZoneCalendar(target, amountDays) {
-      const instant = getInstant();
-      const zone = target === 'primary' ? state.primaryZone : state.secondaryZone;
-      const localValue = target === 'primary' ? els.primaryDateTime.value : els.secondaryDateTime.value;
-      const baseParts = localValue || localInputValue(instant, zone);
-      const localDate = new Date(baseParts + ':00');
-      localDate.setDate(localDate.getDate() + amountDays);
-      const pad = n => String(n).padStart(2, '0');
-      const nextLocal = `${localDate.getFullYear()}-${pad(localDate.getMonth()+1)}-${pad(localDate.getDate())}T${pad(localDate.getHours())}:${pad(localDate.getMinutes())}`;
-      const utcDate = zonedLocalToUtc(nextLocal, zone);
-      if (!utcDate || Number.isNaN(utcDate.getTime())) return;
-      state.referenceInstant = utcDate;
-      state.mode = 'reference';
-      render();
-    }
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
 
-    function setActiveTab(tab) {
-      state.activeTab = tab;
-      render();
-    }
+      function pad2(value) {
+        return String(value).padStart(2, '0');
+      }
 
-    function openDrawer() {
-      state.drawerOpen = true;
-      render();
-    }
+      function normalizeHex(value, fallback) {
+        const test = String(value || '').trim();
+        return /^#[0-9a-fA-F]{6}$/.test(test) ? test.toLowerCase() : fallback;
+      }
 
-    function closeDrawer() {
-      state.drawerOpen = false;
-      render();
-    }
+      function hexToRgb(hex) {
+        const normalized = normalizeHex(hex, '#000000').slice(1);
+        return {
+          r: parseInt(normalized.slice(0, 2), 16),
+          g: parseInt(normalized.slice(2, 4), 16),
+          b: parseInt(normalized.slice(4, 6), 16)
+        };
+      }
 
-    function bindEvents() {
-      els.menuBtn.addEventListener('click', openDrawer);
-      els.closeDrawerBtn.addEventListener('click', closeDrawer);
-      els.drawerBackdrop.addEventListener('click', closeDrawer);
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && state.drawerOpen) closeDrawer();
-      });
+      function rgbToHex(r, g, b) {
+        return '#' + [r, g, b].map(function (n) { return clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0'); }).join('');
+      }
 
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
-      });
+      function rgbToHsl(rgb) {
+        const r = rgb.r / 255;
+        const g = rgb.g / 255;
+        const b = rgb.b / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h = 0;
+        let s = 0;
+        const l = (max + min) / 2;
+        if (max !== min) {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            default: h = (r - g) / d + 4; break;
+          }
+          h /= 6;
+        }
+        return { h: h * 360, s: s * 100, l: l * 100 };
+      }
 
-      els.primaryZone.addEventListener('change', () => {
-        state.primaryZone = els.primaryZone.value;
+      function hslToRgb(h, s, l) {
+        let hh = ((h % 360) + 360) % 360;
+        let ss = clamp(s, 0, 100) / 100;
+        let ll = clamp(l, 0, 100) / 100;
+        if (ss === 0) {
+          const v = Math.round(ll * 255);
+          return { r: v, g: v, b: v };
+        }
+        const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+        const p = 2 * ll - q;
+        const hk = hh / 360;
+        const t = [hk + 1 / 3, hk, hk - 1 / 3];
+        const rgb = t.map(function (tc) {
+          let c = tc;
+          if (c < 0) c += 1;
+          if (c > 1) c -= 1;
+          if (c < 1 / 6) return p + (q - p) * 6 * c;
+          if (c < 1 / 2) return q;
+          if (c < 2 / 3) return p + (q - p) * (2 / 3 - c) * 6;
+          return p;
+        });
+        return { r: Math.round(rgb[0] * 255), g: Math.round(rgb[1] * 255), b: Math.round(rgb[2] * 255) };
+      }
+
+      function hslToHex(h, s, l) {
+        const rgb = hslToRgb(h, s, l);
+        return rgbToHex(rgb.r, rgb.g, rgb.b);
+      }
+
+      function rgba(hex, alpha) {
+        const rgb = hexToRgb(hex);
+        return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha + ')';
+      }
+
+      function isValidDate(date) {
+        return date instanceof Date && !Number.isNaN(date.getTime());
+      }
+
+      function ensureZone(candidate, fallback) {
+        return allZones.includes(candidate) ? candidate : fallback;
+      }
+
+      function getInstant() {
+        return state.mode === 'live' ? new Date() : new Date(state.referenceInstant);
+      }
+
+      function saveState() {
+        const payload = {
+          localZone: state.localZone,
+          remoteZone: state.remoteZone,
+          theme: state.theme,
+          themeColor: state.themeColor,
+          currentTimeColor: state.currentTimeColor,
+          selectedTimeColor: state.selectedTimeColor,
+          timeFormat: state.timeFormat,
+          dialScale: state.dialScale,
+          fontScale: state.fontScale
+        };
+        safeStorageSet(JSON.stringify(payload));
+      }
+
+      function loadState() {
+        state.referenceInstant = new Date();
+        state.mode = 'live';
+        const raw = safeStorageGet();
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          state.localZone = ensureZone(parsed.localZone, DEFAULTS.localZone);
+          state.remoteZone = ensureZone(parsed.remoteZone, DEFAULTS.remoteZone);
+          state.theme = ['ocean', 'ember', 'forest', 'plum'].includes(parsed.theme) ? parsed.theme : DEFAULTS.theme;
+          state.themeColor = normalizeHex(parsed.themeColor, PRESET_THEME_COLORS[state.theme] || DEFAULTS.themeColor);
+          state.currentTimeColor = normalizeHex(parsed.currentTimeColor, DEFAULTS.currentTimeColor);
+          state.selectedTimeColor = normalizeHex(parsed.selectedTimeColor, DEFAULTS.selectedTimeColor);
+          state.timeFormat = parsed.timeFormat === '24' ? '24' : 'ampm';
+          state.dialScale = clamp(Number(parsed.dialScale) || DEFAULTS.dialScale, 82, 118);
+          state.fontScale = clamp(Number(parsed.fontScale) || DEFAULTS.fontScale, 80, 132);
+        } catch (error) {
+          state.referenceInstant = new Date();
+          state.mode = 'live';
+        }
+      }
+
+      function resetState() {
+        safeStorageRemove();
+        state.localZone = DEFAULTS.localZone;
+        state.remoteZone = DEFAULTS.remoteZone;
+        state.theme = DEFAULTS.theme;
+        state.themeColor = DEFAULTS.themeColor;
+        state.currentTimeColor = DEFAULTS.currentTimeColor;
+        state.selectedTimeColor = DEFAULTS.selectedTimeColor;
+        state.timeFormat = DEFAULTS.timeFormat;
+        state.dialScale = DEFAULTS.dialScale;
+        state.fontScale = DEFAULTS.fontScale;
+        state.mode = 'live';
+        state.referenceInstant = new Date();
         render();
-      });
+      }
 
-      els.secondaryZone.addEventListener('change', () => {
-        state.secondaryZone = els.secondaryZone.value;
+      function applyTheme() {
+        const root = document.documentElement;
+        const base = rgbToHsl(hexToRgb(state.themeColor));
+        const bgA = hslToHex(base.h - 4, clamp(base.s * 0.58, 18, 72), clamp(base.l * 0.16, 5, 18));
+        const bgB = hslToHex(base.h, clamp(base.s * 0.66, 20, 78), clamp(base.l * 0.28, 10, 28));
+        const bgC = hslToHex(base.h + 6, clamp(base.s * 0.72, 24, 82), clamp(base.l * 0.42, 18, 46));
+        const accent2 = hslToHex(base.h + 22, clamp(base.s * 0.95, 40, 100), clamp(base.l + 12, 38, 78));
+        const panelTint = rgba(state.themeColor, 0.14);
+        const panelStrongTint = rgba(hslToHex(base.h, base.s * 0.45, clamp(base.l * 0.12, 4, 16)), 0.92);
+        root.style.setProperty('--bg-a', bgA);
+        root.style.setProperty('--bg-b', bgB);
+        root.style.setProperty('--bg-c', bgC);
+        root.style.setProperty('--panel', panelTint);
+        root.style.setProperty('--panel-strong', panelStrongTint);
+        root.style.setProperty('--accent', state.themeColor);
+        root.style.setProperty('--accent-2', accent2);
+        root.style.setProperty('--ring-local', rgba(hslToHex(base.h, 38, 92), 0.96));
+        root.style.setProperty('--ring-remote', rgba(hslToHex(base.h + 14, 34, 90), 0.94));
+        root.style.setProperty('--tick', rgba(hslToHex(base.h, 28, 76), 0.42));
+        root.style.setProperty('--tick-active', state.currentTimeColor);
+        root.style.setProperty('--selected-hour', state.selectedTimeColor);
+        root.style.setProperty('--selected-hour-2', hslToHex(rgbToHsl(hexToRgb(state.selectedTimeColor)).h, rgbToHsl(hexToRgb(state.selectedTimeColor)).s * 0.75, clamp(rgbToHsl(hexToRgb(state.selectedTimeColor)).l + 18, 50, 84)));
+        root.style.setProperty('--dial-scale', String(state.dialScale / 100));
+        root.style.setProperty('--font-scale', String(state.fontScale / 100));
+      }
+
+      function partsForZone(date, timeZone) {
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timeZone,
+          weekday: 'short',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hourCycle: 'h23'
+        });
+        const parts = formatter.formatToParts(date);
+        const map = {};
+        for (const part of parts) {
+          if (part.type !== 'literal') map[part.type] = part.value;
+        }
+        return {
+          weekday: map.weekday,
+          year: Number(map.year),
+          month: Number(map.month),
+          day: Number(map.day),
+          hour: Number(map.hour),
+          minute: Number(map.minute),
+          second: Number(map.second)
+        };
+      }
+
+      function getOffsetMinutes(date, timeZone) {
+        const parts = partsForZone(date, timeZone);
+        const utcAsIfLocal = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+        return (utcAsIfLocal - date.getTime()) / 60000;
+      }
+
+      function zonedLocalToUtc(localInputValue, timeZone) {
+        const match = String(localInputValue).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const hour = Number(match[4]);
+        const minute = Number(match[5]);
+        let guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+        let offset = getOffsetMinutes(guess, timeZone);
+        guess = new Date(guess.getTime() - offset * 60000);
+        const secondOffset = getOffsetMinutes(guess, timeZone);
+        if (secondOffset !== offset) guess = new Date(guess.getTime() - (secondOffset - offset) * 60000);
+        return guess;
+      }
+
+      function localInputString(date, timeZone) {
+        const parts = partsForZone(date, timeZone);
+        return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day) + 'T' + pad2(parts.hour) + ':' + pad2(parts.minute);
+      }
+
+      function monthLabel(date, timeZone) {
+        return new Intl.DateTimeFormat('en-US', { timeZone: timeZone, month: 'short' }).format(date);
+      }
+
+      function zoneLabel(zone) {
+        return zone.split('/').pop().replace(/_/g, ' ');
+      }
+
+      function zoneSubLabel(zone) {
+        return zone.replace(/_/g, ' ').replace(/\//g, ' · ');
+      }
+
+      function currentModeLabel() {
+        return state.mode === 'live' ? 'Live now' : 'Reference time';
+      }
+
+      function deltaLabel(deltaDays) {
+        if (deltaDays === 0) return 'same day';
+        return deltaDays > 0 ? '+' + deltaDays + ' day' : String(deltaDays) + ' day';
+      }
+
+      function sunMoonIcon(hour24) {
+        if (hour24 >= 6 && hour24 < 18) {
+          return '<span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m4.93 19.07 1.41-1.41"></path><path d="m17.66 6.34 1.41-1.41"></path></svg></span>';
+        }
+        return '<span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4A6.6 6.6 0 0 0 20 14.5Z"></path></svg></span>';
+      }
+
+      function formatClockTime(parts) {
+        if (state.timeFormat === '24') return pad2(parts.hour) + ':' + pad2(parts.minute);
+        const hour12 = parts.hour % 12 || 12;
+        const suffix = parts.hour >= 12 ? 'PM' : 'AM';
+        return sunMoonIcon(parts.hour) + hour12 + ':' + pad2(parts.minute) + ' <span style="color:var(--muted)">' + suffix + '</span>';
+      }
+
+      function compareDayDelta(date, baseZone, compareZone) {
+        const base = partsForZone(date, baseZone);
+        const comp = partsForZone(date, compareZone);
+        const baseKey = Date.UTC(base.year, base.month - 1, base.day);
+        const compKey = Date.UTC(comp.year, comp.month - 1, comp.day);
+        return Math.round((compKey - baseKey) / 86400000);
+      }
+
+      function formatDateLine(date, timeZone, referenceZone) {
+        const parts = partsForZone(date, timeZone);
+        const delta = compareDayDelta(date, referenceZone, timeZone);
+        return parts.weekday + ', ' + monthLabel(date, timeZone) + ' ' + parts.day + ', ' + parts.year + ' · ' + deltaLabel(delta);
+      }
+
+      function formatOffsetDifference(date) {
+        const localOffset = getOffsetMinutes(date, state.localZone);
+        const remoteOffset = getOffsetMinutes(date, state.remoteZone);
+        const diffHours = (remoteOffset - localOffset) / 60;
+        const sign = diffHours >= 0 ? '+' : '';
+        return 'Remote offset from local: ' + sign + diffHours;
+      }
+
+      function updateControlValues() {
+        els.themeSelect.value = state.theme;
+        els.themeColorInput.value = state.themeColor;
+        els.currentColorInput.value = state.currentTimeColor;
+        els.selectedColorInput.value = state.selectedTimeColor;
+        els.dialScaleRange.value = String(state.dialScale);
+        els.fontScaleRange.value = String(state.fontScale);
+        els.dialScaleValue.textContent = state.dialScale + '%';
+        els.fontScaleValue.textContent = state.fontScale + '%';
+        els.formatAmpmBtn.classList.toggle('active', state.timeFormat === 'ampm');
+        els.format24Btn.classList.toggle('active', state.timeFormat === '24');
+      }
+
+      function createSvg(tag, attrs) {
+        const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        if (attrs) {
+          Object.keys(attrs).forEach(function (key) {
+            node.setAttribute(key, String(attrs[key]));
+          });
+        }
+        return node;
+      }
+
+      function polar(cx, cy, radius, angleRad) {
+        return { x: cx + Math.cos(angleRad) * radius, y: cy + Math.sin(angleRad) * radius };
+      }
+
+      function formatRingHour(value) {
+        return state.timeFormat === '24' ? pad2(value) : pad2(value % 12 || 12);
+      }
+
+      function hourBadgeStyle(hour24) {
+        if (state.timeFormat === '24') {
+          return { fill: 'transparent', stroke: 'transparent', text: null };
+        }
+        const isPm = hour24 >= 12;
+        return isPm ?
+          { fill: 'rgba(7,12,20,0.88)', stroke: 'rgba(255,255,255,0.12)', text: 'rgba(244,247,255,0.98)' } :
+          { fill: 'rgba(255,255,255,0.92)', stroke: 'rgba(12,18,28,0.14)', text: 'rgba(8,12,20,0.92)' };
+      }
+
+      function appendBackground(svg, cx, cy, outerMostRadius) {
+        const defs = createSvg('defs');
+        defs.innerHTML = '' +
+          '<radialGradient id="dialGlow" cx="50%" cy="40%" r="70%">' +
+          '<stop offset="0%" stop-color="rgba(255,255,255,0.08)"></stop>' +
+          '<stop offset="60%" stop-color="rgba(255,255,255,0.02)"></stop>' +
+          '<stop offset="100%" stop-color="rgba(255,255,255,0)"></stop>' +
+          '</radialGradient>' +
+          '<linearGradient id="outerStroke" x1="0%" y1="0%" x2="100%" y2="100%">' +
+          '<stop offset="0%" stop-color="var(--accent)"></stop>' +
+          '<stop offset="100%" stop-color="var(--accent-2)"></stop>' +
+          '</linearGradient>' +
+          '<linearGradient id="innerStroke" x1="0%" y1="0%" x2="100%" y2="100%">' +
+          '<stop offset="0%" stop-color="var(--accent-2)"></stop>' +
+          '<stop offset="100%" stop-color="var(--accent)"></stop>' +
+          '</linearGradient>';
+        svg.appendChild(defs);
+        svg.appendChild(createSvg('circle', {
+          cx: cx,
+          cy: cy,
+          r: outerMostRadius,
+          fill: 'url(#dialGlow)',
+          stroke: 'rgba(255,255,255,0.07)',
+          'stroke-width': 1.1
+        }));
+      }
+
+      function appendRingDividers(svg, config) {
+        const group = createSvg('g');
+        for (let i = 0; i < 24; i += 1) {
+          const angle = (i * 15 - 90) * Math.PI / 180;
+          const a = polar(config.cx, config.cy, config.outerRadius, angle);
+          const b = polar(config.cx, config.cy, config.innerRadius, angle);
+          group.appendChild(createSvg('line', {
+            x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+            stroke: config.stroke, 'stroke-width': config.strokeWidth, 'stroke-linecap': 'round'
+          }));
+        }
+        svg.appendChild(group);
+      }
+
+      function appendFiveMinuteProgress(svg, config) {
+        const progressGroup = createSvg('g');
+        const passedTicks = Math.floor(config.minute / 5);
+        const slotIndex = ((config.slotIndex % 24) + 24) % 24;
+        for (let step = 1; step <= 11; step += 1) {
+          const angle = (((slotIndex + (step / 12)) * 15) - 90) * Math.PI / 180;
+          const start = polar(config.cx, config.cy, config.radiusStart, angle);
+          const end = polar(config.cx, config.cy, config.radiusEnd, angle);
+          progressGroup.appendChild(createSvg('line', {
+            x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+            stroke: step <= passedTicks ? state.currentTimeColor : 'var(--tick)',
+            'stroke-width': config.strokeWidth,
+            'stroke-linecap': 'round'
+          }));
+        }
+        svg.appendChild(progressGroup);
+      }
+
+      function appendHourRing(svg, config) {
+        const ringGroup = createSvg('g');
+        const topHour = ((config.topHour % 24) + 24) % 24;
+        const selectedSlot = ((config.selectedSlot || 0) % 24 + 24) % 24;
+        const liveSlot = config.liveSlot == null ? -1 : (((config.liveSlot % 24) + 24) % 24);
+        const selectedBg = rgba(state.selectedTimeColor, 0.20);
+        const selectedStroke = rgba(state.selectedTimeColor, 0.54);
+        const liveBg = rgba(state.currentTimeColor, 0.18);
+        const liveStroke = rgba(state.currentTimeColor, 0.48);
+        const bothBg = rgba(state.selectedTimeColor, 0.28);
+        const bothStroke = rgba(state.currentTimeColor, 0.58);
+        for (let i = 0; i < 24; i += 1) {
+          const displayHour = (topHour + i) % 24;
+          const angleRad = (i * 15 - 90) * Math.PI / 180;
+          const pos = polar(config.cx, config.cy, config.radius, angleRad);
+          const holder = createSvg('g', { transform: 'translate(' + pos.x + ' ' + pos.y + ')' });
+          const isSelected = i === selectedSlot;
+          const isLive = i === liveSlot;
+          const badge = hourBadgeStyle(displayHour);
+          if (badge.text) {
+            holder.appendChild(createSvg('circle', {
+              cx: 0,
+              cy: 1,
+              r: config.fontSize * 0.78,
+              fill: badge.fill,
+              stroke: badge.stroke,
+              'stroke-width': 0.8
+            }));
+          }
+          if (isSelected || isLive) {
+            holder.appendChild(createSvg('circle', {
+              cx: 0,
+              cy: 1,
+              r: config.fontSize * 0.88,
+              fill: isSelected && isLive ? bothBg : (isSelected ? selectedBg : liveBg),
+              stroke: isSelected && isLive ? bothStroke : (isSelected ? selectedStroke : liveStroke),
+              'stroke-width': isSelected ? 1.35 : 1.1
+            }));
+          }
+          const text = createSvg('text', {
+            x: 0,
+            y: config.fontSize * 0.34,
+            'text-anchor': 'middle',
+            'font-size': config.fontSize,
+            fill: isSelected ? state.selectedTimeColor : (isLive ? state.currentTimeColor : (badge.text || config.color)),
+            'font-family': 'Inter, Arial, sans-serif',
+            'font-weight': (isSelected || isLive) ? 800 : 700
+          });
+          text.textContent = formatRingHour(displayHour);
+          holder.appendChild(text);
+          ringGroup.appendChild(holder);
+        }
+        svg.appendChild(ringGroup);
+      }
+
+      function drawDial(date) {
+        const svg = els.dialSvg;
+        svg.innerHTML = '';
+        const cx = 400;
+        const cy = 400;
+        const scale = state.dialScale / 100;
+        const fontScale = state.fontScale / 100;
+        const outerMostRadius = 382 * scale;
+        const outerStrokeRadius = 322 * scale;
+        const outerLabelRadius = 286 * scale;
+        const outerDividerOuter = 348 * scale;
+        const outerDividerInner = 302 * scale;
+        const outerProgressOuter = 338 * scale;
+        const outerProgressInner = 321 * scale;
+        const innerStrokeRadius = 224 * scale;
+        const innerLabelRadius = 198 * scale;
+        const innerDividerOuter = 242 * scale;
+        const innerDividerInner = 214 * scale;
+        const innerProgressOuter = 236 * scale;
+        const innerProgressInner = 221 * scale;
+
+        const localParts = partsForZone(date, state.localZone);
+        const remoteParts = partsForZone(date, state.remoteZone);
+        const liveInstant = new Date();
+        const liveLocalParts = partsForZone(liveInstant, state.localZone);
+        const liveRemoteParts = partsForZone(liveInstant, state.remoteZone);
+        const localLiveSlot = ((liveLocalParts.hour - localParts.hour) % 24 + 24) % 24;
+        const remoteLiveSlot = ((liveRemoteParts.hour - remoteParts.hour) % 24 + 24) % 24;
+
+        appendBackground(svg, cx, cy, outerMostRadius + 10 * scale);
+        svg.appendChild(createSvg('circle', { cx: cx, cy: cy, r: outerStrokeRadius + 34 * scale, fill: 'rgba(255,255,255,0.02)', stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1.1 }));
+        svg.appendChild(createSvg('circle', { cx: cx, cy: cy, r: outerStrokeRadius, fill: 'none', stroke: 'url(#outerStroke)', 'stroke-width': 2.8 }));
+        appendRingDividers(svg, { cx: cx, cy: cy, outerRadius: outerDividerOuter, innerRadius: outerDividerInner, stroke: 'rgba(255,255,255,0.22)', strokeWidth: 1.9 });
+        appendFiveMinuteProgress(svg, { cx: cx, cy: cy, minute: liveLocalParts.minute, slotIndex: localLiveSlot, radiusStart: outerProgressOuter, radiusEnd: outerProgressInner, strokeWidth: 2.1 });
+        appendHourRing(svg, { cx: cx, cy: cy, topHour: localParts.hour, selectedSlot: 0, liveSlot: localLiveSlot, radius: outerLabelRadius, fontSize: 27 * fontScale * scale, color: 'var(--ring-local)' });
+
+        svg.appendChild(createSvg('circle', { cx: cx, cy: cy, r: innerStrokeRadius + 27 * scale, fill: 'rgba(255,255,255,0.02)', stroke: 'rgba(255,255,255,0.05)', 'stroke-width': 1.0 }));
+        svg.appendChild(createSvg('circle', { cx: cx, cy: cy, r: innerStrokeRadius, fill: 'none', stroke: 'url(#innerStroke)', 'stroke-width': 2.5 }));
+        appendRingDividers(svg, { cx: cx, cy: cy, outerRadius: innerDividerOuter, innerRadius: innerDividerInner, stroke: 'rgba(255,255,255,0.18)', strokeWidth: 1.5 });
+        appendFiveMinuteProgress(svg, { cx: cx, cy: cy, minute: liveRemoteParts.minute, slotIndex: remoteLiveSlot, radiusStart: innerProgressOuter, radiusEnd: innerProgressInner, strokeWidth: 1.8 });
+        appendHourRing(svg, { cx: cx, cy: cy, topHour: remoteParts.hour, selectedSlot: 0, liveSlot: remoteLiveSlot, radius: innerLabelRadius, fontSize: 22 * fontScale * scale, color: 'var(--ring-remote)' });
+
+        svg.appendChild(createSvg('circle', { cx: cx, cy: cy, r: 5.5, fill: 'rgba(255,255,255,0.92)', stroke: 'rgba(4,8,16,0.9)', 'stroke-width': 2.8 }));
+      }
+
+      function renderCards(date) {
+        const localParts = partsForZone(date, state.localZone);
+        const remoteParts = partsForZone(date, state.remoteZone);
+        const localDayDelta = compareDayDelta(date, state.remoteZone, state.localZone);
+        const remoteDayDelta = compareDayDelta(date, state.localZone, state.remoteZone);
+        els.localZoneBtn.textContent = zoneSubLabel(state.localZone);
+        els.remoteZoneBtn.textContent = zoneSubLabel(state.remoteZone);
+        els.localTimeBtn.innerHTML = formatClockTime(localParts);
+        els.remoteTimeBtn.innerHTML = formatClockTime(remoteParts);
+        els.localDateLine.textContent = formatDateLine(date, state.localZone, state.remoteZone);
+        els.remoteDateLine.textContent = formatDateLine(date, state.remoteZone, state.localZone);
+        els.localStatusLine.textContent = currentModeLabel() + ' · local day shift ' + deltaLabel(localDayDelta);
+        els.remoteStatusLine.textContent = formatOffsetDifference(date) + ' · ' + deltaLabel(remoteDayDelta);
+      }
+
+      function renderZoneResults(query) {
+        const q = String(query || '').trim().toLowerCase();
+        let results = Array.from(new Set(favoriteZones.concat(allZones)));
+        if (q) {
+          results = results.filter(function (zone) {
+            const normalized = zone.toLowerCase();
+            const natural = zone.replace(/_/g, ' ').toLowerCase();
+            return normalized.includes(q) || natural.includes(q);
+          });
+        }
+        results = results.slice(0, 90);
+        els.zoneResults.innerHTML = '';
+        results.forEach(function (zone) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'result-item';
+          button.innerHTML = '<div><span>' + escapeHtml(zoneLabel(zone)) + '</span><small>' + escapeHtml(zoneSubLabel(zone)) + '</small></div><small>' + escapeHtml(zoneOffsetShort(zone)) + '</small>';
+          button.addEventListener('click', function () {
+            if (state.sheetTarget === 'local') state.localZone = zone;
+            if (state.sheetTarget === 'remote') state.remoteZone = zone;
+            render();
+            closeSheet();
+          });
+          els.zoneResults.appendChild(button);
+        });
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function zoneOffsetShort(zone) {
+        const minutes = getOffsetMinutes(getInstant(), zone);
+        const sign = minutes >= 0 ? '+' : '-';
+        const abs = Math.abs(minutes);
+        const hrs = Math.floor(abs / 60);
+        const mins = abs % 60;
+        return 'UTC' + sign + hrs + (mins ? ':' + pad2(mins) : '');
+      }
+
+      function openDrawer() {
+        els.drawer.classList.add('open');
+        els.drawerBackdrop.classList.add('open');
+        els.drawer.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeDrawer() {
+        els.drawer.classList.remove('open');
+        els.drawerBackdrop.classList.remove('open');
+        els.drawer.setAttribute('aria-hidden', 'true');
+      }
+
+      function openSheet(mode, target) {
+        state.sheetMode = mode;
+        state.sheetTarget = target;
+        els.sheet.classList.add('open');
+        els.sheetBackdrop.classList.add('open');
+        els.sheet.setAttribute('aria-hidden', 'false');
+        els.zoneSheetMode.style.display = mode === 'zone' ? 'block' : 'none';
+        els.timeSheetMode.style.display = mode === 'time' ? 'block' : 'none';
+        const zone = target === 'local' ? state.localZone : state.remoteZone;
+        els.sheetTitle.textContent = mode === 'zone' ? ('Select ' + (target === 'local' ? 'local' : 'remote') + ' time zone') : ('Set ' + (target === 'local' ? 'local' : 'remote') + ' date and time');
+        if (mode === 'zone') {
+          els.zoneSearchInput.value = '';
+          renderZoneResults('');
+          setTimeout(function () { els.zoneSearchInput.focus(); }, 40);
+        } else {
+          els.timeSheetInput.value = localInputString(getInstant(), zone);
+          setTimeout(function () { els.timeSheetInput.focus(); }, 40);
+        }
+      }
+
+      function closeSheet() {
+        els.sheet.classList.remove('open');
+        els.sheetBackdrop.classList.remove('open');
+        els.sheet.setAttribute('aria-hidden', 'true');
+      }
+
+      function openDialog() {
+        els.zoneDialog.classList.add('open');
+        els.dialogBackdrop.classList.add('open');
+        els.zoneDialog.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeDialog() {
+        els.zoneDialog.classList.remove('open');
+        els.dialogBackdrop.classList.remove('open');
+        els.zoneDialog.setAttribute('aria-hidden', 'true');
+      }
+
+      function applySheetTime() {
+        const zone = state.sheetTarget === 'local' ? state.localZone : state.remoteZone;
+        const next = zonedLocalToUtc(els.timeSheetInput.value, zone);
+        if (!isValidDate(next)) return;
+        stopAnimation();
+        state.referenceInstant = next;
+        state.mode = 'reference';
         render();
-      });
+        closeSheet();
+      }
 
-      els.applyPrimary.addEventListener('click', () => setReferenceFromZone('primary'));
-      els.applySecondary.addEventListener('click', () => setReferenceFromZone('secondary'));
-      els.liveModeBtn.addEventListener('click', () => setMode('live'));
-      els.referenceModeBtn.addEventListener('click', () => setMode('reference'));
-      els.syncNowBtn.addEventListener('click', () => {
+      function stopAnimation() {
+        if (state.animationId) {
+          cancelAnimationFrame(state.animationId);
+          state.animationId = null;
+        }
+      }
+
+      function animateToInstant(targetInstant) {
+        stopAnimation();
+        const startInstant = getInstant();
+        const duration = 360;
+        const startedAt = performance.now();
+        state.mode = 'reference';
+        function frame(now) {
+          const t = Math.min(1, (now - startedAt) / duration);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const visibleInstant = new Date(startInstant.getTime() + (targetInstant.getTime() - startInstant.getTime()) * eased);
+          state.referenceInstant = visibleInstant;
+          render();
+          if (t < 1) {
+            state.animationId = requestAnimationFrame(frame);
+          } else {
+            state.referenceInstant = new Date(targetInstant);
+            state.animationId = null;
+            render();
+          }
+        }
+        state.referenceInstant = startInstant;
+        state.animationId = requestAnimationFrame(frame);
+      }
+
+      function stepByHours(hours) {
+        const current = getInstant();
+        const target = new Date(current.getTime() + hours * 3600000);
+        animateToInstant(target);
+      }
+
+      function setByDialTap(clientX, clientY) {
+        const rect = els.dialSvg.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dx = clientX - cx;
+        const dy = clientY - cy;
+        const r = Math.hypot(dx, dy);
+        const innerLimit = rect.width * 0.20;
+        const outerLimit = rect.width * 0.49;
+        if (r < innerLimit || r > outerLimit) return;
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+        if (angle < 0) angle += 360;
+        let deltaHours = Math.round(angle / 15) % 24;
+        if (deltaHours > 12) deltaHours -= 24;
+        stepByHours(deltaHours);
+      }
+
+      function snapToNow() {
+        stopAnimation();
         state.referenceInstant = new Date();
         state.mode = 'live';
         render();
-      });
+      }
 
-      els.swapZonesBtn.addEventListener('click', () => {
-        const temp = state.primaryZone;
-        state.primaryZone = state.secondaryZone;
-        state.secondaryZone = temp;
+      function swapZones() {
+        const current = getInstant();
+        const nextLocal = state.remoteZone;
+        state.remoteZone = state.localZone;
+        state.localZone = nextLocal;
+        if (state.mode === 'reference') state.referenceInstant = current;
         render();
-      });
+      }
 
-      document.querySelectorAll('.step-btn').forEach(btn => {
-        btn.addEventListener('click', () => stepByMs(Number(btn.dataset.ms)));
-      });
+      function render() {
+        applyTheme();
+        updateControlValues();
+        const instant = getInstant();
+        drawDial(instant);
+        renderCards(instant);
+        saveState();
+      }
 
-      document.querySelectorAll('.jump-btn').forEach(btn => {
-        btn.addEventListener('click', () => stepZoneCalendar(btn.dataset.target, Number(btn.dataset.amount)));
-      });
-    }
+      function startLiveTimer() {
+        stopLiveTimer();
+        state.timerId = window.setInterval(function () {
+          if (!state.animationId) render();
+        }, 1000);
+      }
 
-    function init() {
-      populateZones();
-      bindEvents();
-      render();
-      startLive();
-    }
+      function stopLiveTimer() {
+        if (state.timerId) {
+          clearInterval(state.timerId);
+          state.timerId = null;
+        }
+      }
 
-    init();
+      function bindEvents() {
+        els.menuBtn.addEventListener('click', openDrawer);
+        els.closeDrawerBtn.addEventListener('click', closeDrawer);
+        els.drawerBackdrop.addEventListener('click', closeDrawer);
+        els.minusBtn.addEventListener('click', function () { stepByHours(-1); });
+        els.plusBtn.addEventListener('click', function () { stepByHours(1); });
+        els.swapBtn.addEventListener('click', swapZones);
+        els.localZoneBtn.addEventListener('click', function () { openSheet('zone', 'local'); });
+        els.remoteZoneBtn.addEventListener('click', function () { openSheet('zone', 'remote'); });
+        els.localTimeBtn.addEventListener('click', function () { openSheet('time', 'local'); });
+        els.remoteTimeBtn.addEventListener('click', function () { openSheet('time', 'remote'); });
+        els.closeSheetBtn.addEventListener('click', closeSheet);
+        els.sheetBackdrop.addEventListener('click', closeSheet);
+        els.zoneSearchInput.addEventListener('input', function () { renderZoneResults(els.zoneSearchInput.value); });
+        els.applyTimeSheetBtn.addEventListener('click', applySheetTime);
+        els.formatAmpmBtn.addEventListener('click', function () { state.timeFormat = 'ampm'; render(); });
+        els.format24Btn.addEventListener('click', function () { state.timeFormat = '24'; render(); });
+        els.themeSelect.addEventListener('change', function () {
+          state.theme = els.themeSelect.value;
+          state.themeColor = PRESET_THEME_COLORS[state.theme] || state.themeColor;
+          render();
+        });
+        els.themeColorInput.addEventListener('input', function () {
+          state.themeColor = normalizeHex(els.themeColorInput.value, state.themeColor);
+          render();
+        });
+        els.currentColorInput.addEventListener('input', function () {
+          state.currentTimeColor = normalizeHex(els.currentColorInput.value, state.currentTimeColor);
+          render();
+        });
+        els.selectedColorInput.addEventListener('input', function () {
+          state.selectedTimeColor = normalizeHex(els.selectedColorInput.value, state.selectedTimeColor);
+          render();
+        });
+        els.dialScaleRange.addEventListener('input', function () { state.dialScale = clamp(Number(els.dialScaleRange.value), 82, 118); render(); });
+        els.fontScaleRange.addEventListener('input', function () { state.fontScale = clamp(Number(els.fontScaleRange.value), 80, 132); render(); });
+        els.snapNowBtn.addEventListener('click', snapToNow);
+        els.resetBtn.addEventListener('click', resetState);
+        els.dialSvg.addEventListener('click', function (event) { setByDialTap(event.clientX, event.clientY); });
+        els.closeDialogBtn.addEventListener('click', closeDialog);
+        els.dialogOkBtn.addEventListener('click', closeDialog);
+        els.dialogResetBtn.addEventListener('click', function () {
+          state.localZone = DEFAULTS.localZone;
+          state.remoteZone = DEFAULTS.remoteZone;
+          render();
+          closeDialog();
+        });
+        els.dialogBackdrop.addEventListener('click', closeDialog);
+        document.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape') {
+            closeDrawer();
+            closeSheet();
+            closeDialog();
+          }
+        });
+        window.addEventListener('beforeunload', stopLiveTimer);
+      }
+
+      function init() {
+        loadState();
+        bindEvents();
+        render();
+        startLiveTimer();
+        if (warnedZoneList) setTimeout(openDialog, 80);
+      }
+
+      init();
+    }());
   </script>
+
 </body>
 </html>

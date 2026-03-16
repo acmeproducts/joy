@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dual-Zone Time Mapper</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(17, 24, 39, 0.94);
+      --panel-2: #1f2937;
+      --line: #334155;
+      --line-2: #475569;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #f8fafc;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #020617 0%, var(--bg) 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    button, input, select { font: inherit; }
+
+    .app {
+      width: min(1200px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 16px 0 32px;
+    }
+
+    .title-card,
+    .clock-card,
+    .status-card,
+    .footer-card,
+    .drawer-panel {
+      background: var(--panel);
+      border: 1px solid rgba(71, 85, 105, 0.45);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .title-card {
+      padding: 16px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 1.25rem;
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+
+    .subtext {
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 0.95rem;
+    }
+
+    .menu-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      border: 1px solid var(--line-2);
+      background: rgba(11, 18, 32, 0.95);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .menu-btn span,
+    .menu-btn span::before,
+    .menu-btn span::after {
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: var(--text);
+      border-radius: 999px;
+      content: '';
+      position: relative;
+    }
+
+    .menu-btn span::before { top: -6px; position: absolute; }
+    .menu-btn span::after { top: 6px; position: absolute; }
+
+    .clock-card {
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .clock-wrap {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .status-strip {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      grid-template-columns: 1fr;
+    }
+
+    .status-card {
+      padding: 12px;
+    }
+
+    .status-card h3 {
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+    }
+
+    .status-line {
+      font-size: 0.93rem;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .status-line strong { color: var(--text); }
+
+    .footer-card {
+      padding: 12px 16px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid rgba(71, 85, 105, 0.5);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--text);
+      margin-left: 8px;
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.68);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 20;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(440px, 100vw);
+      height: 100vh;
+      padding: 14px;
+      transform: translateX(100%);
+      transition: transform 0.22s ease;
+      z-index: 30;
+      display: flex;
+    }
+
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-panel {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    }
+
+    .drawer-title {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .close-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--line-2);
+      background: #0b1220;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .drawer-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    }
+
+    .tab-btn,
+    .action-btn,
+    .mode-btn,
+    input,
+    select {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line-2);
+      background: #0b1220;
+      color: var(--text);
+      padding: 12px 14px;
+      outline: none;
+    }
+
+    .tab-btn,
+    .action-btn,
+    .mode-btn,
+    .close-btn {
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(180deg, #162033 0%, #0b1220 100%);
+    }
+
+    .tab-btn.active,
+    .mode-btn.active {
+      border-color: #e2e8f0;
+      background: linear-gradient(180deg, #1e293b 0%, #111827 100%);
+    }
+
+    input:focus, select:focus, .tab-btn:focus, .action-btn:focus, .mode-btn:focus, .menu-btn:focus, .close-btn:focus {
+      border-color: #cbd5e1;
+      box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.12);
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: grid; gap: 14px; }
+
+    .group {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      background: rgba(11, 18, 32, 0.68);
+      border: 1px solid rgba(71, 85, 105, 0.28);
+      border-radius: 16px;
+    }
+
+    .group-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .button-row,
+    .step-grid,
+    .mini-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .step-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.4;
+    }
+
+    @media (min-width: 900px) {
+      .status-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title-card">
+        <h1>Dual-Zone Time Mapper</h1>
+        <p class="subtext">One shared instant rendered through two time zones. Outer ring is the primary zone. Inner ring is the secondary zone. Open the menu to change zones, set hypothetical times, and step through dates and times.</p>
+      </div>
+      <button id="menuBtn" class="menu-btn" aria-label="Open configuration menu" aria-expanded="false" aria-controls="configDrawer"><span></span></button>
+    </div>
+
+    <section class="clock-card">
+      <div class="clock-wrap">
+        <svg id="clockSvg" viewBox="0 0 800 800" aria-label="Dual time zone radial clock"></svg>
+      </div>
+      <div class="status-strip">
+        <div class="status-card">
+          <h3 id="primaryStatusTitle">Primary</h3>
+          <div id="primaryStatus" class="status-line"></div>
+        </div>
+        <div class="status-card">
+          <h3 id="secondaryStatusTitle">Secondary</h3>
+          <div id="secondaryStatus" class="status-line"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-card">
+      Internal clock engine uses one absolute instant and converts it into each zone. That keeps both rings synchronized during live updates, manual edits, and both date and time stepping. Day-state labels show whether the secondary zone is on the previous day, same day, or next day relative to the primary zone for the current shared instant.
+    </div>
+  </div>
+
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+  <aside id="configDrawer" class="drawer" aria-hidden="true">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <div class="drawer-title">Configuration</div>
+        <button id="closeDrawerBtn" class="close-btn" aria-label="Close configuration menu">×</button>
+      </div>
+      <div class="drawer-tabs">
+        <button class="tab-btn active" data-tab="zones">Zones</button>
+        <button class="tab-btn" data-tab="reference">Reference</button>
+        <button class="tab-btn" data-tab="step">Step</button>
+      </div>
+      <div class="drawer-body">
+        <section id="tab-zones" class="tab-panel active">
+          <div class="group">
+            <div class="group-title">Primary zone</div>
+            <div class="field">
+              <label for="primaryZone">Time zone</label>
+              <select id="primaryZone"></select>
+            </div>
+          </div>
+          <div class="group">
+            <div class="group-title">Secondary zone</div>
+            <div class="field">
+              <label for="secondaryZone">Time zone</label>
+              <select id="secondaryZone"></select>
+            </div>
+          </div>
+          <div class="group">
+            <div class="mini-grid">
+              <button id="swapZonesBtn" class="action-btn">Swap zones</button>
+              <button id="syncNowBtn" class="action-btn">Snap to now</button>
+            </div>
+            <div class="hint">Use the other tabs to set a hypothetical instant and move it forward or backward.</div>
+          </div>
+        </section>
+
+        <section id="tab-reference" class="tab-panel">
+          <div class="group">
+            <div class="group-title">Mode</div>
+            <div class="button-row">
+              <button id="liveModeBtn" class="mode-btn active">Live mode</button>
+              <button id="referenceModeBtn" class="mode-btn">Reference mode</button>
+            </div>
+          </div>
+          <div class="group">
+            <div class="group-title">Set from primary zone</div>
+            <div class="field">
+              <label for="primaryDateTime">Reference date and time in primary zone</label>
+              <input id="primaryDateTime" type="datetime-local" step="60" />
+            </div>
+            <button id="applyPrimary" class="action-btn">Apply primary reference</button>
+          </div>
+          <div class="group">
+            <div class="group-title">Set from secondary zone</div>
+            <div class="field">
+              <label for="secondaryDateTime">Reference date and time in secondary zone</label>
+              <input id="secondaryDateTime" type="datetime-local" step="60" />
+            </div>
+            <button id="applySecondary" class="action-btn">Apply secondary reference</button>
+          </div>
+        </section>
+
+        <section id="tab-step" class="tab-panel">
+          <div class="group">
+            <div class="group-title">Time stepping</div>
+            <div class="step-grid">
+              <button class="step-btn action-btn" data-ms="-86400000">-1 day</button>
+              <button class="step-btn action-btn" data-ms="-3600000">-1 hour</button>
+              <button class="step-btn action-btn" data-ms="-900000">-15 min</button>
+              <button class="step-btn action-btn" data-ms="900000">+15 min</button>
+              <button class="step-btn action-btn" data-ms="3600000">+1 hour</button>
+              <button class="step-btn action-btn" data-ms="86400000">+1 day</button>
+            </div>
+          </div>
+          <div class="group">
+            <div class="group-title">Date stepping by local zone</div>
+            <div class="mini-grid">
+              <button class="jump-btn action-btn" data-target="primary" data-amount="-1">Primary -1 day</button>
+              <button class="jump-btn action-btn" data-target="primary" data-amount="1">Primary +1 day</button>
+              <button class="jump-btn action-btn" data-target="secondary" data-amount="-1">Secondary -1 day</button>
+              <button class="jump-btn action-btn" data-target="secondary" data-amount="1">Secondary +1 day</button>
+            </div>
+            <div class="hint">These preserve the local clock time in the selected zone and move the calendar day from that zone’s perspective.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    const state = {
+      primaryZone: 'America/Los_Angeles',
+      secondaryZone: 'Asia/Kuala_Lumpur',
+      mode: 'live',
+      referenceInstant: new Date(),
+      liveTimer: null,
+      drawerOpen: false,
+      activeTab: 'zones'
+    };
+
+    const els = {
+      menuBtn: document.getElementById('menuBtn'),
+      closeDrawerBtn: document.getElementById('closeDrawerBtn'),
+      drawer: document.getElementById('configDrawer'),
+      drawerBackdrop: document.getElementById('drawerBackdrop'),
+      primaryZone: document.getElementById('primaryZone'),
+      secondaryZone: document.getElementById('secondaryZone'),
+      primaryDateTime: document.getElementById('primaryDateTime'),
+      secondaryDateTime: document.getElementById('secondaryDateTime'),
+      applyPrimary: document.getElementById('applyPrimary'),
+      applySecondary: document.getElementById('applySecondary'),
+      liveModeBtn: document.getElementById('liveModeBtn'),
+      referenceModeBtn: document.getElementById('referenceModeBtn'),
+      syncNowBtn: document.getElementById('syncNowBtn'),
+      swapZonesBtn: document.getElementById('swapZonesBtn'),
+      clockSvg: document.getElementById('clockSvg'),
+      primaryStatusTitle: document.getElementById('primaryStatusTitle'),
+      secondaryStatusTitle: document.getElementById('secondaryStatusTitle'),
+      primaryStatus: document.getElementById('primaryStatus'),
+      secondaryStatus: document.getElementById('secondaryStatus')
+    };
+
+    const zoneNames = typeof Intl.supportedValuesOf === 'function'
+      ? Intl.supportedValuesOf('timeZone')
+      : [
+          'America/Los_Angeles','America/New_York','Europe/London','Europe/Paris',
+          'Asia/Kuala_Lumpur','Asia/Singapore','Asia/Tokyo','Asia/Dubai','Australia/Sydney','UTC'
+        ];
+
+    function populateZones() {
+      const favorites = [
+        'America/Los_Angeles',
+        'America/New_York',
+        'UTC',
+        'Europe/London',
+        'Europe/Paris',
+        'Asia/Dubai',
+        'Asia/Kuala_Lumpur',
+        'Asia/Singapore',
+        'Asia/Tokyo',
+        'Australia/Sydney'
+      ];
+
+      const unique = [...new Set([...favorites, ...zoneNames])];
+      [els.primaryZone, els.secondaryZone].forEach(select => {
+        select.innerHTML = '';
+        unique.forEach(zone => {
+          const option = document.createElement('option');
+          option.value = zone;
+          option.textContent = zone.replace(/_/g, ' ');
+          select.appendChild(option);
+        });
+      });
+
+      els.primaryZone.value = state.primaryZone;
+      els.secondaryZone.value = state.secondaryZone;
+    }
+
+    function getInstant() {
+      return state.mode === 'live' ? new Date() : new Date(state.referenceInstant);
+    }
+
+    function partsForZone(date, timeZone) {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+        weekday: 'short'
+      });
+      const parts = formatter.formatToParts(date);
+      const map = {};
+      for (const part of parts) {
+        if (part.type !== 'literal') map[part.type] = part.value;
+      }
+      return {
+        year: Number(map.year),
+        month: Number(map.month),
+        day: Number(map.day),
+        hour: Number(map.hour),
+        minute: Number(map.minute),
+        second: Number(map.second),
+        weekday: map.weekday
+      };
+    }
+
+    function getOffsetMinutes(date, timeZone) {
+      const p = partsForZone(date, timeZone);
+      const utcEquivalent = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+      return (utcEquivalent - date.getTime()) / 60000;
+    }
+
+    function zonedLocalToUtc(localStr, timeZone) {
+      const match = localStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+      if (!match) return null;
+      const [, y, mo, d, h, mi] = match.map(Number);
+      let guess = new Date(Date.UTC(y, mo - 1, d, h, mi, 0));
+      let offset = getOffsetMinutes(guess, timeZone);
+      guess = new Date(guess.getTime() - offset * 60000);
+      const offset2 = getOffsetMinutes(guess, timeZone);
+      if (offset2 !== offset) {
+        guess = new Date(guess.getTime() - (offset2 - offset) * 60000);
+      }
+      return guess;
+    }
+
+    function localInputValue(date, timeZone) {
+      const p = partsForZone(date, timeZone);
+      const pad = n => String(n).padStart(2, '0');
+      return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
+    }
+
+    function readableZoneTime(date, timeZone) {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      }).format(date);
+    }
+
+    function compareDayState(date, baseZone, compareZone) {
+      const a = partsForZone(date, baseZone);
+      const b = partsForZone(date, compareZone);
+      const keyA = Date.UTC(a.year, a.month - 1, a.day);
+      const keyB = Date.UTC(b.year, b.month - 1, b.day);
+      const diffDays = Math.round((keyB - keyA) / 86400000);
+      if (diffDays < 0) return 'Previous day';
+      if (diffDays > 0) return 'Next day';
+      return 'Same day';
+    }
+
+    function zoneHourFraction(date, timeZone) {
+      const p = partsForZone(date, timeZone);
+      return p.hour + p.minute / 60 + p.second / 3600;
+    }
+
+    function zoneHourAngle(hourFraction) {
+      return (hourFraction / 24) * Math.PI * 2 - Math.PI / 2;
+    }
+
+    function polar(cx, cy, r, angle) {
+      return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+    }
+
+    function createSvgEl(tag, attrs = {}) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+      return el;
+    }
+
+    function drawClock(date) {
+      const svg = els.clockSvg;
+      svg.innerHTML = '';
+
+      const cx = 400;
+      const cy = 400;
+      const outerR = 330;
+      const innerR = 230;
+      const outerMarkerIn = 286;
+      const innerMarkerIn = 196;
+
+      svg.appendChild(createSvgEl('circle', { cx, cy, r: 372, fill: '#08111f', stroke: '#334155', 'stroke-width': 2 }));
+      svg.appendChild(createSvgEl('circle', { cx, cy, r: outerR, fill: 'none', stroke: '#94a3b8', 'stroke-width': 2.5 }));
+      svg.appendChild(createSvgEl('circle', { cx, cy, r: innerR, fill: 'none', stroke: '#64748b', 'stroke-width': 2.5 }));
+      svg.appendChild(createSvgEl('circle', { cx, cy, r: 108, fill: 'none', stroke: '#1e293b', 'stroke-width': 1.5, 'stroke-dasharray': '6 8' }));
+
+      for (let i = 0; i < 24; i++) {
+        const angle = zoneHourAngle(i);
+        const isMajor = i % 6 === 0;
+        const outerA = polar(cx, cy, outerR, angle);
+        const outerB = polar(cx, cy, isMajor ? outerMarkerIn - 10 : outerMarkerIn, angle);
+        svg.appendChild(createSvgEl('line', {
+          x1: outerA.x, y1: outerA.y, x2: outerB.x, y2: outerB.y,
+          stroke: isMajor ? '#e2e8f0' : '#64748b', 'stroke-width': isMajor ? 3 : 1.4
+        }));
+
+        const innerA = polar(cx, cy, innerR, angle);
+        const innerB = polar(cx, cy, isMajor ? innerMarkerIn - 10 : innerMarkerIn, angle);
+        svg.appendChild(createSvgEl('line', {
+          x1: innerA.x, y1: innerA.y, x2: innerB.x, y2: innerB.y,
+          stroke: isMajor ? '#cbd5e1' : '#475569', 'stroke-width': isMajor ? 3 : 1.4
+        }));
+
+        const outerLabelPos = polar(cx, cy, 305, angle);
+        const outerText = createSvgEl('text', {
+          x: outerLabelPos.x, y: outerLabelPos.y + 6,
+          'text-anchor': 'middle', 'font-size': isMajor ? 22 : 16, fill: '#e5e7eb', 'font-family': 'Arial, sans-serif'
+        });
+        outerText.textContent = String(i).padStart(2, '0');
+        svg.appendChild(outerText);
+
+        const innerLabelPos = polar(cx, cy, 170, angle);
+        const innerText = createSvgEl('text', {
+          x: innerLabelPos.x, y: innerLabelPos.y + 5,
+          'text-anchor': 'middle', 'font-size': isMajor ? 19 : 14, fill: '#cbd5e1', 'font-family': 'Arial, sans-serif'
+        });
+        innerText.textContent = String(i).padStart(2, '0');
+        svg.appendChild(innerText);
+      }
+
+      const primaryAngle = zoneHourAngle(zoneHourFraction(date, state.primaryZone));
+      const secondaryAngle = zoneHourAngle(zoneHourFraction(date, state.secondaryZone));
+
+      const outerEnd = polar(cx, cy, 265, primaryAngle);
+      const outerEnd2 = polar(cx, cy, 315, primaryAngle);
+      svg.appendChild(createSvgEl('line', {
+        x1: cx, y1: cy, x2: outerEnd.x, y2: outerEnd.y,
+        stroke: '#f8fafc', 'stroke-width': 8, 'stroke-linecap': 'round'
+      }));
+      svg.appendChild(createSvgEl('line', {
+        x1: outerEnd.x, y1: outerEnd.y, x2: outerEnd2.x, y2: outerEnd2.y,
+        stroke: '#f8fafc', 'stroke-width': 8, 'stroke-linecap': 'round'
+      }));
+      const outerTipLeft = polar(outerEnd2.x, outerEnd2.y, 16, primaryAngle + Math.PI * 0.83);
+      const outerTipRight = polar(outerEnd2.x, outerEnd2.y, 16, primaryAngle - Math.PI * 0.83);
+      svg.appendChild(createSvgEl('polygon', {
+        points: `${outerEnd2.x},${outerEnd2.y} ${outerTipLeft.x},${outerTipLeft.y} ${outerTipRight.x},${outerTipRight.y}`,
+        fill: '#f8fafc'
+      }));
+
+      const innerEnd = polar(cx, cy, 170, secondaryAngle);
+      const innerEnd2 = polar(cx, cy, 214, secondaryAngle);
+      svg.appendChild(createSvgEl('line', {
+        x1: cx, y1: cy, x2: innerEnd.x, y2: innerEnd.y,
+        stroke: '#cbd5e1', 'stroke-width': 7, 'stroke-linecap': 'round'
+      }));
+      svg.appendChild(createSvgEl('line', {
+        x1: innerEnd.x, y1: innerEnd.y, x2: innerEnd2.x, y2: innerEnd2.y,
+        stroke: '#cbd5e1', 'stroke-width': 7, 'stroke-linecap': 'round'
+      }));
+      const innerTipLeft = polar(innerEnd2.x, innerEnd2.y, 14, secondaryAngle + Math.PI * 0.83);
+      const innerTipRight = polar(innerEnd2.x, innerEnd2.y, 14, secondaryAngle - Math.PI * 0.83);
+      svg.appendChild(createSvgEl('polygon', {
+        points: `${innerEnd2.x},${innerEnd2.y} ${innerTipLeft.x},${innerTipLeft.y} ${innerTipRight.x},${innerTipRight.y}`,
+        fill: '#cbd5e1'
+      }));
+
+      const primaryParts = partsForZone(date, state.primaryZone);
+      const secondaryParts = partsForZone(date, state.secondaryZone);
+      const modeText = state.mode === 'live' ? 'LIVE' : 'REFERENCE';
+      const centerRows = [
+        `${modeText}`,
+        `${String(primaryParts.hour).padStart(2, '0')}:${String(primaryParts.minute).padStart(2, '0')} ${state.primaryZone}`,
+        `${String(secondaryParts.hour).padStart(2, '0')}:${String(secondaryParts.minute).padStart(2, '0')} ${state.secondaryZone}`
+      ];
+      [364, 400, 436].forEach((y, idx) => {
+        const t = createSvgEl('text', {
+          x: 400,
+          y,
+          'text-anchor': 'middle',
+          'font-size': idx === 0 ? 18 : 16,
+          fill: idx === 0 ? '#94a3b8' : '#e5e7eb',
+          'font-family': 'Arial, sans-serif',
+          'font-weight': idx === 0 ? '700' : '500'
+        });
+        t.textContent = centerRows[idx];
+        svg.appendChild(t);
+      });
+
+      const labelPrimary = createSvgEl('text', {
+        x: 400, y: 90, 'text-anchor': 'middle', 'font-size': 18, fill: '#f8fafc', 'font-family': 'Arial, sans-serif', 'font-weight': '700'
+      });
+      labelPrimary.textContent = `Outer · ${state.primaryZone}`;
+      svg.appendChild(labelPrimary);
+
+      const labelSecondary = createSvgEl('text', {
+        x: 400, y: 720, 'text-anchor': 'middle', 'font-size': 18, fill: '#cbd5e1', 'font-family': 'Arial, sans-serif', 'font-weight': '700'
+      });
+      labelSecondary.textContent = `Inner · ${state.secondaryZone}`;
+      svg.appendChild(labelSecondary);
+
+      svg.appendChild(createSvgEl('circle', { cx, cy, r: 10, fill: '#e2e8f0', stroke: '#020617', 'stroke-width': 3 }));
+    }
+
+    function render() {
+      const instant = getInstant();
+      drawClock(instant);
+
+      els.primaryZone.value = state.primaryZone;
+      els.secondaryZone.value = state.secondaryZone;
+      els.primaryDateTime.value = localInputValue(instant, state.primaryZone);
+      els.secondaryDateTime.value = localInputValue(instant, state.secondaryZone);
+
+      els.liveModeBtn.classList.toggle('active', state.mode === 'live');
+      els.referenceModeBtn.classList.toggle('active', state.mode === 'reference');
+
+      const dayState = compareDayState(instant, state.primaryZone, state.secondaryZone);
+      const reverseDayState = compareDayState(instant, state.secondaryZone, state.primaryZone);
+
+      els.primaryStatusTitle.textContent = `Primary: ${state.primaryZone}`;
+      els.secondaryStatusTitle.textContent = `Secondary: ${state.secondaryZone}`;
+
+      els.primaryStatus.innerHTML = `
+        <strong>${readableZoneTime(instant, state.primaryZone)}</strong><br>
+        Secondary relative to primary: <strong>${dayState}</strong>
+      `;
+
+      els.secondaryStatus.innerHTML = `
+        <strong>${readableZoneTime(instant, state.secondaryZone)}</strong><br>
+        Primary relative to secondary: <strong>${reverseDayState}</strong>
+      `;
+
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === state.activeTab));
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === `tab-${state.activeTab}`));
+      els.drawer.classList.toggle('open', state.drawerOpen);
+      els.drawer.setAttribute('aria-hidden', String(!state.drawerOpen));
+      els.drawerBackdrop.classList.toggle('open', state.drawerOpen);
+      els.menuBtn.setAttribute('aria-expanded', String(state.drawerOpen));
+    }
+
+    function startLive() {
+      stopLive();
+      state.liveTimer = setInterval(() => {
+        if (state.mode === 'live') render();
+      }, 1000);
+    }
+
+    function stopLive() {
+      if (state.liveTimer) {
+        clearInterval(state.liveTimer);
+        state.liveTimer = null;
+      }
+    }
+
+    function setMode(mode) {
+      if (mode === 'reference' && state.mode === 'live') state.referenceInstant = new Date();
+      state.mode = mode;
+      render();
+    }
+
+    function setReferenceFromZone(target) {
+      const isPrimary = target === 'primary';
+      const value = isPrimary ? els.primaryDateTime.value : els.secondaryDateTime.value;
+      const zone = isPrimary ? state.primaryZone : state.secondaryZone;
+      const utcDate = zonedLocalToUtc(value, zone);
+      if (!utcDate || Number.isNaN(utcDate.getTime())) return;
+      state.referenceInstant = utcDate;
+      state.mode = 'reference';
+      render();
+    }
+
+    function stepByMs(ms) {
+      const base = getInstant();
+      state.referenceInstant = new Date(base.getTime() + ms);
+      state.mode = 'reference';
+      render();
+    }
+
+    function stepZoneCalendar(target, amountDays) {
+      const instant = getInstant();
+      const zone = target === 'primary' ? state.primaryZone : state.secondaryZone;
+      const localValue = target === 'primary' ? els.primaryDateTime.value : els.secondaryDateTime.value;
+      const baseParts = localValue || localInputValue(instant, zone);
+      const localDate = new Date(baseParts + ':00');
+      localDate.setDate(localDate.getDate() + amountDays);
+      const pad = n => String(n).padStart(2, '0');
+      const nextLocal = `${localDate.getFullYear()}-${pad(localDate.getMonth()+1)}-${pad(localDate.getDate())}T${pad(localDate.getHours())}:${pad(localDate.getMinutes())}`;
+      const utcDate = zonedLocalToUtc(nextLocal, zone);
+      if (!utcDate || Number.isNaN(utcDate.getTime())) return;
+      state.referenceInstant = utcDate;
+      state.mode = 'reference';
+      render();
+    }
+
+    function setActiveTab(tab) {
+      state.activeTab = tab;
+      render();
+    }
+
+    function openDrawer() {
+      state.drawerOpen = true;
+      render();
+    }
+
+    function closeDrawer() {
+      state.drawerOpen = false;
+      render();
+    }
+
+    function bindEvents() {
+      els.menuBtn.addEventListener('click', openDrawer);
+      els.closeDrawerBtn.addEventListener('click', closeDrawer);
+      els.drawerBackdrop.addEventListener('click', closeDrawer);
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && state.drawerOpen) closeDrawer();
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+      });
+
+      els.primaryZone.addEventListener('change', () => {
+        state.primaryZone = els.primaryZone.value;
+        render();
+      });
+
+      els.secondaryZone.addEventListener('change', () => {
+        state.secondaryZone = els.secondaryZone.value;
+        render();
+      });
+
+      els.applyPrimary.addEventListener('click', () => setReferenceFromZone('primary'));
+      els.applySecondary.addEventListener('click', () => setReferenceFromZone('secondary'));
+      els.liveModeBtn.addEventListener('click', () => setMode('live'));
+      els.referenceModeBtn.addEventListener('click', () => setMode('reference'));
+      els.syncNowBtn.addEventListener('click', () => {
+        state.referenceInstant = new Date();
+        state.mode = 'live';
+        render();
+      });
+
+      els.swapZonesBtn.addEventListener('click', () => {
+        const temp = state.primaryZone;
+        state.primaryZone = state.secondaryZone;
+        state.secondaryZone = temp;
+        render();
+      });
+
+      document.querySelectorAll('.step-btn').forEach(btn => {
+        btn.addEventListener('click', () => stepByMs(Number(btn.dataset.ms)));
+      });
+
+      document.querySelectorAll('.jump-btn').forEach(btn => {
+        btn.addEventListener('click', () => stepZoneCalendar(btn.dataset.target, Number(btn.dataset.amount)));
+      });
+    }
+
+    function init() {
+      populateZones();
+      bindEvents();
+      render();
+      startLive();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -160,9 +160,19 @@
       z-index: 3;
       display: flex;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: space-between;
       margin-bottom: 4px;
       min-height: 44px;
+    }
+
+    .menu-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .about-btn {
+      color: #a6b2c2;
     }
 
     .icon-btn {
@@ -232,10 +242,9 @@
       -webkit-backdrop-filter: blur(10px);
     }
 
-    .step-btn,
     .center-swap {
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 48px;
       padding: 0;
       border-radius: 14px;
       display: inline-flex;
@@ -243,12 +252,6 @@
       justify-content: center;
       background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
       box-shadow: none;
-    }
-
-    .step-btn {
-      font-size: 1.8rem;
-      font-weight: 700;
-      line-height: 1;
     }
 
     .center-swap svg {
@@ -291,7 +294,7 @@
       bottom: 0;
       width: var(--card-w);
       min-height: 112px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--accent);
       border-radius: 20px;
       padding: 12px 12px 13px;
       background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
@@ -644,11 +647,20 @@
 <body>
   <div class="app">
     <div class="menu-row">
-      <button id="menuBtn" class="icon-btn" aria-label="Open settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-          <path d="M4 7h16"></path>
-          <path d="M4 12h16"></path>
-          <path d="M4 17h16"></path>
+      <div class="menu-actions">
+        <button id="menuBtn" class="icon-btn" aria-label="Open settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 7h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 17h16"></path>
+          </svg>
+        </button>
+      </div>
+      <button id="aboutBtn" class="icon-btn about-btn" type="button" aria-label="About and controls help">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M9.6 9.2a2.4 2.4 0 1 1 3.7 2l-.9.6c-.7.4-1.1 1.1-1.1 1.9v.4"></path>
+          <path d="M12 17.2h.01"></path>
         </svg>
       </button>
     </div>
@@ -659,7 +671,6 @@
           <svg id="dialSvg" viewBox="0 0 800 800" aria-label="Dual-zone radial time mapper"></svg>
           <div class="center-controls">
             <div class="center-row">
-              <button id="minusBtn" class="step-btn" type="button" aria-label="Go back one hour">−</button>
               <button id="swapBtn" class="swap-btn center-swap" type="button" aria-label="Swap local and remote zones">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M7 7h11"></path>
@@ -668,7 +679,6 @@
                   <path d="m10 14-4 3 4 3"></path>
                 </svg>
               </button>
-              <button id="plusBtn" class="step-btn" type="button" aria-label="Go forward one hour">+</button>
             </div>
           </div>
         </div>
@@ -758,12 +768,6 @@
           <button id="resetBtn" type="button">Reset</button>
         </div>
 
-        <div class="field" style="margin-top:16px;">
-          <label>About</label>
-          <div class="about-copy">
-            One shared instant is rendered in two time zones. The outer ring shows local time. The inner ring shows remote time. Tap the dial to rotate to a different local hour. Tap a zone or time card value to edit directly.
-          </div>
-        </div>
       </div>
     </div>
   </aside>
@@ -813,6 +817,22 @@
     </div>
   </section>
 
+  <div id="aboutBackdrop" class="dialog-backdrop"></div>
+  <section id="aboutDialog" class="dialog" aria-hidden="true">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">About this clock</div>
+        <button id="closeAboutBtn" class="icon-btn" type="button" aria-label="Close about dialog">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="about-copy">
+          One shared instant is rendered in two time zones. The outer ring shows local time and the inner ring shows remote time.<br /><br />
+          Quick controls: tap a city name or time value to change city/time directly. Tap the dial or use ← / → to move backward or forward one hour. Use the center swap button (or press <strong>S</strong>) to switch local and remote zones.
+        </div>
+      </div>
+    </div>
+  </section>
+
   
   <script>
     (function () {
@@ -827,13 +847,13 @@
       };
 
       const DEFAULTS = {
-        localZone: 'America/Los_Angeles',
-        remoteZone: 'Asia/Kuala_Lumpur',
+        localZone: 'Asia/Bangkok',
+        remoteZone: 'America/Los_Angeles',
         theme: 'ocean',
         themeColor: PRESET_THEME_COLORS.ocean,
         currentTimeColor: '#ffb347',
         selectedTimeColor: '#ff8a00',
-        timeFormat: 'ampm',
+        timeFormat: '24',
         dialScale: 100,
         fontScale: 100,
         mode: 'live',
@@ -861,8 +881,7 @@
       const els = {
         dialSvg: document.getElementById('dialSvg'),
         menuBtn: document.getElementById('menuBtn'),
-        minusBtn: document.getElementById('minusBtn'),
-        plusBtn: document.getElementById('plusBtn'),
+        aboutBtn: document.getElementById('aboutBtn'),
         swapBtn: document.getElementById('swapBtn'),
         localZoneBtn: document.getElementById('localZoneBtn'),
         remoteZoneBtn: document.getElementById('remoteZoneBtn'),
@@ -901,7 +920,10 @@
         dialogBackdrop: document.getElementById('dialogBackdrop'),
         closeDialogBtn: document.getElementById('closeDialogBtn'),
         dialogOkBtn: document.getElementById('dialogOkBtn'),
-        dialogResetBtn: document.getElementById('dialogResetBtn')
+        dialogResetBtn: document.getElementById('dialogResetBtn'),
+        aboutDialog: document.getElementById('aboutDialog'),
+        aboutBackdrop: document.getElementById('aboutBackdrop'),
+        closeAboutBtn: document.getElementById('closeAboutBtn')
       };
 
       const BUILTIN_ZONES = [
@@ -1541,6 +1563,18 @@
         els.zoneDialog.setAttribute('aria-hidden', 'true');
       }
 
+      function openAboutDialog() {
+        els.aboutDialog.classList.add('open');
+        els.aboutBackdrop.classList.add('open');
+        els.aboutDialog.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeAboutDialog() {
+        els.aboutDialog.classList.remove('open');
+        els.aboutBackdrop.classList.remove('open');
+        els.aboutDialog.setAttribute('aria-hidden', 'true');
+      }
+
       function applySheetTime() {
         const zone = state.sheetTarget === 'local' ? state.localZone : state.remoteZone;
         const next = zonedLocalToUtc(els.timeSheetInput.value, zone);
@@ -1647,10 +1681,9 @@
 
       function bindEvents() {
         els.menuBtn.addEventListener('click', openDrawer);
+        els.aboutBtn.addEventListener('click', openAboutDialog);
         els.closeDrawerBtn.addEventListener('click', closeDrawer);
         els.drawerBackdrop.addEventListener('click', closeDrawer);
-        els.minusBtn.addEventListener('click', function () { stepByHours(-1); });
-        els.plusBtn.addEventListener('click', function () { stepByHours(1); });
         els.swapBtn.addEventListener('click', swapZones);
         els.localZoneBtn.addEventListener('click', function () { openSheet('zone', 'local'); });
         els.remoteZoneBtn.addEventListener('click', function () { openSheet('zone', 'remote'); });
@@ -1693,11 +1726,23 @@
           closeDialog();
         });
         els.dialogBackdrop.addEventListener('click', closeDialog);
+        els.closeAboutBtn.addEventListener('click', closeAboutDialog);
+        els.aboutBackdrop.addEventListener('click', closeAboutDialog);
         document.addEventListener('keydown', function (event) {
           if (event.key === 'Escape') {
             closeDrawer();
             closeSheet();
             closeDialog();
+            closeAboutDialog();
+          }
+          if (event.key === 'ArrowLeft') {
+            stepByHours(-1);
+          }
+          if (event.key === 'ArrowRight') {
+            stepByHours(1);
+          }
+          if (event.key === 's' || event.key === 'S') {
+            swapZones();
           }
         });
         window.addEventListener('beforeunload', stopLiveTimer);

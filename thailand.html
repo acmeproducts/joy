@@ -160,9 +160,19 @@
       z-index: 3;
       display: flex;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: space-between;
       margin-bottom: 4px;
       min-height: 44px;
+    }
+
+    .menu-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .about-btn {
+      color: #a6b2c2;
     }
 
     .icon-btn {
@@ -232,10 +242,9 @@
       -webkit-backdrop-filter: blur(10px);
     }
 
-    .step-btn,
     .center-swap {
-      width: 40px;
-      height: 40px;
+      width: 48px;
+      height: 48px;
       padding: 0;
       border-radius: 14px;
       display: inline-flex;
@@ -243,12 +252,6 @@
       justify-content: center;
       background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
       box-shadow: none;
-    }
-
-    .step-btn {
-      font-size: 1.8rem;
-      font-weight: 700;
-      line-height: 1;
     }
 
     .center-swap svg {
@@ -291,7 +294,7 @@
       bottom: 0;
       width: var(--card-w);
       min-height: 112px;
-      border: 1px solid var(--line);
+      border: 1px solid var(--accent);
       border-radius: 20px;
       padding: 12px 12px 13px;
       background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
@@ -422,14 +425,22 @@
     .sheet {
       left: 0;
       right: 0;
+      top: 0;
       bottom: 0;
-      transform: translateY(103%);
-      padding: 12px;
+      transform: translateY(18px);
+      padding: calc(var(--safe-top) + 10px) 12px calc(var(--safe-bottom) + 12px);
       display: flex;
       justify-content: center;
+      align-items: flex-start;
+      opacity: 0;
+      pointer-events: none;
     }
 
-    .sheet.open { transform: translateY(0); }
+    .sheet.open {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
 
     .dialog {
       inset: 0;
@@ -460,7 +471,7 @@
     }
 
     .drawer .panel { display: flex; flex-direction: column; }
-    .sheet .panel { width: min(560px, 100%); max-height: min(88svh, 760px); display: flex; flex-direction: column; }
+    .sheet .panel { width: min(620px, 100%); max-height: calc(100svh - var(--safe-top) - var(--safe-bottom) - 22px); display: flex; flex-direction: column; }
     .dialog .panel { width: min(420px, 100%); }
 
     .panel-head {
@@ -481,6 +492,94 @@
     .panel-body {
       padding: 16px;
       overflow: auto;
+    }
+
+    .editor-body {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .editor-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    }
+
+    .editor-summary small,
+    .field-note {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .editor-summary strong {
+      display: block;
+      font-size: 1rem;
+      margin-top: 2px;
+    }
+
+    .editor-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .editor-search {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .editor-search .field {
+      margin-bottom: 0;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding-bottom: 10px;
+      background: linear-gradient(180deg, rgba(7,15,28,0.96), rgba(7,15,28,0.78) 70%, rgba(7,15,28,0));
+    }
+
+    .editor-search input {
+      font-size: 1rem;
+    }
+
+    .editor-fields {
+      display: grid;
+      gap: 12px;
+    }
+
+    .editor-time-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: end;
+    }
+
+    .time-colon {
+      align-self: center;
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: var(--muted);
+      padding-top: 24px;
+    }
+
+    .editor-fields input[type="date"],
+    .editor-fields input[type="time"],
+    .editor-fields input[type="number"] {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .editor-fields input[type="number"]::-webkit-outer-spin-button,
+    .editor-fields input[type="number"]::-webkit-inner-spin-button {
+      opacity: 1;
     }
 
     .field { margin-bottom: 15px; }
@@ -534,9 +633,10 @@
     .result-list {
       display: grid;
       gap: 8px;
-      margin-top: 12px;
-      max-height: 48svh;
+      margin-top: 10px;
+      max-height: min(42svh, 360px);
       overflow: auto;
+      padding-bottom: 4px;
     }
 
     .result-item {
@@ -560,6 +660,12 @@
       margin-top: 3px;
     }
 
+    .result-item.active {
+      border-color: rgba(255,255,255,0.28);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    }
+
     .icon-inline {
       width: 14px;
       height: 14px;
@@ -574,6 +680,13 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-top: 14px;
+    }
+
+    .editor-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 4px;
     }
 
     .sr-only {
@@ -615,6 +728,18 @@
         width: 48px;
         height: 48px;
       }
+
+      .editor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .sheet .panel {
+        max-height: calc(100svh - var(--safe-top) - var(--safe-bottom) - 16px);
+      }
+
+      .result-list {
+        max-height: min(34svh, 280px);
+      }
     }
 
     @media (max-width: 560px) {
@@ -638,17 +763,43 @@
       .status-line {
         font-size: 0.76rem;
       }
+
+      .panel-body {
+        padding: 14px;
+      }
+
+      .editor-summary {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .editor-time-row {
+        gap: 8px;
+      }
+
+      .result-list {
+        max-height: min(30svh, 220px);
+      }
     }
   </style>
 </head>
 <body>
   <div class="app">
     <div class="menu-row">
-      <button id="menuBtn" class="icon-btn" aria-label="Open settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-          <path d="M4 7h16"></path>
-          <path d="M4 12h16"></path>
-          <path d="M4 17h16"></path>
+      <div class="menu-actions">
+        <button id="menuBtn" class="icon-btn" aria-label="Open settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 7h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 17h16"></path>
+          </svg>
+        </button>
+      </div>
+      <button id="aboutBtn" class="icon-btn about-btn" type="button" aria-label="About and controls help">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M9.6 9.2a2.4 2.4 0 1 1 3.7 2l-.9.6c-.7.4-1.1 1.1-1.1 1.9v.4"></path>
+          <path d="M12 17.2h.01"></path>
         </svg>
       </button>
     </div>
@@ -659,7 +810,6 @@
           <svg id="dialSvg" viewBox="0 0 800 800" aria-label="Dual-zone radial time mapper"></svg>
           <div class="center-controls">
             <div class="center-row">
-              <button id="minusBtn" class="step-btn" type="button" aria-label="Go back one hour">−</button>
               <button id="swapBtn" class="swap-btn center-swap" type="button" aria-label="Swap local and remote zones">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M7 7h11"></path>
@@ -668,7 +818,6 @@
                   <path d="m10 14-4 3 4 3"></path>
                 </svg>
               </button>
-              <button id="plusBtn" class="step-btn" type="button" aria-label="Go forward one hour">+</button>
             </div>
           </div>
         </div>
@@ -678,7 +827,7 @@
 
   <div class="cards-layer" aria-hidden="false">
     <div class="cards-inner">
-      <section class="info-card local">
+      <section id="localCard" class="info-card local">
         <div class="mini-label">Local</div>
         <button id="localZoneBtn" class="zone-btn" type="button"></button>
         <button id="localTimeBtn" class="time-btn" type="button"></button>
@@ -686,7 +835,7 @@
         <div id="localStatusLine" class="status-line"></div>
       </section>
 
-      <section class="info-card remote remote">
+      <section id="remoteCard" class="info-card remote remote">
         <div class="mini-label">Remote</div>
         <button id="remoteZoneBtn" class="zone-btn" type="button"></button>
         <button id="remoteTimeBtn" class="time-btn" type="button"></button>
@@ -758,12 +907,6 @@
           <button id="resetBtn" type="button">Reset</button>
         </div>
 
-        <div class="field" style="margin-top:16px;">
-          <label>About</label>
-          <div class="about-copy">
-            One shared instant is rendered in two time zones. The outer ring shows local time. The inner ring shows remote time. Tap the dial to rotate to a different local hour. Tap a zone or time card value to edit directly.
-          </div>
-        </div>
       </div>
     </div>
   </aside>
@@ -775,20 +918,42 @@
         <div id="sheetTitle" class="panel-title">Select</div>
         <button id="closeSheetBtn" class="icon-btn" type="button" aria-label="Close panel">×</button>
       </div>
-      <div class="panel-body">
-        <div id="zoneSheetMode">
-          <div class="field">
-            <label for="zoneSearchInput">Search time zones</label>
-            <input id="zoneSearchInput" type="text" autocomplete="off" placeholder="Search city, region, or zone" />
+      <div class="panel-body editor-body">
+        <div class="editor-summary">
+          <div>
+            <small id="editorSummaryLabel">Editing local</small>
+            <strong id="editorSummaryZone"></strong>
           </div>
-          <div id="zoneResults" class="result-list"></div>
+          <small>Search for a city or zone, then adjust the date and time in one place.</small>
         </div>
-        <div id="timeSheetMode">
-          <div class="field">
-            <label for="timeSheetInput">Date and time</label>
-            <input id="timeSheetInput" type="datetime-local" step="60" />
+        <div class="editor-grid">
+          <div class="editor-search">
+            <div class="field">
+              <label for="zoneSearchInput">Search location</label>
+              <input id="zoneSearchInput" type="text" inputmode="search" autocomplete="off" placeholder="Search city, region, or zone" />
+              <div class="field-note">Results stay near the top so they remain visible above the keyboard.</div>
+            </div>
+            <div id="zoneResults" class="result-list"></div>
           </div>
-          <button id="applyTimeSheetBtn" type="button">Apply</button>
+          <div class="editor-fields">
+            <div class="field">
+              <label for="editorDateInput">Date</label>
+              <input id="editorDateInput" type="date" />
+            </div>
+            <div class="field">
+              <label>Time</label>
+              <div class="editor-time-row">
+                <input id="editorHourInput" type="number" min="0" max="23" step="1" inputmode="numeric" pattern="[0-9]*" placeholder="HH" />
+                <div class="time-colon" aria-hidden="true">:</div>
+                <input id="editorMinuteInput" type="number" min="0" max="59" step="1" inputmode="numeric" pattern="[0-9]*" placeholder="MM" />
+              </div>
+              <div class="field-note">Use the native spinner or type numbers directly.</div>
+            </div>
+          </div>
+        </div>
+        <div class="editor-actions">
+          <button id="cancelSheetBtn" type="button">Cancel</button>
+          <button id="applyTimeSheetBtn" type="button">Apply changes</button>
         </div>
       </div>
     </div>
@@ -813,6 +978,22 @@
     </div>
   </section>
 
+  <div id="aboutBackdrop" class="dialog-backdrop"></div>
+  <section id="aboutDialog" class="dialog" aria-hidden="true">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">About this clock</div>
+        <button id="closeAboutBtn" class="icon-btn" type="button" aria-label="Close about dialog">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="about-copy">
+          One shared instant is rendered in two time zones. The outer ring shows local time and the inner ring shows remote time.<br /><br />
+          Quick controls: tap a city name or time value to change city/time directly. Tap the dial or use ← / → to move backward or forward one hour. Use the center swap button (or press <strong>S</strong>) to switch local and remote zones.
+        </div>
+      </div>
+    </div>
+  </section>
+
   
   <script>
     (function () {
@@ -827,13 +1008,13 @@
       };
 
       const DEFAULTS = {
-        localZone: 'America/Los_Angeles',
-        remoteZone: 'Asia/Kuala_Lumpur',
+        localZone: 'Asia/Bangkok',
+        remoteZone: 'America/Los_Angeles',
         theme: 'ocean',
         themeColor: PRESET_THEME_COLORS.ocean,
         currentTimeColor: '#ffb347',
         selectedTimeColor: '#ff8a00',
-        timeFormat: 'ampm',
+        timeFormat: '24',
         dialScale: 100,
         fontScale: 100,
         mode: 'live',
@@ -852,8 +1033,12 @@
         fontScale: DEFAULTS.fontScale,
         mode: DEFAULTS.mode,
         referenceInstant: new Date(),
-        sheetMode: null,
         sheetTarget: null,
+        editorZone: DEFAULTS.localZone,
+        editorInitialDate: '',
+        editorInitialTime: '',
+        editorDateDirty: false,
+        editorTimeDirty: false,
         timerId: null,
         animationId: null
       };
@@ -861,8 +1046,7 @@
       const els = {
         dialSvg: document.getElementById('dialSvg'),
         menuBtn: document.getElementById('menuBtn'),
-        minusBtn: document.getElementById('minusBtn'),
-        plusBtn: document.getElementById('plusBtn'),
+        aboutBtn: document.getElementById('aboutBtn'),
         swapBtn: document.getElementById('swapBtn'),
         localZoneBtn: document.getElementById('localZoneBtn'),
         remoteZoneBtn: document.getElementById('remoteZoneBtn'),
@@ -872,6 +1056,8 @@
         remoteDateLine: document.getElementById('remoteDateLine'),
         localStatusLine: document.getElementById('localStatusLine'),
         remoteStatusLine: document.getElementById('remoteStatusLine'),
+        localCard: document.getElementById('localCard'),
+        remoteCard: document.getElementById('remoteCard'),
         drawer: document.getElementById('drawer'),
         drawerBackdrop: document.getElementById('drawerBackdrop'),
         closeDrawerBtn: document.getElementById('closeDrawerBtn'),
@@ -890,18 +1076,24 @@
         sheet: document.getElementById('sheet'),
         sheetBackdrop: document.getElementById('sheetBackdrop'),
         closeSheetBtn: document.getElementById('closeSheetBtn'),
+        cancelSheetBtn: document.getElementById('cancelSheetBtn'),
         sheetTitle: document.getElementById('sheetTitle'),
-        zoneSheetMode: document.getElementById('zoneSheetMode'),
-        timeSheetMode: document.getElementById('timeSheetMode'),
+        editorSummaryLabel: document.getElementById('editorSummaryLabel'),
+        editorSummaryZone: document.getElementById('editorSummaryZone'),
         zoneSearchInput: document.getElementById('zoneSearchInput'),
         zoneResults: document.getElementById('zoneResults'),
-        timeSheetInput: document.getElementById('timeSheetInput'),
+        editorDateInput: document.getElementById('editorDateInput'),
+        editorHourInput: document.getElementById('editorHourInput'),
+        editorMinuteInput: document.getElementById('editorMinuteInput'),
         applyTimeSheetBtn: document.getElementById('applyTimeSheetBtn'),
         zoneDialog: document.getElementById('zoneDialog'),
         dialogBackdrop: document.getElementById('dialogBackdrop'),
         closeDialogBtn: document.getElementById('closeDialogBtn'),
         dialogOkBtn: document.getElementById('dialogOkBtn'),
-        dialogResetBtn: document.getElementById('dialogResetBtn')
+        dialogResetBtn: document.getElementById('dialogResetBtn'),
+        aboutDialog: document.getElementById('aboutDialog'),
+        aboutBackdrop: document.getElementById('aboutBackdrop'),
+        closeAboutBtn: document.getElementById('closeAboutBtn')
       };
 
       const BUILTIN_ZONES = [
@@ -1169,9 +1361,42 @@
         return guess;
       }
 
-      function localInputString(date, timeZone) {
+      function editorValuesFor(date, timeZone) {
         const parts = partsForZone(date, timeZone);
-        return parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day) + 'T' + pad2(parts.hour) + ':' + pad2(parts.minute);
+        return {
+          date: parts.year + '-' + pad2(parts.month) + '-' + pad2(parts.day),
+          hour: pad2(parts.hour),
+          minute: pad2(parts.minute)
+        };
+      }
+
+      function buildEditorLocalInput() {
+        const hour = clamp(Number(els.editorHourInput.value || 0), 0, 23);
+        const minute = clamp(Number(els.editorMinuteInput.value || 0), 0, 59);
+        return String(els.editorDateInput.value || '') + 'T' + pad2(hour) + ':' + pad2(minute);
+      }
+
+      function syncEditorTimeInputs() {
+        if (els.editorHourInput.value !== '') els.editorHourInput.value = pad2(clamp(Number(els.editorHourInput.value), 0, 23));
+        if (els.editorMinuteInput.value !== '') els.editorMinuteInput.value = pad2(clamp(Number(els.editorMinuteInput.value), 0, 59));
+      }
+
+      function setEditorFields(zone, date, options) {
+        const values = editorValuesFor(date, zone);
+        state.editorZone = zone;
+        els.editorDateInput.value = values.date;
+        els.editorHourInput.value = values.hour;
+        els.editorMinuteInput.value = values.minute;
+        if (!options || !options.keepDirty) {
+          state.editorDateDirty = false;
+          state.editorTimeDirty = false;
+        }
+      }
+
+      function updateEditorSummary() {
+        const isLocal = state.sheetTarget === 'local';
+        els.editorSummaryLabel.textContent = isLocal ? 'Editing local' : 'Editing remote';
+        els.editorSummaryZone.textContent = zoneSubLabel(state.editorZone);
       }
 
       function monthLabel(date, timeZone) {
@@ -1461,13 +1686,19 @@
         results.forEach(function (zone) {
           const button = document.createElement('button');
           button.type = 'button';
-          button.className = 'result-item';
+          button.className = 'result-item' + (zone === state.editorZone ? ' active' : '');
           button.innerHTML = '<div><span>' + escapeHtml(zoneLabel(zone)) + '</span><small>' + escapeHtml(zoneSubLabel(zone)) + '</small></div><small>' + escapeHtml(zoneOffsetShort(zone)) + '</small>';
           button.addEventListener('click', function () {
-            if (state.sheetTarget === 'local') state.localZone = zone;
-            if (state.sheetTarget === 'remote') state.remoteZone = zone;
-            render();
-            closeSheet();
+            state.editorZone = zone;
+            updateEditorSummary();
+            if (!state.editorDateDirty && !state.editorTimeDirty) {
+              const values = editorValuesFor(getInstant(), zone);
+              setEditorFields(zone, getInstant(), { keepDirty: false });
+              state.editorInitialDate = values.date;
+              state.editorInitialTime = values.hour + ':' + values.minute;
+              updateEditorSummary();
+            }
+            renderZoneResults(els.zoneSearchInput.value);
           });
           els.zoneResults.appendChild(button);
         });
@@ -1503,30 +1734,30 @@
         els.drawer.setAttribute('aria-hidden', 'true');
       }
 
-      function openSheet(mode, target) {
-        state.sheetMode = mode;
+      function openSheet(target) {
         state.sheetTarget = target;
         els.sheet.classList.add('open');
         els.sheetBackdrop.classList.add('open');
         els.sheet.setAttribute('aria-hidden', 'false');
-        els.zoneSheetMode.style.display = mode === 'zone' ? 'block' : 'none';
-        els.timeSheetMode.style.display = mode === 'time' ? 'block' : 'none';
         const zone = target === 'local' ? state.localZone : state.remoteZone;
-        els.sheetTitle.textContent = mode === 'zone' ? ('Select ' + (target === 'local' ? 'local' : 'remote') + ' time zone') : ('Set ' + (target === 'local' ? 'local' : 'remote') + ' date and time');
-        if (mode === 'zone') {
-          els.zoneSearchInput.value = '';
-          renderZoneResults('');
-          setTimeout(function () { els.zoneSearchInput.focus(); }, 40);
-        } else {
-          els.timeSheetInput.value = localInputString(getInstant(), zone);
-          setTimeout(function () { els.timeSheetInput.focus(); }, 40);
-        }
+        const values = editorValuesFor(getInstant(), zone);
+        state.editorInitialDate = values.date;
+        state.editorInitialTime = values.hour + ':' + values.minute;
+        setEditorFields(zone, getInstant(), { keepDirty: false });
+        els.sheetTitle.textContent = 'Edit ' + (target === 'local' ? 'local' : 'remote') + ' pane';
+        els.zoneSearchInput.value = '';
+        updateEditorSummary();
+        renderZoneResults('');
+        setTimeout(function () { els.zoneSearchInput.focus(); }, 40);
       }
 
       function closeSheet() {
         els.sheet.classList.remove('open');
         els.sheetBackdrop.classList.remove('open');
         els.sheet.setAttribute('aria-hidden', 'true');
+        state.sheetTarget = null;
+        state.editorDateDirty = false;
+        state.editorTimeDirty = false;
       }
 
       function openDialog() {
@@ -1541,13 +1772,38 @@
         els.zoneDialog.setAttribute('aria-hidden', 'true');
       }
 
+      function openAboutDialog() {
+        els.aboutDialog.classList.add('open');
+        els.aboutBackdrop.classList.add('open');
+        els.aboutDialog.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeAboutDialog() {
+        els.aboutDialog.classList.remove('open');
+        els.aboutBackdrop.classList.remove('open');
+        els.aboutDialog.setAttribute('aria-hidden', 'true');
+      }
+
       function applySheetTime() {
-        const zone = state.sheetTarget === 'local' ? state.localZone : state.remoteZone;
-        const next = zonedLocalToUtc(els.timeSheetInput.value, zone);
-        if (!isValidDate(next)) return;
+        if (!state.sheetTarget || !els.editorDateInput.value || els.editorHourInput.value === '' || els.editorMinuteInput.value === '') return;
+        syncEditorTimeInputs();
+        const targetZoneKey = state.sheetTarget === 'local' ? 'localZone' : 'remoteZone';
+        const originalTargetZone = state[targetZoneKey];
+        const nextZone = ensureZone(state.editorZone, originalTargetZone);
+        const editedTime = pad2(clamp(Number(els.editorHourInput.value), 0, 23)) + ':' + pad2(clamp(Number(els.editorMinuteInput.value), 0, 59));
+        const shouldShiftInstant = els.editorDateInput.value !== state.editorInitialDate || editedTime !== state.editorInitialTime;
+        state[targetZoneKey] = nextZone;
+        if (shouldShiftInstant) {
+          const next = zonedLocalToUtc(buildEditorLocalInput(), nextZone);
+          if (!isValidDate(next)) {
+            state[targetZoneKey] = originalTargetZone;
+            return;
+          }
+          stopAnimation();
+          state.referenceInstant = next;
+          state.mode = 'reference';
+        }
         stopAnimation();
-        state.referenceInstant = next;
-        state.mode = 'reference';
         render();
         closeSheet();
       }
@@ -1562,12 +1818,12 @@
       function animateToInstant(targetInstant) {
         stopAnimation();
         const startInstant = getInstant();
-        const duration = 360;
+        const duration = 760;
         const startedAt = performance.now();
         state.mode = 'reference';
         function frame(now) {
           const t = Math.min(1, (now - startedAt) / duration);
-          const eased = 1 - Math.pow(1 - t, 3);
+          const eased = 0.5 - (Math.cos(Math.PI * t) / 2);
           const visibleInstant = new Date(startInstant.getTime() + (targetInstant.getTime() - startInstant.getTime()) * eased);
           state.referenceInstant = visibleInstant;
           render();
@@ -1647,18 +1903,25 @@
 
       function bindEvents() {
         els.menuBtn.addEventListener('click', openDrawer);
+        els.aboutBtn.addEventListener('click', openAboutDialog);
         els.closeDrawerBtn.addEventListener('click', closeDrawer);
         els.drawerBackdrop.addEventListener('click', closeDrawer);
-        els.minusBtn.addEventListener('click', function () { stepByHours(-1); });
-        els.plusBtn.addEventListener('click', function () { stepByHours(1); });
         els.swapBtn.addEventListener('click', swapZones);
-        els.localZoneBtn.addEventListener('click', function () { openSheet('zone', 'local'); });
-        els.remoteZoneBtn.addEventListener('click', function () { openSheet('zone', 'remote'); });
-        els.localTimeBtn.addEventListener('click', function () { openSheet('time', 'local'); });
-        els.remoteTimeBtn.addEventListener('click', function () { openSheet('time', 'remote'); });
+        els.localCard.addEventListener('click', function () { openSheet('local'); });
+        els.remoteCard.addEventListener('click', function () { openSheet('remote'); });
+        els.localZoneBtn.addEventListener('click', function (event) { event.stopPropagation(); openSheet('local'); });
+        els.remoteZoneBtn.addEventListener('click', function (event) { event.stopPropagation(); openSheet('remote'); });
+        els.localTimeBtn.addEventListener('click', function (event) { event.stopPropagation(); openSheet('local'); });
+        els.remoteTimeBtn.addEventListener('click', function (event) { event.stopPropagation(); openSheet('remote'); });
         els.closeSheetBtn.addEventListener('click', closeSheet);
+        els.cancelSheetBtn.addEventListener('click', closeSheet);
         els.sheetBackdrop.addEventListener('click', closeSheet);
         els.zoneSearchInput.addEventListener('input', function () { renderZoneResults(els.zoneSearchInput.value); });
+        els.editorDateInput.addEventListener('input', function () { state.editorDateDirty = true; });
+        els.editorHourInput.addEventListener('input', function () { state.editorTimeDirty = true; });
+        els.editorMinuteInput.addEventListener('input', function () { state.editorTimeDirty = true; });
+        els.editorHourInput.addEventListener('blur', syncEditorTimeInputs);
+        els.editorMinuteInput.addEventListener('blur', syncEditorTimeInputs);
         els.applyTimeSheetBtn.addEventListener('click', applySheetTime);
         els.formatAmpmBtn.addEventListener('click', function () { state.timeFormat = 'ampm'; render(); });
         els.format24Btn.addEventListener('click', function () { state.timeFormat = '24'; render(); });
@@ -1693,11 +1956,32 @@
           closeDialog();
         });
         els.dialogBackdrop.addEventListener('click', closeDialog);
+        els.closeAboutBtn.addEventListener('click', closeAboutDialog);
+        els.aboutBackdrop.addEventListener('click', closeAboutDialog);
         document.addEventListener('keydown', function (event) {
           if (event.key === 'Escape') {
             closeDrawer();
             closeSheet();
             closeDialog();
+            closeAboutDialog();
+          }
+          if (event.key === 'Enter' && state.sheetTarget && document.activeElement && (
+            document.activeElement === els.editorHourInput ||
+            document.activeElement === els.editorMinuteInput ||
+            document.activeElement === els.editorDateInput ||
+            document.activeElement === els.zoneSearchInput
+          )) {
+            event.preventDefault();
+            applySheetTime();
+          }
+          if (!state.sheetTarget && event.key === 'ArrowLeft') {
+            stepByHours(-1);
+          }
+          if (!state.sheetTarget && event.key === 'ArrowRight') {
+            stepByHours(1);
+          }
+          if (!state.sheetTarget && (event.key === 's' || event.key === 'S')) {
+            swapZones();
           }
         });
         window.addEventListener('beforeunload', stopLiveTimer);

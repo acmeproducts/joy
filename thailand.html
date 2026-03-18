@@ -1965,22 +1965,13 @@
             closeDialog();
             closeAboutDialog();
           }
-          if (event.key === 'Enter' && state.sheetTarget && document.activeElement && (
-            document.activeElement === els.editorHourInput ||
-            document.activeElement === els.editorMinuteInput ||
-            document.activeElement === els.editorDateInput ||
-            document.activeElement === els.zoneSearchInput
-          )) {
-            event.preventDefault();
-            applySheetTime();
-          }
-          if (!state.sheetTarget && event.key === 'ArrowLeft') {
+          if (event.key === 'ArrowLeft') {
             stepByHours(-1);
           }
-          if (!state.sheetTarget && event.key === 'ArrowRight') {
+          if (event.key === 'ArrowRight') {
             stepByHours(1);
           }
-          if (!state.sheetTarget && (event.key === 's' || event.key === 'S')) {
+          if (event.key === 's' || event.key === 'S') {
             swapZones();
           }
         });

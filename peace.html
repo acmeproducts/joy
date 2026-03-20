@@ -43,82 +43,6 @@
         #custom-message-container a,
         #peer-chat-history a { color: #2563eb; text-decoration: underline; }
         #peer-chat-window.dragging { user-select: none; }
-        .peer-chat-tab-handle:empty::before {
-            content: attr(data-placeholder);
-            color: rgb(148 163 184);
-        }
-        .peer-chat-tab[data-unread="true"] .peer-chat-tab-waiting {
-            opacity: 1;
-            transform: scale(1);
-        }
-        #peer-chat-window {
-            resize: both;
-            overflow: hidden;
-            min-width: 360px;
-            min-height: 420px;
-        }
-        #peer-chat-window::after {
-            content: '';
-            position: absolute;
-            right: 10px;
-            bottom: 10px;
-            width: 14px;
-            height: 14px;
-            border-right: 2px solid rgba(100, 116, 139, 0.45);
-            border-bottom: 2px solid rgba(100, 116, 139, 0.45);
-            pointer-events: none;
-        }
-        .peer-chat-svg-icon {
-            width: 16px;
-            height: 16px;
-            stroke: currentColor;
-            fill: none;
-            stroke-width: 1.8;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            display: inline-block;
-        }
-        .peer-chat-action-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 2rem;
-            height: 2rem;
-            border-radius: 9999px;
-            color: rgb(100 116 139);
-            transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
-        }
-        .peer-chat-action-btn:hover {
-            background: rgba(148, 163, 184, 0.14);
-            color: rgb(51 65 85);
-        }
-        .peer-chat-tab-field:empty::before {
-            content: attr(data-placeholder);
-            color: rgb(148 163 184);
-        }
-        .peer-chat-tab-field:focus {
-            outline: none;
-            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.5);
-            background: rgba(255,255,255,0.9);
-        }
-        .peer-chat-participant-chip[data-state="active"] .peer-chat-participant-dot,
-        .peer-chat-participant-chip[data-state="you"] .peer-chat-participant-dot {
-            background: rgb(34 197 94);
-        }
-        .peer-chat-participant-chip[data-state="idle"] .peer-chat-participant-dot {
-            background: rgb(250 204 21);
-        }
-        .peer-chat-participant-chip[data-state="saved"],
-        .peer-chat-participant-chip[data-state="offline"] {
-            color: rgb(100 116 139);
-        }
-        .peer-chat-participant-chip[data-state="saved"] .peer-chat-participant-dot,
-        .peer-chat-participant-chip[data-state="offline"] .peer-chat-participant-dot {
-            background: rgb(148 163 184);
-        }
-        #peer-chat-history {
-            min-height: 0;
-        }
     </style>
 </head>
 <body class="overflow-hidden h-screen w-screen font-sans text-slate-800">
@@ -162,113 +86,108 @@
         <span id="session-beacon-dot" class="w-8 h-8 rounded-full border-2 border-transparent flex items-center justify-center text-[11px] font-semibold leading-none bg-slate-500/60 text-white/70">0</span>
     </button>
 
-    <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(720px,96vw)] h-[min(760px,90vh)] bg-slate-50/95 backdrop-blur-xl shadow-2xl rounded-[28px] border border-white/60 z-50 hidden flex flex-col overflow-hidden">
-        <div id="peer-chat-window-handle" class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200/80 bg-white/80 cursor-move touch-none select-none">
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-10 h-10 rounded-2xl bg-slate-200/80 flex items-center justify-center text-slate-500 shrink-0" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" class="peer-chat-svg-icon w-5 h-5"><path d="M7 8.5h10M7 12h6M7 15.5h8"/><path d="M5 6.5a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z"/></svg>
+    <aside class="fixed top-0 left-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 -translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="session-panel">
+        <div class="p-6 flex justify-between items-center border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-700 tracking-wide uppercase">Session</h2>
+            <button class="text-gray-400 hover:text-gray-700 transition-colors" id="close-session-panel">
+                <span class="material-symbols-outlined text-3xl">close</span>
+            </button>
+        </div>
+        <div class="p-6 space-y-6 flex-1">
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-gray-400">
+                        <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                        <span id="local-status-label">Active</span>
+                    </div>
+                    <div class="text-sm font-semibold text-gray-700 truncate" id="local-name-display">--</div>
                 </div>
-                <div class="min-w-0">
-                    <div class="text-[11px] uppercase tracking-[0.32em] text-slate-400">Peace chat</div>
-                    <div id="peer-chat-active-session-label" class="text-sm font-semibold text-slate-700 truncate">Peace Channel</div>
+                <div class="flex items-center gap-2">
+                    <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
+                    <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5 shrink-0 text-slate-500">
-                <button id="peer-chat-new-tab" class="peer-chat-action-btn" title="New tab" aria-label="New tab" type="button">
-                    <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M12 5v14M5 12h14"/></svg>
-                </button>
-                <button id="peer-chat-window-close" class="peer-chat-action-btn" title="Exit chat" aria-label="Exit chat" type="button">
-                    <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            <div class="space-y-2">
+                <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
+                    <span>Live Sessions</span>
+                    <button class="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition" id="session-log-btn">
+                        <span class="material-symbols-outlined text-base">receipt_long</span>
+                        Log
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-400">Everyone listed here shares the same altar chat.</p>
+                <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-gray-600"></ul>
+            </div>
+        </div>
+    </aside>
+
+    <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
+        <div id="peer-chat-window-handle" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 cursor-move touch-none">
+            <div class="min-w-0 flex-1"></div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
+                <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
+                <button id="peer-chat-import-trigger" class="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition" title="Import altar chat">Import</button>
+                <button id="peer-chat-clear" class="px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition" title="Clear altar chat">Clear</button>
+                <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat">
+                    <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
             </div>
         </div>
-        <div class="flex-1 min-h-0 flex flex-col px-4 py-4 gap-4">
-            <div class="rounded-[24px] border border-slate-200 bg-white/80 p-3 shadow-sm">
-                <div id="peer-chat-tabs" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+        <div class="px-4 py-3 border-b border-gray-100 space-y-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">You</div>
+                <div class="flex items-center gap-2">
+                    <input id="peer-chat-local-name" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Local name">
+                    <button id="peer-chat-local-name-update" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+                </div>
             </div>
-            <div class="grid grid-cols-1 xl:grid-cols-[240px_minmax(0,1fr)] gap-4 min-h-0 flex-1">
-                <aside class="rounded-[24px] border border-slate-200 bg-white/80 p-4 flex flex-col gap-4 min-h-0">
-                    <div class="rounded-[20px] border border-slate-200 bg-slate-50/90 px-4 py-3">
-                        <label for="peer-chat-local-name" class="text-[10px] uppercase tracking-[0.28em] text-slate-400 block mb-2">Visible name</label>
-                        <input id="peer-chat-local-name" type="text" maxlength="40" class="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none" placeholder="Your name" aria-label="Your visible name">
-                    </div>
-                    <div class="rounded-[20px] border border-slate-200 bg-slate-50/90 px-4 py-3 space-y-3">
-                        <div class="flex items-center justify-between gap-2">
-                            <div>
-                                <div class="text-[10px] uppercase tracking-[0.28em] text-slate-400">Participants</div>
-                                <div id="peer-chat-session-meta" class="text-[11px] text-slate-500 mt-1 leading-relaxed">Saved locally.</div>
-                            </div>
-                            <button id="peer-chat-participants-trigger" class="peer-chat-action-btn w-8 h-8" title="Toggle participants" aria-label="Toggle participants" type="button">
-                                <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M16 19v-1.2A3.8 3.8 0 0 0 12.2 14H6.8A3.8 3.8 0 0 0 3 17.8V19"/><path d="M9.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M16.5 11.5a2.5 2.5 0 1 0 0-5"/><path d="M18 19v-1a3.1 3.1 0 0 0-2.4-3"/></svg>
-                            </button>
-                        </div>
-                        <div id="peer-chat-participants-panel" class="space-y-2">
-                            <div id="peer-chat-members" class="flex flex-wrap gap-2 text-[11px] text-slate-600"></div>
-                            <button id="peer-chat-participants-close" class="hidden" aria-label="Close participants" type="button"></button>
-                        </div>
-                    </div>
-                    <div class="rounded-[20px] border border-slate-200 bg-slate-50/90 px-3 py-3 space-y-2 relative">
-                        <div class="flex items-center justify-between gap-2">
-                            <div class="text-[10px] uppercase tracking-[0.28em] text-slate-400">Actions</div>
-                            <button id="peer-chat-actions-trigger" class="peer-chat-action-btn w-8 h-8" title="More actions" aria-label="More actions" type="button">
-                                <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
-                            </button>
-                        </div>
-                        <div id="peer-chat-actions-menu" class="hidden absolute right-3 top-11 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl p-2 space-y-1 z-20 text-slate-600">
-                            <button id="peer-chat-export" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>Export</span></button>
-                            <button id="peer-chat-import-trigger" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></svg><span>Import</span></button>
-                            <button id="peer-chat-clear" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 13H6L5 6"/></svg><span>Clear</span></button>
-                            <button id="session-log-btn" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M12 8v5l3 2"/><circle cx="12" cy="12" r="8"/></svg><span>Log</span></button>
-                            <button id="peer-chat-lock-trigger" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M12 15v2"/></svg><span id="peer-chat-lock-trigger-label">Apply password</span></button>
-                            <button id="peer-chat-copy" class="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-100 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><rect x="9" y="9" width="10" height="10" rx="2"/><path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg><span>Copy log</span></button>
-                            <button id="peer-chat-session-delete" class="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-xl transition" type="button"><svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 13H6L5 6"/></svg><span>Delete tab</span></button>
-                        </div>
-                        <div id="peer-chat-lock-panel" class="hidden rounded-2xl border border-amber-200 bg-amber-50/80 px-3 py-3 space-y-2">
-                            <label for="peer-chat-session-password" class="text-[10px] uppercase tracking-[0.26em] text-amber-700 block">Password to connect</label>
-                            <div class="flex items-center gap-2">
-                                <input id="peer-chat-session-password" type="password" maxlength="40" class="min-w-0 flex-1 px-3 py-2 text-xs border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-300" placeholder="Hint or password">
-                                <button id="peer-chat-session-password-clear" class="px-3 py-2 text-xs font-semibold text-amber-700 bg-white border border-amber-200 rounded-xl hover:bg-amber-100 transition" type="button">Remove</button>
-                            </div>
-                            <p class="text-[11px] text-amber-700/80">Saved locally for this visible chat tab so you can re-use or remove it quickly.</p>
-                        </div>
-                        <input id="peer-chat-import-input" type="file" accept="application/json" class="hidden">
-                    </div>
-                </aside>
-                <section class="rounded-[24px] border border-slate-200 bg-white/85 p-4 flex flex-col min-h-0 shadow-sm">
-                    <div id="peer-chat-history" class="flex-1 bg-slate-50 border border-slate-200 rounded-[20px] p-4 text-xs text-slate-700 overflow-y-auto space-y-3"></div>
-                    <div class="mt-4 rounded-[20px] border border-slate-200 bg-slate-50/80 px-4 py-3 space-y-3">
-                        <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 uppercase tracking-[0.26em]">
-                            <span>Compose</span>
-                            <div class="flex items-center gap-2">
-                                <div id="peer-chat-translate-row" class="hidden"><select id="peer-chat-translate" class="px-2 py-1 text-[10px] text-slate-700 bg-white border border-slate-200 rounded-lg"><option value="">Auto</option><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="zh">Chinese</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></div>
-                                <div id="peer-chat-display-row" class="hidden"><select id="peer-chat-display" class="px-2 py-1 text-[10px] text-slate-700 bg-white border border-slate-200 rounded-lg"><option value="single">Single</option><option value="dual">Dual</option></select></div>
-                            </div>
-                        </div>
-                        <div class="flex items-end gap-3">
-                            <button id="peer-chat-attach" type="button" class="peer-chat-action-btn w-10 h-10 shrink-0 border border-slate-200 bg-white" title="Attach files">
-                                <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="m21.44 11.05-8.49 8.49a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.66 5.65l-9.2 9.2a2 2 0 0 1-2.83-2.83l8.5-8.49"/></svg>
-                            </button>
-                            <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
-                            <div class="flex-1 rounded-[18px] border border-slate-200 bg-white px-3 py-2">
-                                <label for="peer-chat-input" class="sr-only">Compose message</label>
-                                <textarea id="peer-chat-input" rows="3" class="w-full resize-none bg-transparent text-sm text-slate-700 outline-none" placeholder="Write markdown, paste a link, or use label -> url"></textarea>
-                                <div class="mt-2 text-[11px] text-slate-400">Markdown supported. Links auto-complete with <span class="font-semibold text-slate-500">https://</span> and <span class="font-semibold text-slate-500">.com</span> when needed.</div>
-                            </div>
-                            <button id="peer-chat-send" class="px-4 py-3 bg-slate-700 text-white text-xs font-semibold rounded-2xl hover:bg-slate-800 transition shrink-0">Send</button>
-                        </div>
-                        <div class="flex flex-col gap-2 text-[10px] text-slate-400" id="peer-chat-attachments">
-                            <div class="flex items-center justify-between gap-3">
-                                <span>No attachments selected.</span>
-                                <button id="peer-chat-attachments-clear" type="button" class="hidden text-slate-500 hover:text-slate-700">Clear</button>
-                            </div>
-                            <div id="peer-chat-attachments-alert" class="hidden text-rose-500"></div>
-                            <div id="peer-chat-attachments-preview" class="flex flex-wrap gap-2"></div>
-                        </div>
-                    </div>
-                </section>
+            <div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Participants</div>
+                <div id="peer-chat-members" class="flex flex-wrap gap-2 text-[11px] text-gray-600"></div>
+            </div>
+        </div>
+        <div class="px-4 py-3 space-y-3">
+            <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
+            <div class="flex items-center justify-between" id="peer-chat-translate-row">
+                <label class="text-[10px] uppercase tracking-wider text-gray-400">Translate</label>
+                <select id="peer-chat-translate" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
+                    <option value="">Auto</option>
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                </select>
+            </div>
+            <div class="flex items-center justify-between" id="peer-chat-display-row">
+                <label class="text-[10px] uppercase tracking-wider text-gray-400">Display</label>
+                <select id="peer-chat-display" class="px-2 py-1 text-[10px] text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300">
+                    <option value="single">Single</option>
+                    <option value="dual">Dual</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
+                    <span class="material-symbols-outlined text-base">attach_file</span>
+                </button>
+                <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
+                <input id="peer-chat-import-input" type="file" accept="application/json" class="hidden">
+                <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
+                <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
+            </div>
+            <div class="flex flex-col gap-2 text-[10px] text-gray-400" id="peer-chat-attachments">
+                <div class="flex items-center justify-between">
+                    <span>No attachments selected.</span>
+                    <button id="peer-chat-attachments-clear" type="button" class="hidden text-blue-500 hover:text-blue-700">Clear</button>
+                </div>
+                <div id="peer-chat-attachments-alert" class="hidden text-rose-500"></div>
+                <div id="peer-chat-attachments-preview" class="flex flex-wrap gap-2"></div>
             </div>
         </div>
     </div>
+
     <aside class="fixed top-0 right-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="settings-panel">
         
         <div class="p-6 flex justify-between items-center border-b border-gray-100">
@@ -514,33 +433,6 @@
         </div>
     </div>
 
-    <div id="channel-share-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
-        <div id="channel-share-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
-            <div class="flex justify-between items-center mb-4 border-b pb-2">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-800">Share Channel</h3>
-                    <p class="text-xs text-gray-500 mt-1">Invite someone into this exact channel.</p>
-                </div>
-                <button id="close-channel-share" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[10px] uppercase tracking-wider text-gray-400 block mb-2">Share link</label>
-                    <div class="flex items-center gap-2">
-                        <input id="channel-share-url" type="text" readonly class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg">
-                        <button id="channel-share-copy" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Copy</button>
-                    </div>
-                </div>
-                <div class="flex justify-center">
-                    <img id="channel-share-qr" alt="Channel share QR code" class="w-52 h-52 rounded-xl border border-gray-200 bg-white p-2">
-                </div>
-                <button id="channel-share-native" class="w-full px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition">Share</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         const config = {
             currentThemeIndex: 0,
@@ -574,11 +466,8 @@
 
         const BG_DB_NAME = 'garden_assets';
         const BG_STORE_NAME = 'backgrounds';
-        const BG_STORE_KEY_PREFIX = 'garden_bg_';
+        const BG_STORE_KEY = 'garden_bg';
         let bgDbPromise = null;
-        function getBackgroundStoreKey() {
-            return `${BG_STORE_KEY_PREFIX}${ACTIVE_CHANNEL_ID}`;
-        }
 
         function openBackgroundDb() {
             if (!('indexedDB' in window)) return Promise.resolve(null);
@@ -610,7 +499,7 @@
                     console.warn('Failed to persist background image.');
                     resolve(false);
                 };
-                tx.objectStore(BG_STORE_NAME).put(dataUrl, getBackgroundStoreKey());
+                tx.objectStore(BG_STORE_NAME).put(dataUrl, BG_STORE_KEY);
             });
         }
 
@@ -619,7 +508,7 @@
             if (!db) return null;
             return new Promise(resolve => {
                 const tx = db.transaction(BG_STORE_NAME, 'readonly');
-                const request = tx.objectStore(BG_STORE_NAME).get(getBackgroundStoreKey());
+                const request = tx.objectStore(BG_STORE_NAME).get(BG_STORE_KEY);
                 request.onsuccess = () => resolve(request.result || null);
                 request.onerror = () => resolve(null);
             });
@@ -632,7 +521,7 @@
                 const tx = db.transaction(BG_STORE_NAME, 'readwrite');
                 tx.oncomplete = () => resolve(true);
                 tx.onerror = () => resolve(false);
-                tx.objectStore(BG_STORE_NAME).delete(getBackgroundStoreKey());
+                tx.objectStore(BG_STORE_NAME).delete(BG_STORE_KEY);
             });
         }
 
@@ -914,8 +803,8 @@
             
             ctx.scale(dpr, dpr);
             
-            const settingsPanelEl = document.getElementById('settings-panel');
-            if (settingsPanelEl) settingsPanelEl.style.height = `${window.innerHeight}px`;
+            document.getElementById('settings-panel').style.height = `${window.innerHeight}px`;
+            document.getElementById('session-panel').style.height = `${window.innerHeight}px`;
         }
         window.addEventListener('resize', resize);
         window.addEventListener('orientationchange', () => { setTimeout(resize, 100); });
@@ -1404,145 +1293,10 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const CHANNEL_REGISTRY_STORAGE_KEY = 'relax_channel_registry_v1';
-        const ACTIVE_CHANNEL_STORAGE_KEY = 'relax_active_channel_id';
-        const GLOBAL_JOIN_NAME_STORAGE_KEY = 'relax_join_name';
-        const CHANNEL_QUERY_PARAM = 'channel';
-        const CHANNEL_SHARE_QUERY_PARAM = 'shared';
-        const CHANNEL_INVITED_BY_QUERY_PARAM = 'by';
-        const RELAX_RELAY_SESSION_PREFIX = 'relax:peace:';
-        const DEFAULT_CHANNEL_NAME = 'Peace Channel';
-        function createUuid() {
-            if (crypto.randomUUID) return crypto.randomUUID();
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => {
-                const random = Math.random() * 16 | 0;
-                const value = char === 'x' ? random : (random & 0x3 | 0x8);
-                return value.toString(16);
-            });
-        }
-        function getChannelShortId(channelOrId) {
-            const id = typeof channelOrId === 'string' ? channelOrId : channelOrId?.id;
-            return id ? id.slice(0, 8) : 'local';
-        }
-        function getDeterministicChannelName(channelOrId) {
-            const shortId = getChannelShortId(channelOrId);
-            return shortId === 'local' ? DEFAULT_CHANNEL_NAME : `Channel ${shortId}`;
-        }
-        function sanitizeChannelName(name, fallback = DEFAULT_CHANNEL_NAME) {
-            return (name || '').trim().slice(0, 20) || fallback;
-        }
-        function sanitizeChannelRoomName(name, fallback = 'Shared room') {
-            return (name || '').trim().slice(0, 20) || fallback;
-        }
-        function normalizeChannelRecord(channel = {}) {
-            const now = new Date().toISOString();
-            const normalized = {
-                id: channel.id || createUuid(),
-                name: sanitizeChannelName(channel.name, getDeterministicChannelName(channel.id)),
-                createdAt: channel.createdAt || now,
-                updatedAt: channel.updatedAt || channel.createdAt || now,
-                lastMessageAt: channel.lastMessageAt || channel.updatedAt || channel.createdAt || now,
-                lastViewedAt: channel.lastViewedAt || channel.joinedAt || channel.updatedAt || channel.createdAt || now,
-                invitedBy: (channel.invitedBy || '').trim(),
-                roomName: sanitizeChannelRoomName(channel.roomName, channel.invitedBy || 'Shared room'),
-                joinedAt: channel.joinedAt || '',
-                source: channel.source || 'local',
-                password: (channel.password || '').trim(),
-                passwordUpdatedAt: channel.passwordUpdatedAt || ''
-            };
-            if (!normalized.name) {
-                normalized.name = getDeterministicChannelName(normalized.id);
-            }
-            return normalized;
-        }
-        function createChannelRecord(name = DEFAULT_CHANNEL_NAME, id = createUuid(), meta = {}) {
-            return normalizeChannelRecord({ ...meta, id, name: sanitizeChannelName(name, getDeterministicChannelName(id)) });
-        }
-        function readChannelRegistry() {
-            try {
-                const raw = localStorage.getItem(CHANNEL_REGISTRY_STORAGE_KEY);
-                const parsed = raw ? JSON.parse(raw) : [];
-                return Array.isArray(parsed)
-                    ? parsed.filter(item => item?.id).map(normalizeChannelRecord)
-                    : [];
-            } catch (_) {
-                return [];
-            }
-        }
-        function writeChannelRegistry(channels) {
-            try {
-                localStorage.setItem(CHANNEL_REGISTRY_STORAGE_KEY, JSON.stringify(channels.map(normalizeChannelRecord)));
-            } catch (_) {}
-        }
-        function persistChannelRegistry(channels) {
-            const normalized = channels.map(normalizeChannelRecord);
-            writeChannelRegistry(normalized);
-            return normalized;
-        }
-        function parseSharedChannelId(rawValue = '') {
-            const value = (rawValue || '').trim();
-            if (!value) return '';
-            const channelId = value.startsWith(RELAX_RELAY_SESSION_PREFIX)
-                ? value.slice(RELAX_RELAY_SESSION_PREFIX.length).trim()
-                : value;
-            return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(channelId) ? channelId : '';
-        }
-        function ensureChannelState() {
-            const params = new URLSearchParams(window.location.search);
-            const requestedChannelId = parseSharedChannelId(params.get(CHANNEL_SHARE_QUERY_PARAM) || params.get(CHANNEL_QUERY_PARAM) || '');
-            const invitedBy = (params.get(CHANNEL_INVITED_BY_QUERY_PARAM) || '').trim();
-            const joinedAt = new Date().toISOString();
-            let channels = readChannelRegistry();
-            if (!channels.length) {
-                channels = [createChannelRecord(DEFAULT_CHANNEL_NAME)];
-            }
-            let activeChannelId = requestedChannelId || localStorage.getItem(ACTIVE_CHANNEL_STORAGE_KEY) || channels[0]?.id;
-            let activeChannel = channels.find(channel => channel.id === activeChannelId);
-            if (requestedChannelId) {
-                const inviteName = invitedBy || activeChannel?.invitedBy || '';
-                const deterministicName = activeChannel?.name || getDeterministicChannelName(requestedChannelId);
-                if (!activeChannel) {
-                    activeChannel = createChannelRecord(deterministicName, requestedChannelId, {
-                        invitedBy: inviteName,
-                        joinedAt,
-                        source: 'invite'
-                    });
-                    channels.push(activeChannel);
-                } else {
-                    activeChannel = normalizeChannelRecord({
-                        ...activeChannel,
-                        name: sanitizeChannelName(activeChannel.name, deterministicName),
-                        invitedBy: inviteName || activeChannel.invitedBy || '',
-                        joinedAt: activeChannel.joinedAt || joinedAt,
-                        source: activeChannel.source || 'invite',
-                        updatedAt: joinedAt
-                    });
-                    channels = channels.map(channel => channel.id === activeChannel.id ? activeChannel : channel);
-                }
-            }
-            if (!activeChannel) {
-                activeChannel = channels[0];
-                activeChannelId = activeChannel?.id;
-            }
-            channels = persistChannelRegistry(channels);
-            activeChannel = channels.find(channel => channel.id === activeChannelId) || normalizeChannelRecord(activeChannel);
-            try {
-                localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, activeChannelId);
-            } catch (_) {}
-            return { channels, activeChannel, activeChannelId };
-        }
-        const channelState = ensureChannelState();
-        const ACTIVE_CHANNEL_ID = channelState.activeChannelId;
-        const RELAY_SESSION_ID = `${RELAX_RELAY_SESSION_PREFIX}${ACTIVE_CHANNEL_ID}`;
+        const RELAY_SESSION_ID = 'relax:peace';
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
-        function channelScopedStorageKey(prefix, channelId = ACTIVE_CHANNEL_ID, suffix = '') {
-            return `${prefix}_${channelId}${suffix ? `_${suffix}` : ''}`;
-        }
-        function channelStorageKey(prefix, suffix = '') {
-            return channelScopedStorageKey(prefix, ACTIVE_CHANNEL_ID, suffix);
-        }
-        const CLIENT_ID_STORAGE_KEY = channelStorageKey('relax_client_id');
+        const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
         let storedClientId = null;
         try {
             storedClientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
@@ -1555,8 +1309,8 @@
             } catch (_) {}
         }
         const RELAY_CLIENT_ID = resolvedClientId;
-        const LAMPORT_STORAGE_KEY = channelStorageKey('garden_lamport_clock');
-        const BG_META_STORAGE_KEY = channelStorageKey('garden_bg_meta');
+        const LAMPORT_STORAGE_KEY = 'garden_lamport_clock';
+        const BG_META_STORAGE_KEY = 'garden_bg_meta';
         let lamportClock = Number(localStorage.getItem(LAMPORT_STORAGE_KEY)) || 0;
         let backgroundMeta = (() => {
             try {
@@ -1574,17 +1328,17 @@
         const SNAPSHOT_DEBOUNCE_MS = 1200;
         const RELAY_LOG_SLOT_COUNT = 15;
         const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
-        const RELAY_LOG_SLOT_PREFIX = `${channelStorageKey('relax_relay_log_slot')}_`;
-        const RELAY_LOG_META_KEY = channelStorageKey('relax_relay_log_meta');
+        const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
+        const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
-        const SESSION_LOG_STORAGE_KEY = channelStorageKey('relax_session_log_entries');
+        const SESSION_LOG_STORAGE_KEY = 'relax_session_log_entries';
         const SESSION_LOG_MAX_ENTRIES = 400;
-        const RELAY_SEQ_STORAGE_KEY = channelStorageKey('relax_relay_seq');
+        const RELAY_SEQ_STORAGE_KEY = `relax_relay_seq_${RELAY_SESSION_ID}`;
         const relayState = { ws: null, connectTimeoutTimer: null };
         let pendingSnapshot = false;
         let pendingSnapshotReason = null;
         let pendingSnapshotTarget = null;
-        const storedStateTs = Number(localStorage.getItem(channelStorageKey('garden_state_ts')));
+        const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
         const syncState = {
             lastStateTs: 0,
             initialSent: false,
@@ -1593,37 +1347,20 @@
         let remoteStateApplied = false;
         let localStateDirty = false;
         const syncIndicator = document.getElementById('sync-indicator');
-        const sessionStatusList = null;
+        const sessionStatusList = document.getElementById('session-status-list');
         const uiNotice = document.getElementById('ui-notice');
         const sessionLogBtn = document.getElementById('session-log-btn');
-        const localNameDisplay = null;
-        const localNameInput = null;
-        const localStatusDot = null;
-        const localStatusLabel = null;
-        const sessionPanelCurrentName = null;
-        const sessionPanelCurrentMeta = null;
+        const localNameDisplay = document.getElementById('local-name-display');
+        const localNameInput = document.getElementById('local-name-input');
+        const localStatusDot = document.getElementById('local-status-dot');
+        const localStatusLabel = document.getElementById('local-status-label');
+        const updateNameBtn = document.getElementById('update-name-btn');
         const sessionBeacon = document.getElementById('session-beacon');
         const sessionBeaconDot = document.getElementById('session-beacon-dot');
         const peerChatWindow = document.getElementById('peer-chat-window');
-        const peerChatActiveSessionLabel = document.getElementById('peer-chat-active-session-label');
         const chatLocalNameInput = document.getElementById('peer-chat-local-name');
+        const chatLocalNameUpdate = document.getElementById('peer-chat-local-name-update');
         const peerChatMembers = document.getElementById('peer-chat-members');
-        const channelShareBtn = null;
-        const peerChatSessionSummary = null;
-        const peerChatSessionMeta = document.getElementById('peer-chat-session-meta');
-        const peerChatTabs = document.getElementById('peer-chat-tabs');
-        const peerChatNewTab = document.getElementById('peer-chat-new-tab');
-        const peerChatActionsTrigger = document.getElementById('peer-chat-actions-trigger');
-        const peerChatActionsMenu = document.getElementById('peer-chat-actions-menu');
-        const peerChatParticipantsTrigger = document.getElementById('peer-chat-participants-trigger');
-        const peerChatParticipantsPanel = document.getElementById('peer-chat-participants-panel');
-        const peerChatParticipantsClose = document.getElementById('peer-chat-participants-close');
-        const peerChatSessionDelete = document.getElementById('peer-chat-session-delete');
-        const peerChatLockTrigger = document.getElementById('peer-chat-lock-trigger');
-        const peerChatLockPanel = document.getElementById('peer-chat-lock-panel');
-        const peerChatSessionPassword = document.getElementById('peer-chat-session-password');
-        const peerChatSessionPasswordClear = document.getElementById('peer-chat-session-password-clear');
-        const peerChatLockTriggerLabel = document.getElementById('peer-chat-lock-trigger-label');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1633,10 +1370,8 @@
         let snapshotTimer = null;
         let uiNoticeTimer = null;
         let lastChatSentAt = 0;
-        const JOIN_NAME_STORAGE_KEY = channelStorageKey('relax_join_name');
-        const JOINED_AT_STORAGE_KEY = channelStorageKey('relax_joined_at');
-        const ALTAR_CHAT_STORAGE_KEY = channelStorageKey('relax_altar_chat');
-        const CUSTOM_WORDS_STORAGE_KEY = channelStorageKey('garden_words');
+        const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
+        const ALTAR_CHAT_STORAGE_KEY = `relax_altar_chat_${RELAY_SESSION_ID}`;
         const ALTAR_CHAT_MAX_ENTRIES = 300;
         const CHAT_MAX_LENGTH = 800;
         const CHAT_COOLDOWN_MS = 1000;
@@ -1669,7 +1404,7 @@
         const PENDING_TRANSIENT_MAX_EVENTS = 60;
         const MAX_BG_DATA_URL_LENGTH = 900000;
         const MAX_BG_BLOB_BYTES = 700000;
-        const AUTO_RELOAD_STORAGE_KEY = channelStorageKey('relax_auto_reload_at');
+        const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
         const AUTO_RELOAD_COOLDOWN_MS = 1500;
         const FILE_PICKER_GRACE_MS = 3000;
         let isFilePickerActive = false;
@@ -1681,118 +1416,6 @@
         const chatPairSource = chatPairParts[0] || 'en';
         const chatPairTarget = chatPairParts[1] || 'en';
         const isChatPairSingleColumn = chatPairSource === 'en' && chatPairTarget === 'en';
-
-        function getChannelRegistry() {
-            return readChannelRegistry();
-        }
-
-        function saveChannelRegistry(channels) {
-            return persistChannelRegistry(channels);
-        }
-
-        function updateChannelRecord(channelId, updates = {}) {
-            if (!channelId) return null;
-            const channels = getChannelRegistry();
-            let updated = null;
-            const nextChannels = channels.map(channel => {
-                if (channel.id !== channelId) return channel;
-                updated = normalizeChannelRecord({ ...channel, ...updates });
-                return updated;
-            });
-            if (!updated) return null;
-            saveChannelRegistry(nextChannels);
-            return updated;
-        }
-
-        function markChannelViewed(channelId = ACTIVE_CHANNEL_ID, viewedAt = new Date().toISOString()) {
-            return updateChannelRecord(channelId, { lastViewedAt: viewedAt, updatedAt: viewedAt }) || getActiveChannelRecord();
-        }
-
-        function markChannelActivity(channelId = ACTIVE_CHANNEL_ID, activityAt = new Date().toISOString()) {
-            return updateChannelRecord(channelId, { lastMessageAt: activityAt, updatedAt: activityAt }) || getActiveChannelRecord();
-        }
-
-        function getActiveChannelRecord() {
-            return getChannelRegistry().find(channel => channel.id === ACTIVE_CHANNEL_ID) || channelState.activeChannel;
-        }
-
-        function buildChannelShareUrl(channelId = ACTIVE_CHANNEL_ID) {
-            const url = new URL(window.location.href);
-            const relaySessionId = `${RELAX_RELAY_SESSION_PREFIX}${channelId}`;
-            url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
-            url.searchParams.set(CHANNEL_SHARE_QUERY_PARAM, relaySessionId);
-            url.searchParams.set(CHANNEL_INVITED_BY_QUERY_PARAM, joinState.name || 'A friend');
-            return url.toString();
-        }
-
-        function updateSelectedSessionPassword(nextPassword = '') {
-            const targetId = getSessionCandidateId();
-            if (!targetId) return;
-            const channels = getChannelRegistry().map(channel => channel.id === targetId
-                ? {
-                    ...channel,
-                    password: (nextPassword || '').trim(),
-                    passwordUpdatedAt: (nextPassword || '').trim() ? new Date().toISOString() : '',
-                    updatedAt: new Date().toISOString()
-                }
-                : channel);
-            saveChannelRegistry(channels);
-            renderChannelControls();
-        }
-
-        function teardownRelayForChannelSwitch() {
-            if (snapshotTimer) {
-                clearTimeout(snapshotTimer);
-                snapshotTimer = null;
-            }
-            if (presenceTimer) {
-                clearInterval(presenceTimer);
-                presenceTimer = null;
-            }
-            if (presenceRenderTimer) {
-                clearInterval(presenceRenderTimer);
-                presenceRenderTimer = null;
-            }
-            if (relayReconnectTimer) {
-                clearTimeout(relayReconnectTimer);
-                relayReconnectTimer = null;
-            }
-            if (relayHeartbeatTimer) {
-                clearInterval(relayHeartbeatTimer);
-                relayHeartbeatTimer = null;
-            }
-            if (relayState.connectTimeoutTimer) {
-                clearTimeout(relayState.connectTimeoutTimer);
-                relayState.connectTimeoutTimer = null;
-            }
-            peerPresence.clear();
-            peerConnectionHistory.clear();
-            peerChatHistory.clear();
-            unreadChatByPeer.clear();
-            translationCache.clear();
-            pendingTranslations.clear();
-            pendingTransientEvents.length = 0;
-            recentTapEvents.length = 0;
-            seenTapIds.clear();
-            altarChatHistory = [];
-            activePeerModalId = null;
-            if (relayState.ws) {
-                try { relayState.ws.close(4001, 'channel-switch'); } catch (_) {}
-                relayState.ws = null;
-            }
-        }
-
-        function switchActiveChannel(channelId) {
-            if (!channelId || channelId === ACTIVE_CHANNEL_ID) return;
-            try {
-                localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, channelId);
-            } catch (_) {}
-            teardownRelayForChannelSwitch();
-            const url = new URL(window.location.href);
-            url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
-            url.searchParams.set(CHANNEL_SHARE_QUERY_PARAM, `${RELAX_RELAY_SESSION_PREFIX}${channelId}`);
-            window.location.replace(url.toString());
-        }
 
         function markFilePickerActive() {
             isFilePickerActive = true;
@@ -1814,25 +1437,22 @@
             });
         }
         function ensureJoinName() {
-            let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY) || localStorage.getItem(GLOBAL_JOIN_NAME_STORAGE_KEY);
+            let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
-                storedName = 'You';
-                localStorage.setItem(JOINED_AT_STORAGE_KEY, new Date().toISOString());
+                storedName = new Date().toLocaleString(undefined, {
+                    month: 'short',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
+                localStorage.setItem('relax_joined_at', new Date().toISOString());
             }
-            storedName = storedName.trim().slice(0, 40) || 'You';
-            localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
-            localStorage.setItem(GLOBAL_JOIN_NAME_STORAGE_KEY, storedName);
             return storedName;
         }
         const joinState = {
             name: ensureJoinName()
         };
-        const sessionPickerState = {
-            selectedId: ACTIVE_CHANNEL_ID,
-            query: formatStoredSessionLabel(channelState.activeChannel)
-        };
-        let activeTabParticipantsId = '';
-        let currentShareChannelId = ACTIVE_CHANNEL_ID;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
@@ -1980,13 +1600,9 @@
             });
             const merged = Array.from(existing.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0)).slice(-ALTAR_CHAT_MAX_ENTRIES);
             saveAltarChat(merged);
-            const latestTs = merged.length ? Math.max(...merged.map(entry => entry.ts || 0)) : Date.now();
-            markChannelActivity(ACTIVE_CHANNEL_ID, new Date(latestTs).toISOString());
             if (isPeerChatOpen()) {
-                markChannelViewed();
                 renderPeerChat();
             }
-            renderChannelControls();
         }
 
         function requestAltarChatSync() {
@@ -2127,255 +1743,6 @@
             updateSessionBeaconIndicator();
         }
 
-        function formatStoredSessionLabel(channel) {
-            return sanitizeChannelName(channel?.name, getDeterministicChannelName(channel));
-        }
-
-        function formatStoredSessionTimestamp(channel) {
-            const value = channel?.lastMessageAt || channel?.joinedAt || channel?.updatedAt || channel?.createdAt;
-            if (!value) return 'Saved recently';
-            const parsed = new Date(value);
-            if (Number.isNaN(parsed.getTime())) return 'Saved recently';
-            return parsed.toLocaleString(undefined, {
-                month: 'short',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        }
-
-        function describeStoredSession(channel) {
-            if (!channel) return 'Saved locally.';
-            const details = [];
-            details.push(channel.id === ACTIVE_CHANNEL_ID ? 'Active now' : 'Saved session');
-            details.push(channel.roomName || 'Shared room');
-            if (channel.password) details.push('Password saved');
-            details.push(`Updated ${formatStoredSessionTimestamp(channel)}`);
-            details.push(`ID ${getChannelShortId(channel)}`);
-            return details.join(' · ');
-        }
-
-        function getChannelRoomLabel(channel) {
-            return sanitizeChannelRoomName(channel?.roomName, channel?.invitedBy || 'Shared room');
-        }
-
-        function sanitizeInlineChannelField(nextValue = '', fallback = '') {
-            return (nextValue || '').replace(/\s+/g, ' ').trim().slice(0, 20) || fallback;
-        }
-
-        function getSessionCandidateId() {
-            return ACTIVE_CHANNEL_ID;
-        }
-
-        function isPlaceholderChannelName(channel) {
-            const label = sanitizeChannelName(channel?.name, '');
-            return !label || label === DEFAULT_CHANNEL_NAME || label === getDeterministicChannelName(channel);
-        }
-
-        function getChannelTabHandle(channel) {
-            return isPlaceholderChannelName(channel) ? '' : formatStoredSessionLabel(channel);
-        }
-
-        function getChannelTabMeta(channel) {
-            return getChannelRoomLabel(channel);
-        }
-
-        function getChannelUnreadCount(channel) {
-            if (!channel?.id) return 0;
-            if (channel.id === ACTIVE_CHANNEL_ID) return unreadChatByPeer.get('altar') || 0;
-            const lastMessageAt = new Date(channel.lastMessageAt || channel.updatedAt || channel.createdAt || 0).getTime();
-            const lastViewedAt = new Date(channel.lastViewedAt || channel.createdAt || 0).getTime();
-            return lastMessageAt > lastViewedAt ? 1 : 0;
-        }
-
-        function createNewChannel() {
-            const nextChannel = createChannelRecord(DEFAULT_CHANNEL_NAME);
-            saveChannelRegistry([...getChannelRegistry(), nextChannel]);
-            switchActiveChannel(nextChannel.id);
-        }
-
-        function updateChannelHandle(channelId, nextName) {
-            const channels = getChannelRegistry();
-            const channel = channels.find(item => item.id === channelId);
-            if (!channel) return;
-            const fallback = getDeterministicChannelName(channel);
-            updateChannelRecord(channelId, {
-                name: sanitizeChannelName(sanitizeInlineChannelField(nextName, fallback), fallback),
-                updatedAt: new Date().toISOString()
-            });
-            renderChannelControls();
-        }
-
-        function updateChannelRoomName(channelId, nextRoomName) {
-            const channels = getChannelRegistry();
-            const channel = channels.find(item => item.id === channelId);
-            if (!channel) return;
-            updateChannelRecord(channelId, {
-                roomName: sanitizeChannelRoomName(sanitizeInlineChannelField(nextRoomName, getChannelRoomLabel(channel)), getChannelRoomLabel(channel)),
-                updatedAt: new Date().toISOString()
-            });
-            renderChannelControls();
-        }
-
-        function removeStoredChannel(channelId) {
-            if (!channelId) {
-                showUiNotice('Select a chat to delete.');
-                return;
-            }
-            const channels = getChannelRegistry();
-            const targetChannel = channels.find(channel => channel.id === channelId);
-            if (!targetChannel) {
-                showUiNotice('Select a saved chat first.');
-                return;
-            }
-            const remaining = channels.filter(channel => channel.id !== channelId);
-            if (!remaining.length) {
-                const fallback = createChannelRecord(DEFAULT_CHANNEL_NAME);
-                saveChannelRegistry([fallback]);
-                switchActiveChannel(fallback.id);
-                return;
-            }
-            saveChannelRegistry(remaining);
-            if (channelId === ACTIVE_CHANNEL_ID) {
-                switchActiveChannel(remaining[0].id);
-                return;
-            }
-            renderChannelControls();
-            showUiNotice(`Deleted ${formatStoredSessionLabel(targetChannel)}.`);
-        }
-
-        function buildParticipantListMarkup(channel) {
-            const isActive = channel?.id === ACTIVE_CHANNEL_ID;
-            const members = isActive
-                ? [
-                    { id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: localPresenceState || 'active' },
-                    ...Array.from(peerPresence.values()).filter(peer => peer.state !== 'suspended' && peer.active !== false)
-                  ]
-                : [{ id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: 'saved' }];
-            const items = members.map(member => {
-                const statusClass = member.isLocal || member.state === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
-                const statusLabel = member.isLocal ? 'You' : (member.state || 'saved');
-                return `<div class="flex items-center justify-between gap-2 text-[11px] text-gray-600"><span class="truncate">${escapeHtml(member.name || 'Unnamed')}</span><span class="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-gray-400"><span class="w-2 h-2 rounded-full ${statusClass}"></span>${escapeHtml(statusLabel)}</span></div>`;
-            }).join('');
-            const footer = isActive ? '' : '<div class="text-[10px] text-gray-400">Open this chat tab to refresh live presence.</div>';
-            return `${items}${footer}`;
-        }
-
-        function setActiveTabParticipants(channelId = '') {
-            activeTabParticipantsId = activeTabParticipantsId === channelId ? '' : channelId;
-            renderChannelControls();
-        }
-
-        function renderChatTabs() {
-            if (!peerChatTabs) return;
-            const channels = getChannelRegistry();
-            peerChatTabs.innerHTML = '';
-            channels.forEach((channel, index) => {
-                const isActive = channel.id === ACTIVE_CHANNEL_ID;
-                const unreadCount = getChannelUnreadCount(channel);
-                const tab = document.createElement('section');
-                tab.className = `peer-chat-tab relative rounded-[20px] border px-3 py-3 transition min-w-0 ${isActive ? 'border-slate-400 bg-slate-100 shadow-sm' : 'border-slate-200 bg-slate-50/90 hover:bg-white'}`;
-                tab.dataset.unread = unreadCount > 0 ? 'true' : 'false';
-                tab.innerHTML = `
-                    <div class="flex items-start gap-2">
-                        <div class="peer-chat-tab-switch min-w-0 flex-1 text-left space-y-2 cursor-pointer" role="button" tabindex="0">
-                            <div class="flex items-center gap-2 text-xs text-slate-500">
-                                <span class="peer-chat-tab-waiting inline-flex min-w-[2.25rem] justify-center rounded-full px-2 py-0.5 bg-rose-100 text-rose-700 font-semibold opacity-0 scale-75 transition">${unreadCount > 0 ? `Tab ${index + 1}` : `Tab ${index + 1}`}</span>
-                                <span class="text-[10px] uppercase tracking-[0.24em] ${unreadCount > 0 ? 'font-bold text-rose-600' : 'text-slate-400'}">${unreadCount > 0 ? 'Waiting' : 'Ready'}</span>
-                            </div>
-                            <div class="peer-chat-tab-field peer-chat-tab-name min-h-[30px] rounded-xl px-2 py-1 text-sm ${unreadCount > 0 ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'} truncate outline-none" contenteditable="true" spellcheck="false" data-placeholder="chatname">${escapeHtml(getChannelTabHandle(channel))}</div>
-                            <div class="peer-chat-tab-field peer-chat-tab-room min-h-[30px] rounded-xl px-2 py-1 text-xs text-slate-500 truncate outline-none" contenteditable="true" spellcheck="false" data-placeholder="Roomname">${escapeHtml(getChannelRoomLabel(channel))}</div>
-                        </div>
-                        <button type="button" class="peer-chat-tab-close peer-chat-action-btn w-8 h-8 shrink-0" aria-label="Close tab" title="Close tab">
-                            <svg viewBox="0 0 24 24" class="peer-chat-svg-icon"><path d="M6 6l12 12M18 6L6 18"/></svg>
-                        </button>
-                    </div>`;
-                const switchButton = tab.querySelector('.peer-chat-tab-switch');
-                const nameField = tab.querySelector('.peer-chat-tab-name');
-                const roomField = tab.querySelector('.peer-chat-tab-room');
-                const closeButton = tab.querySelector('.peer-chat-tab-close');
-                const activateTab = () => {
-                    if (!isActive) switchActiveChannel(channel.id);
-                };
-                switchButton?.addEventListener('click', event => {
-                    if (nameField?.contains(event.target) || roomField?.contains(event.target)) return;
-                    activateTab();
-                });
-                switchButton?.addEventListener('keydown', event => {
-                    if ((event.key === 'Enter' || event.key === ' ') && !nameField?.contains(event.target) && !roomField?.contains(event.target)) {
-                        event.preventDefault();
-                        activateTab();
-                    }
-                });
-                [nameField, roomField].forEach(field => {
-                    field?.addEventListener('click', event => {
-                        event.stopPropagation();
-                        if (!isActive) activateTab();
-                    });
-                    field?.addEventListener('keydown', event => {
-                        if (event.key === 'Enter') {
-                            event.preventDefault();
-                            field.blur();
-                        }
-                    });
-                });
-                nameField?.addEventListener('blur', () => updateChannelHandle(channel.id, nameField.textContent || ''));
-                roomField?.addEventListener('blur', () => updateChannelRoomName(channel.id, roomField.textContent || ''));
-                closeButton?.addEventListener('click', event => {
-                    event.stopPropagation();
-                    removeStoredChannel(channel.id);
-                });
-                peerChatTabs.appendChild(tab);
-            });
-        }
-
-        function renderChannelControls() {
-            const channels = getChannelRegistry();
-            const activeChannel = channels.find(channel => channel.id === ACTIVE_CHANNEL_ID) || getActiveChannelRecord();
-            sessionPickerState.selectedId = ACTIVE_CHANNEL_ID;
-            sessionPickerState.query = formatStoredSessionLabel(activeChannel);
-            if (peerChatActiveSessionLabel) {
-                peerChatActiveSessionLabel.textContent = `${formatStoredSessionLabel(activeChannel)} · ${getChannelRoomLabel(activeChannel)}`;
-            }
-            if (peerChatSessionMeta) {
-                peerChatSessionMeta.textContent = describeStoredSession(activeChannel);
-            }
-            if (peerChatSessionDelete) {
-                const canDelete = channels.length > 1;
-                peerChatSessionDelete.disabled = !canDelete;
-                peerChatSessionDelete.classList.toggle('opacity-50', !canDelete);
-                peerChatSessionDelete.classList.toggle('cursor-not-allowed', !canDelete);
-            }
-            if (peerChatLockTrigger) {
-                peerChatLockTrigger.classList.toggle('text-amber-700', Boolean(activeChannel?.password));
-            }
-            if (peerChatLockTriggerLabel) {
-                peerChatLockTriggerLabel.textContent = activeChannel?.password ? 'Remove password' : 'Apply password';
-            }
-            if (peerChatSessionPassword && document.activeElement !== peerChatSessionPassword) {
-                peerChatSessionPassword.value = activeChannel?.password || '';
-            }
-            renderChatTabs();
-        }
-
-        function updateChannelShareModal(channelId = ACTIVE_CHANNEL_ID) {
-            const shareUrl = buildChannelShareUrl(channelId);
-            const shareUrlInput = document.getElementById('channel-share-url');
-            const shareQr = document.getElementById('channel-share-qr');
-            const nativeShareBtn = document.getElementById('channel-share-native');
-            if (shareUrlInput) {
-                shareUrlInput.value = shareUrl;
-            }
-            if (shareQr) {
-                shareQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(shareUrl)}`;
-            }
-            if (nativeShareBtn) {
-                nativeShareBtn.disabled = !navigator.share;
-                nativeShareBtn.classList.toggle('opacity-50', !navigator.share);
-                nativeShareBtn.classList.toggle('cursor-not-allowed', !navigator.share);
-            }
-        }
-
         function refreshUnreadChat() {
             unreadChatCount = getUnreadChatTotal();
             updateDocumentTitle();
@@ -2391,8 +1758,6 @@
         function clearUnreadChat() {
             if (activePeerModalId && isPeerChatOpen()) {
                 clearUnreadForPeer(activePeerModalId);
-                markChannelViewed();
-                renderChannelControls();
             }
         }
 
@@ -2482,56 +1847,25 @@
                 .replace(/'/g, '&#39;');
         }
 
-        function normalizeChatHref(rawHref) {
-            const trimmedHref = (rawHref || '').trim();
-            if (!trimmedHref) return '';
-            const candidateHref = /^https?:\/\//i.test(trimmedHref) ? trimmedHref : `https://${trimmedHref}`;
-            try {
-                const parsedUrl = new URL(candidateHref);
-                if (!parsedUrl.hostname.includes('.')) {
-                    parsedUrl.hostname = `${parsedUrl.hostname}.com`;
-                }
-                return parsedUrl.toString();
-            } catch (_) {
-                return candidateHref;
-            }
-        }
-
         function normalizeChatMessage(text) {
-            return (text || '').trim();
+            return (text || '').replace(/\/\/([^\n/][^\n]*?)\/\/((?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:[^\s]*)?)/g, (_, label, url) => {
+                const cleanLabel = label.trim();
+                const cleanUrl = url.trim();
+                const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
+                return cleanLabel ? `[${cleanLabel}](${normalizedUrl})` : _;
+            });
         }
 
-        function linkifyPlainText(text) {
-            const source = text || '';
-            const urlRegex = /\b((?:https?:\/\/)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<]*)?)/gi;
-            let html = '';
-            let lastIndex = 0;
-            let match;
-            while ((match = urlRegex.exec(source)) !== null) {
-                const [rawUrl] = match;
-                const index = match.index;
-                html += escapeHtml(source.slice(lastIndex, index));
-                const normalizedUrl = normalizeChatHref(rawUrl);
-                html += `<a href="${escapeHtml(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(rawUrl)}</a>`;
-                lastIndex = index + rawUrl.length;
-            }
-            html += escapeHtml(source.slice(lastIndex));
+        function renderMarkdown(text) {
+            let html = escapeHtml(normalizeChatMessage(text || ''));
+            html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre class="bg-gray-900 text-gray-100 rounded p-2 text-[11px] overflow-auto"><code>${code}</code></pre>`);
+            html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            html = html.replace(/\n/g, '<br>');
             return html;
-        }
-
-        function renderChatMessage(text) {
-            return normalizeChatMessage(text)
-                .split('\n')
-                .map(line => {
-                    const shortcut = line.match(/^(.{1,80}?)\s*->\s*((?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?)$/i);
-                    if (shortcut) {
-                        const [, label, rawUrl] = shortcut;
-                        const normalizedUrl = normalizeChatHref(rawUrl);
-                        return `<a href="${escapeHtml(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label.trim())}</a>`;
-                    }
-                    return linkifyPlainText(line);
-                })
-                .join('<br>');
         }
 
         function queueChatTranslation(entry, target, peerId, chatHistory) {
@@ -2912,7 +2246,7 @@
         function renderPeerChatMembers() {
             if (!peerChatMembers) return;
             const members = [
-                { id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: 'you', lastSeen: Date.now() },
+                { id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: 'active' },
                 ...Array.from(peerPresence.values())
                     .filter(peer => peer.state !== 'suspended' && peer.active !== false)
                     .sort((a, b) => (a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device'))
@@ -2920,14 +2254,8 @@
             peerChatMembers.innerHTML = '';
             members.forEach(member => {
                 const chip = document.createElement('span');
-                const state = member.isLocal ? 'you' : (member.state || 'saved');
-                const statusText = member.isLocal
-                    ? 'You are active in this room.'
-                    : `${member.name || 'Participant'} is ${state}${member.lastSeen ? ` · last seen ${formatTimestamp(member.lastSeen)}` : ''}`;
-                chip.className = 'peer-chat-participant-chip inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-slate-700 cursor-default';
-                chip.dataset.state = state;
-                chip.title = statusText;
-                chip.innerHTML = `<span class="peer-chat-participant-dot w-2 h-2 rounded-full"></span><span>${escapeHtml(member.name || 'Unnamed device')}${member.isLocal ? ' (You)' : ''}</span>`;
+                chip.className = `inline-flex items-center gap-2 px-2.5 py-1 rounded-full ${member.isLocal ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-700'}`;
+                chip.innerHTML = `<span class="w-2 h-2 rounded-full ${member.isLocal || member.state === 'active' ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span>${member.name || 'Unnamed device'}${member.isLocal ? ' (You)' : ''}</span>`;
                 peerChatMembers.appendChild(chip);
             });
         }
@@ -2935,22 +2263,13 @@
         function openPeerModal(peerId = 'altar') {
             activePeerModalId = peerId || 'altar';
             showPeerChatWindow();
-            peerChatParticipantsPanel?.classList.remove('hidden');
-            peerChatLockPanel?.classList.add('hidden');
-            peerChatActionsMenu?.classList.add('hidden');
-            markChannelViewed();
             renderPeerChatMembers();
             renderPeerChat();
             clearUnreadChat();
-            renderChannelControls();
         }
 
         function closePeerModal() {
             activePeerModalId = null;
-            activeTabParticipantsId = '';
-            peerChatLockPanel?.classList.add('hidden');
-            peerChatParticipantsPanel?.classList.add('hidden');
-            peerChatActionsMenu?.classList.add('hidden');
             closePeerChatWindow();
         }
 
@@ -3019,7 +2338,7 @@
                         const dual = document.createElement('div');
                         dual.className = 'grid grid-cols-2 gap-2';
                         const original = document.createElement('div');
-                        original.innerHTML = renderChatMessage(messageText);
+                        original.innerHTML = renderMarkdown(messageText);
                         const translated = document.createElement('div');
                         translated.className = 'text-gray-500';
                         if (!messageText) {
@@ -3027,7 +2346,7 @@
                         } else {
                             const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
                             if (cached) {
-                                translated.innerHTML = renderChatMessage(cached);
+                                translated.innerHTML = renderMarkdown(cached);
                             } else {
                                 translated.textContent = '…';
                                 queueChatTranslation(entry, translationTarget, peerId, chatHistory);
@@ -3042,14 +2361,14 @@
                         } else {
                             const cached = entry.translations?.[translationTarget] || translationCache.get(`${translationTarget}|${messageText}`);
                             if (cached) {
-                                messageLine.innerHTML = renderChatMessage(cached);
+                                messageLine.innerHTML = renderMarkdown(cached);
                             } else {
                                 messageLine.textContent = '…';
                                 queueChatTranslation(entry, translationTarget, peerId, chatHistory);
                             }
                         }
                     } else {
-                        messageLine.innerHTML = renderChatMessage(messageText);
+                        messageLine.innerHTML = renderMarkdown(messageText);
                     }
                     if (Array.isArray(entry.attachments) && entry.attachments.length) {
                         appendChatAttachments(messageLine, entry.attachments, {
@@ -3790,7 +3109,7 @@
                 syncState.lastLocalStateTs = relaxLocalClock
                     ? effectiveStateTs
                     : Math.max(syncState.lastLocalStateTs, effectiveStateTs);
-                localStorage.setItem(channelStorageKey('garden_state_ts'), String(syncState.lastLocalStateTs));
+                localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
             }
             if (options.source) {
                 localStateDirty = false;
@@ -3805,7 +3124,7 @@
                 config.customWords = state.customWords.filter(Boolean);
                 if (customWordsInput) {
                     customWordsInput.value = config.customWords.join(', ');
-                    localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, customWordsInput.value);
+                    localStorage.setItem('garden_words', customWordsInput.value);
                 }
             }
 
@@ -3885,7 +3204,7 @@
         function updateLocalStateTimestamp(ts = Date.now()) {
             const nextTs = Math.max(syncState.lastLocalStateTs || 0, ts);
             syncState.lastLocalStateTs = nextTs;
-            localStorage.setItem(channelStorageKey('garden_state_ts'), String(nextTs));
+            localStorage.setItem('garden_state_ts', String(nextTs));
         }
 
         function isOnline() {
@@ -4012,7 +3331,7 @@
         }
 
         function updateLocalProfileUI() {
-            if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'You';
+            if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'Unnamed';
             if (localNameInput && document.activeElement !== localNameInput) {
                 localNameInput.value = joinState.name || '';
             }
@@ -4023,15 +3342,14 @@
             if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
             if (localStatusLabel) localStatusLabel.textContent = status.label;
             updateSessionBeaconIndicator();
-            renderChannelControls();
         }
 
         function updateLocalName(nextName) {
-            const trimmed = (nextName || '').trim().slice(0, 40) || 'You';
+            const trimmed = (nextName || '').trim();
+            if (!trimmed) return;
             joinState.name = trimmed;
             try {
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
-                localStorage.setItem(GLOBAL_JOIN_NAME_STORAGE_KEY, trimmed);
             } catch (_) {}
             updateLocalProfileUI();
             updateLocalChatNames();
@@ -4082,11 +3400,10 @@
         }
 
         function renderSessionStatus() {
+            if (!sessionStatusList) return;
             const peers = Array.from(peerPresence.values());
             const now = Date.now();
-            if (sessionStatusList) {
-                sessionStatusList.innerHTML = '';
-            }
+            sessionStatusList.innerHTML = '';
             updateSessionBeaconIndicator();
 
             peers.forEach(peer => {
@@ -4136,10 +3453,9 @@
                     button.appendChild(dot);
                     button.appendChild(nameSpan);
                     row.appendChild(button);
-                    sessionStatusList?.appendChild(row);
+                    sessionStatusList.appendChild(row);
                 });
             renderPeerChatMembers();
-            renderChannelControls();
             if (sessionLogOpen) {
                 renderSessionLog();
             }
@@ -4333,7 +3649,6 @@
                 });
                 mergeAltarChatHistory([entry]);
                 if (isPeerChatOpen()) {
-                    markChannelViewed();
                     renderPeerChat();
                     clearUnreadChat();
                 } else {
@@ -4353,12 +3668,9 @@
                     entry.attachments = [];
                     entry.pending = false;
                     saveAltarChat(chatHistory);
-                    markChannelActivity();
                     if (isPeerChatOpen()) {
-                        markChannelViewed();
                         renderPeerChat();
                     }
-                    renderChannelControls();
                 }
                 return;
             }
@@ -4727,12 +4039,19 @@
         });
 
         const settingsPanel = document.getElementById('settings-panel');
+        const sessionPanel = document.getElementById('session-panel');
         document.getElementById('settings-trigger').onclick = () => {
             settingsPanel.classList.remove('translate-x-full');
+            sessionPanel.classList.add('-translate-x-full');
         };
         document.getElementById('close-btn').onclick = () => settingsPanel.classList.add('translate-x-full');
         if (sessionBeacon) {
-            sessionBeacon.onclick = () => {
+            sessionBeacon.onclick = (event) => {
+                if (event?.shiftKey) {
+                    sessionPanel.classList.remove('-translate-x-full');
+                    settingsPanel.classList.add('translate-x-full');
+                    return;
+                }
                 if (isPeerChatOpen()) {
                     closePeerModal();
                     return;
@@ -4741,94 +4060,10 @@
                 clearUnreadChat();
             };
         }
-        const commitLocalName = source => updateLocalName(source?.value || '');
-        if (localNameInput) {
-            localNameInput.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    commitLocalName(localNameInput);
-                    localNameInput.blur();
-                }
-            });
-            localNameInput.addEventListener('blur', () => commitLocalName(localNameInput));
+        const closeSessionPanelBtn = document.getElementById('close-session-panel');
+        if (closeSessionPanelBtn) {
+            closeSessionPanelBtn.onclick = () => sessionPanel.classList.add('-translate-x-full');
         }
-        if (chatLocalNameInput) {
-            chatLocalNameInput.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    commitLocalName(chatLocalNameInput);
-                    chatLocalNameInput.blur();
-                }
-            });
-            chatLocalNameInput.addEventListener('blur', () => commitLocalName(chatLocalNameInput));
-        }
-        if (peerChatNewTab) {
-            peerChatNewTab.onclick = () => createNewChannel();
-        }
-        if (peerChatSessionDelete) {
-            peerChatSessionDelete.onclick = () => {
-                peerChatActionsMenu?.classList.add('hidden');
-                removeStoredChannel(ACTIVE_CHANNEL_ID);
-            };
-        }
-        if (peerChatLockTrigger) {
-            peerChatLockTrigger.onclick = () => {
-                peerChatActionsMenu?.classList.add('hidden');
-                if ((peerChatSessionPassword?.value || '').trim()) {
-                    if (peerChatSessionPassword) peerChatSessionPassword.value = '';
-                    updateSelectedSessionPassword('');
-                    peerChatLockPanel?.classList.add('hidden');
-                    showUiNotice('Password removed from this tab.');
-                    return;
-                }
-                peerChatLockPanel?.classList.toggle('hidden');
-                if (!peerChatLockPanel?.classList.contains('hidden')) {
-                    peerChatSessionPassword?.focus();
-                }
-            };
-        }
-        if (peerChatSessionPassword) {
-            peerChatSessionPassword.addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    updateSelectedSessionPassword(peerChatSessionPassword.value || '');
-                    showUiNotice((peerChatSessionPassword.value || '').trim() ? 'Password saved for this tab.' : 'Password removed from this tab.');
-                }
-            });
-            peerChatSessionPassword.addEventListener('blur', () => updateSelectedSessionPassword(peerChatSessionPassword.value || ''));
-        }
-        if (peerChatSessionPasswordClear) {
-            peerChatSessionPasswordClear.onclick = () => {
-                if (peerChatSessionPassword) peerChatSessionPassword.value = '';
-                updateSelectedSessionPassword('');
-                showUiNotice('Password removed from this tab.');
-            };
-        }
-        if (peerChatParticipantsTrigger) {
-            peerChatParticipantsTrigger.onclick = () => {
-                peerChatParticipantsPanel?.classList.toggle('hidden');
-                setActiveTabParticipants('');
-            };
-        }
-        if (peerChatParticipantsClose) {
-            peerChatParticipantsClose.onclick = () => peerChatParticipantsPanel?.classList.add('hidden');
-        }
-        if (peerChatActionsTrigger) {
-            peerChatActionsTrigger.onclick = () => {
-                peerChatParticipantsPanel?.classList.add('hidden');
-                peerChatActionsMenu?.classList.toggle('hidden');
-            };
-        }
-        document.addEventListener('click', event => {
-            if (peerChatActionsMenu && peerChatActionsTrigger && !peerChatActionsMenu.contains(event.target) && !peerChatActionsTrigger.contains(event.target)) {
-                peerChatActionsMenu.classList.add('hidden');
-            }
-            if (peerChatTabs && activeTabParticipantsId && !peerChatTabs.contains(event.target)) {
-                activeTabParticipantsId = '';
-                renderChannelControls();
-            }
-        });
-
         document.getElementById('audio-toggle').onchange=e=>{
             ZenAudio.enabled=e.target.checked;
             appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
@@ -4894,8 +4129,7 @@
             secrets: document.getElementById('secrets-modal'),
             peer: document.getElementById('peer-modal'),
             'session-log': document.getElementById('session-log-modal'),
-            'chat-attachment': document.getElementById('chat-attachment-modal'),
-            'channel-share': document.getElementById('channel-share-modal')
+            'chat-attachment': document.getElementById('chat-attachment-modal')
         };
 
         function toggleModal(id, show) {
@@ -4907,6 +4141,7 @@
                 el.classList.remove('invisible'); el.classList.add('visible');
                 content.classList.remove('scale-out'); content.classList.add('scale-in');
                 settingsPanel.classList.add('translate-x-full'); 
+                sessionPanel.classList.add('-translate-x-full');
             } else { 
                 el.classList.remove('visible'); el.classList.add('invisible');
                 content.classList.remove('scale-in'); content.classList.add('scale-out');
@@ -4924,44 +4159,6 @@
                     toggleModal('chat-attachment', false);
                 }
             });
-        }
-        const channelShareModal = document.getElementById('channel-share-modal');
-        const closeChannelShare = document.getElementById('close-channel-share');
-        const channelShareCopy = document.getElementById('channel-share-copy');
-        const channelShareNative = document.getElementById('channel-share-native');
-        if (closeChannelShare) {
-            closeChannelShare.onclick = () => toggleModal('channel-share', false);
-        }
-        if (channelShareModal) {
-            channelShareModal.addEventListener('click', (event) => {
-                if (event.target === channelShareModal) {
-                    toggleModal('channel-share', false);
-                }
-            });
-        }
-        if (channelShareCopy) {
-            channelShareCopy.onclick = async () => {
-                const shareUrl = buildChannelShareUrl(currentShareChannelId);
-                try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    showUiNotice('Channel link copied.');
-                } catch (_) {
-                    showUiNotice('Copy failed.');
-                }
-            };
-        }
-        if (channelShareNative) {
-            channelShareNative.onclick = async () => {
-                if (!navigator.share) return;
-                const shareChannel = getChannelRegistry().find(channel => channel.id === currentShareChannelId) || getActiveChannelRecord();
-                try {
-                    await navigator.share({
-                        title: formatStoredSessionLabel(shareChannel) || DEFAULT_CHANNEL_NAME,
-                        text: 'Join my Peace channel',
-                        url: buildChannelShareUrl(currentShareChannelId)
-                    });
-                } catch (_) {}
-            };
         }
 
         localPresenceState = getLocalPresenceState();
@@ -5026,16 +4223,19 @@
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('close-peer-modal').onclick=closePeerModal;
         const peerChatWindowClose = document.getElementById('peer-chat-window-close');
-        const peerChatShareTrigger = document.getElementById('peer-chat-share-trigger');
         if (peerChatWindowClose) {
             peerChatWindowClose.onclick = closePeerModal;
         }
-        if (peerChatShareTrigger) {
-            peerChatShareTrigger.onclick = () => {
-                currentShareChannelId = getSessionCandidateId();
-                updateChannelShareModal(currentShareChannelId);
-                toggleModal('channel-share', true);
-            };
+        if (chatLocalNameUpdate) {
+            chatLocalNameUpdate.onclick = () => updateLocalName(chatLocalNameInput?.value || '');
+        }
+        if (chatLocalNameInput) {
+            chatLocalNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateLocalName(chatLocalNameInput.value || '');
+                }
+            });
         }
         if (sessionLogBtn) {
             sessionLogBtn.onclick = () => {
@@ -5217,8 +4417,6 @@
 
         function clearAltarChat() {
             saveAltarChat([]);
-            const nowIso = new Date().toISOString();
-            updateChannelRecord(ACTIVE_CHANNEL_ID, { lastMessageAt: nowIso, lastViewedAt: nowIso, updatedAt: nowIso });
             unreadChatByPeer.delete('altar');
             refreshUnreadChat();
             if (isPeerChatOpen()) {
@@ -5234,7 +4432,6 @@
                 return;
             }
             mergeAltarChatHistory(entries);
-            markChannelViewed();
             showUiNotice(`Imported ${entries.length} altar chat entr${entries.length === 1 ? 'y' : 'ies'}.`);
         }
 
@@ -5395,10 +4592,7 @@
                 status: 'pending'
             });
             saveAltarChat(chatHistory);
-            const activityIso = new Date(now).toISOString();
-            updateChannelRecord(ACTIVE_CHANNEL_ID, { lastMessageAt: activityIso, lastViewedAt: activityIso, updatedAt: activityIso });
             renderPeerChat();
-            renderChannelControls();
             lastChatSentAt = now;
             const sent = sendRelayMessage({
                 type: 'chat-room',
@@ -5416,21 +4610,12 @@
             setAttachmentAlert('');
             updateChatAttachmentUI();
         };
-        const peerChatInput = document.getElementById('peer-chat-input');
-        if (peerChatInput) {
-            const resizePeerChatInput = () => {
-                peerChatInput.style.height = 'auto';
-                peerChatInput.style.height = `${Math.min(peerChatInput.scrollHeight, 180)}px`;
-            };
-            peerChatInput.addEventListener('input', resizePeerChatInput);
-            peerChatInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    document.getElementById('peer-chat-send').click();
-                }
-            });
-            resizePeerChatInput();
-        }
+        document.getElementById('peer-chat-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('peer-chat-send').click();
+            }
+        });
         document.getElementById('back-to-grid').onclick=()=>{
             document.getElementById('secrets-detail-view').classList.add('hidden');
             document.getElementById('secrets-grid-view').classList.remove('hidden');
@@ -5557,10 +4742,21 @@
             recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
         }
 
+        if (updateNameBtn && localNameInput) {
+            updateNameBtn.onclick = () => {
+                updateLocalName(localNameInput.value);
+                requestAutoReload('name-update');
+            };
+            localNameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateNameBtn.click();
+                }
+            });
+        }
+
         updateLocalProfileUI();
         updateLocalChatNames();
-        renderChannelControls();
-        updateChannelShareModal();
         appendDeviceLog('session', 'Session initialized.');
 
         connectRelay();
@@ -6007,13 +5203,13 @@
             if (customWordsInput) {
                 customWordsInput.value = selectedWords.join(', ');
                 if (persist) {
-                    localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, customWordsInput.value);
+                    localStorage.setItem('garden_words', customWordsInput.value);
                 }
             }
         }
 
         const cBox=document.getElementById('custom-words');
-        cBox.value=localStorage.getItem(CUSTOM_WORDS_STORAGE_KEY)||"";
+        cBox.value=localStorage.getItem('garden_words')||"";
         applyCustomWordsSelection(cBox.value, { persist: false });
         cBox.onblur=e=>{
             applyCustomWordsSelection(e.target.value);

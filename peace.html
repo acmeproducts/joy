@@ -107,34 +107,45 @@
             </div>
             <div class="space-y-2">
                 <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
-                    <span>Peers</span>
+                    <span>Live Sessions</span>
                     <button class="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition" id="session-log-btn">
                         <span class="material-symbols-outlined text-base">receipt_long</span>
                         Log
                     </button>
                 </div>
+                <p class="text-[11px] text-gray-400">Everyone listed here shares the same altar chat.</p>
                 <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-gray-600"></ul>
             </div>
         </div>
     </aside>
 
-    <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(360px,90vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+    <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3">
             <div class="min-w-0">
-                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Peer</div>
-                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Connected: --</div>
+                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Altar Chat</div>
+                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Live sessions: --</div>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 shrink-0">
+                <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
+                <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
+                <button id="peer-chat-import-trigger" class="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition" title="Import altar chat">Import</button>
+                <button id="peer-chat-clear" class="px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition" title="Clear altar chat">Clear</button>
                 <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat">
                     <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
             </div>
         </div>
-        <div class="px-4 py-3 border-b border-gray-100">
-            <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">You</div>
-            <div class="flex items-center gap-2">
-                <input id="peer-chat-local-name" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Local name">
-                <button id="peer-chat-local-name-update" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+        <div class="px-4 py-3 border-b border-gray-100 space-y-3">
+            <div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">You</div>
+                <div class="flex items-center gap-2">
+                    <input id="peer-chat-local-name" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Local name">
+                    <button id="peer-chat-local-name-update" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+                </div>
+            </div>
+            <div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Participants</div>
+                <div id="peer-chat-members" class="flex flex-wrap gap-2 text-[11px] text-gray-600"></div>
             </div>
         </div>
         <div class="px-4 py-3 space-y-3">
@@ -163,6 +174,7 @@
                     <span class="material-symbols-outlined text-base">attach_file</span>
                 </button>
                 <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
+                <input id="peer-chat-import-input" type="file" accept="application/json" class="hidden">
                 <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
                 <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
             </div>
@@ -1349,6 +1361,7 @@
         const peerChatWindow = document.getElementById('peer-chat-window');
         const chatLocalNameInput = document.getElementById('peer-chat-local-name');
         const chatLocalNameUpdate = document.getElementById('peer-chat-local-name-update');
+        const peerChatMembers = document.getElementById('peer-chat-members');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1359,6 +1372,8 @@
         let uiNoticeTimer = null;
         let lastChatSentAt = 0;
         const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
+        const ALTAR_CHAT_STORAGE_KEY = `relax_altar_chat_${RELAY_SESSION_ID}`;
+        const ALTAR_CHAT_MAX_ENTRIES = 300;
         const CHAT_MAX_LENGTH = 800;
         const CHAT_COOLDOWN_MS = 1000;
         const MAX_CHAT_ATTACHMENTS = 3;
@@ -1448,6 +1463,7 @@
         const peerPresence = new Map();
         const peerConnectionHistory = new Map();
         const peerChatHistory = new Map();
+        let altarChatHistory = [];
         let activePeerModalId = null;
         let presenceTimer = null;
         let presenceRenderTimer = null;
@@ -1538,6 +1554,60 @@
             try {
                 localStorage.setItem(getPeerChatKey(peerId), JSON.stringify(payload.slice(-200)));
             } catch (_) {}
+        }
+
+        function loadAltarChat() {
+            if (altarChatHistory.length) return altarChatHistory;
+            let history = [];
+            try {
+                const raw = localStorage.getItem(ALTAR_CHAT_STORAGE_KEY);
+                history = raw ? JSON.parse(raw) : [];
+            } catch (_) {
+                history = [];
+            }
+            altarChatHistory = Array.isArray(history)
+                ? history.map(normalizeChatEntry).filter(Boolean).slice(-ALTAR_CHAT_MAX_ENTRIES)
+                : [];
+            return altarChatHistory;
+        }
+
+        function saveAltarChat(history) {
+            altarChatHistory = Array.isArray(history)
+                ? history.map(normalizeChatEntry).filter(Boolean).slice(-ALTAR_CHAT_MAX_ENTRIES)
+                : [];
+            try {
+                localStorage.setItem(ALTAR_CHAT_STORAGE_KEY, JSON.stringify(altarChatHistory));
+            } catch (_) {}
+        }
+
+        function getLatestAltarChatTimestamp() {
+            const chatHistory = loadAltarChat();
+            if (!chatHistory.length) return 0;
+            return Math.max(...chatHistory.map(entry => entry.ts || 0));
+        }
+
+        function mergeAltarChatHistory(incoming) {
+            if (!Array.isArray(incoming) || incoming.length === 0) return;
+            const existing = new Map(loadAltarChat().map(entry => [entry.id, entry]));
+            incoming.map(normalizeChatEntry).filter(Boolean).forEach(entry => {
+                const current = existing.get(entry.id);
+                if (!current) {
+                    existing.set(entry.id, entry);
+                    return;
+                }
+                if (entry.deleted && !current.deleted) {
+                    existing.set(entry.id, { ...current, ...entry, deleted: true });
+                }
+            });
+            const merged = Array.from(existing.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0)).slice(-ALTAR_CHAT_MAX_ENTRIES);
+            saveAltarChat(merged);
+            if (isPeerChatOpen()) {
+                renderPeerChat();
+            }
+        }
+
+        function requestAltarChatSync() {
+            sendRelayMessage({ type: 'chat-room-sync-request', since: getLatestAltarChatTimestamp() });
         }
 
         function formatTimestamp(ts) {
@@ -1649,25 +1719,20 @@
         }
 
         function updateLocalChatNames() {
-            const peerIds = getStoredPeerChatIds();
             let changed = false;
-            peerIds.forEach(peerId => {
-                const chatHistory = loadPeerChat(peerId);
-                let peerChanged = false;
-                chatHistory.forEach(entry => {
-                    if (entry.from === 'local' && entry.name !== joinState.name) {
-                        entry.name = joinState.name;
-                        peerChanged = true;
-                    }
-                });
-                if (peerChanged) {
-                    savePeerChat(peerId, chatHistory);
-                    if (activePeerModalId === peerId) {
-                        renderPeerChat(peerId);
-                    }
+            const altarHistory = loadAltarChat();
+            altarHistory.forEach(entry => {
+                if (entry.from === 'local' && entry.name !== joinState.name) {
+                    entry.name = joinState.name;
                     changed = true;
                 }
             });
+            if (changed) {
+                saveAltarChat(altarHistory);
+                if (isPeerChatOpen()) {
+                    renderPeerChat();
+                }
+            }
             return changed;
         }
 
@@ -1803,6 +1868,13 @@
                 if (!translated) return;
                 entry.translations = entry.translations || {};
                 entry.translations[target] = translated;
+                if (peerId === 'altar') {
+                    saveAltarChat(chatHistory);
+                    if (isPeerChatOpen()) {
+                        renderPeerChat();
+                    }
+                    return;
+                }
                 savePeerChat(peerId, chatHistory);
                 if (activePeerModalId === peerId) {
                     renderPeerChat(peerId);
@@ -1941,10 +2013,17 @@
 
         function removeChatAttachment(peerId, entryIndex, attachmentIndex) {
             if (!peerId && peerId !== 0) return;
-            const chatHistory = loadPeerChat(peerId);
+            const chatHistory = peerId === 'altar' ? loadAltarChat() : loadPeerChat(peerId);
             const entry = chatHistory[entryIndex];
             if (!entry || !Array.isArray(entry.attachments)) return;
             entry.attachments.splice(attachmentIndex, 1);
+            if (peerId === 'altar') {
+                saveAltarChat(chatHistory);
+                if (isPeerChatOpen()) {
+                    renderPeerChat();
+                }
+                return;
+            }
             savePeerChat(peerId, chatHistory);
             if (activePeerModalId === peerId) {
                 renderPeerChat(peerId);
@@ -2088,51 +2167,40 @@
             return peerChatWindow && !peerChatWindow.classList.contains('hidden');
         }
 
-        function openPeerModal(peerId) {
-            const peer = peerPresence.get(peerId);
-            if (!peer) return;
-            activePeerModalId = peerId;
-            const connectedAt = peer.connectedAt || peer.lastSeen || Date.now();
-            const duration = (peer.state === 'suspended' && peer.disconnectedAt)
-                ? peer.disconnectedAt - connectedAt
-                : Date.now() - connectedAt;
-            const name = peer.name || 'Unnamed device';
+        function renderPeerChatMembers() {
+            if (!peerChatMembers) return;
+            const chatMeta = document.getElementById('peer-chat-window-meta');
+            const members = [
+                { id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: 'active' },
+                ...Array.from(peerPresence.values())
+                    .filter(peer => peer.state !== 'suspended' && peer.active !== false)
+                    .sort((a, b) => (a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device'))
+            ];
+            peerChatMembers.innerHTML = '';
+            if (chatMeta) {
+                chatMeta.textContent = `Live sessions: ${members.length} • Messages saved on this altar`;
+            }
+            members.forEach(member => {
+                const chip = document.createElement('span');
+                chip.className = `inline-flex items-center gap-2 px-2.5 py-1 rounded-full ${member.isLocal ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-700'}`;
+                chip.innerHTML = `<span class="w-2 h-2 rounded-full ${member.isLocal || member.state === 'active' ? 'bg-emerald-400' : 'bg-amber-400'}"></span><span>${member.name || 'Unnamed device'}${member.isLocal ? ' (You)' : ''}</span>`;
+                peerChatMembers.appendChild(chip);
+            });
+        }
+
+        function openPeerModal(peerId = 'altar') {
+            activePeerModalId = peerId || 'altar';
+            const livePeers = Array.from(peerPresence.values()).filter(peer => peer.state !== 'suspended' && peer.active !== false);
             const chatName = document.getElementById('peer-chat-window-name');
             const chatMeta = document.getElementById('peer-chat-window-meta');
-            if (chatName) chatName.textContent = name;
+            if (chatName) chatName.textContent = 'Altar Chat';
             if (chatMeta) {
-                chatMeta.textContent = `Connected: ${formatTimestamp(connectedAt)} • ${formatDuration(duration)}`;
+                chatMeta.textContent = `Live sessions: ${livePeers.length + 1} • Messages saved on this altar`;
             }
             showPeerChatWindow();
-
-            document.getElementById('peer-modal-name').textContent = name;
-            document.getElementById('peer-modal-meta').textContent = `Connected: ${formatTimestamp(connectedAt)}`;
-            document.getElementById('peer-connected-at').textContent = formatTimestamp(connectedAt);
-            document.getElementById('peer-connected-duration').textContent = formatDuration(duration);
-
-            const history = loadPeerHistory(peerId);
-            const historyList = document.getElementById('peer-connection-history');
-            historyList.innerHTML = '';
-            if (history.length === 0) {
-                const item = document.createElement('li');
-                item.className = 'text-[11px] text-gray-400';
-                item.textContent = 'No prior connections yet.';
-                historyList.appendChild(item);
-            } else {
-                history.slice(-5).reverse().forEach(entry => {
-                    const item = document.createElement('li');
-                    item.className = 'bg-white border border-gray-200 rounded-lg p-2';
-                    const endText = entry.disconnectedAt ? formatTimestamp(entry.disconnectedAt) : 'Active';
-                    item.innerHTML = `<div><strong>Start:</strong> ${formatTimestamp(entry.connectedAt)}</div>
-                        <div><strong>End:</strong> ${endText}</div>
-                        <div><strong>Duration:</strong> ${formatDuration(entry.durationMs || (entry.disconnectedAt ? entry.disconnectedAt - entry.connectedAt : 0))}</div>`;
-                    historyList.appendChild(item);
-                });
-            }
-
-            renderPeerChat(peerId);
-            clearUnreadForPeer(peerId);
-            sendChatReadReceipt(peerId);
+            renderPeerChatMembers();
+            renderPeerChat();
+            clearUnreadChat();
         }
 
         function closePeerModal() {
@@ -2140,10 +2208,18 @@
             closePeerChatWindow();
         }
 
-        function renderPeerChat(peerId) {
-            const chatHistory = loadPeerChat(peerId);
+        function renderPeerChat() {
+            const peerId = 'altar';
+            const chatHistory = loadAltarChat();
             const chatBox = document.getElementById('peer-chat-history');
             chatBox.innerHTML = '';
+            if (!chatHistory.length) {
+                const empty = document.createElement('div');
+                empty.className = 'text-[11px] text-gray-400 text-center py-8';
+                empty.textContent = 'Altar chat will stay here on this device. Invite anyone live in the room to begin.';
+                chatBox.appendChild(empty);
+                return;
+            }
             const target = chatTranslationTarget;
             const displayMode = chatTranslationDisplay || 'dual';
             chatHistory.forEach((entry, entryIndex) => {
@@ -2182,7 +2258,7 @@
                     deleteBtn.className = 'text-gray-300 hover:text-rose-400 text-[14px] leading-none';
                     deleteBtn.textContent = '✕';
                     deleteBtn.title = 'Delete post';
-                    deleteBtn.onclick = () => deleteChatEntry(peerId, entry.id);
+                    deleteBtn.onclick = () => deleteChatEntry(entry.id);
                     headerLine.appendChild(deleteBtn);
                 }
                 const messageLine = document.createElement('div');
@@ -2244,9 +2320,9 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        function deleteChatEntry(peerId, entryId) {
-            if (!peerId || !entryId) return;
-            const chatHistory = loadPeerChat(peerId);
+        function deleteChatEntry(entryId) {
+            if (!entryId) return;
+            const chatHistory = loadAltarChat();
             const entry = chatHistory.find(item => item.id === entryId);
             if (!entry || entry.deleted) return;
             entry.deleted = true;
@@ -2254,11 +2330,11 @@
             entry.attachments = [];
             entry.pending = false;
             entry.status = entry.status || 'sent';
-            savePeerChat(peerId, chatHistory);
-            if (activePeerModalId === peerId) {
-                renderPeerChat(peerId);
+            saveAltarChat(chatHistory);
+            if (isPeerChatOpen()) {
+                renderPeerChat();
             }
-            sendRelayMessage({ type: 'delete', to: peerId, id: entryId });
+            sendRelayMessage({ type: 'chat-room-delete', id: entryId });
         }
 
         function recordPeerConnectionStart(peerId, ts) {
@@ -3265,56 +3341,56 @@
             sessionStatusList.innerHTML = '';
             updateSessionBeaconIndicator();
 
-            if (peers.length === 0) {
-                const emptyItem = document.createElement('li');
-                emptyItem.className = 'text-[11px] text-gray-500';
-                emptyItem.textContent = 'No peers yet.';
-                sessionStatusList.appendChild(emptyItem);
-                return;
-            }
-
-            peers
-                .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
-                .forEach(peer => {
-                    const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
-                    if (isStale) {
-                        if (peer.state !== 'suspended') {
-                            peer.state = 'suspended';
-                            peer.disconnectedAt = now;
-                            recordPeerConnectionEnd(peer.id, now);
-                            queuePresencePulse('leave');
-                            appendDeviceLog('peer-timeout', `Peer ${peer.name || peer.id} timed out.`);
-                        }
-                        peer.active = false;
-                    } else {
-                        peer.active = peer.state !== 'suspended';
+            peers.forEach(peer => {
+                const isStale = now - peer.lastSeen > RELAY_PRESENCE_STALE_MS;
+                if (isStale) {
+                    if (peer.state !== 'suspended') {
+                        peer.state = 'suspended';
+                        peer.disconnectedAt = now;
+                        recordPeerConnectionEnd(peer.id, now);
+                        queuePresencePulse('leave');
+                        appendDeviceLog('peer-timeout', `Peer ${peer.name || peer.id} timed out.`);
                     }
-                    const status = isStale ? 'suspended' : (peer.state || 'active');
-                    const dotClass = status === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
-                    const displayName = peer.name?.trim() || 'Unnamed device';
+                    peer.active = false;
+                } else {
+                    peer.active = peer.state !== 'suspended';
+                }
+            });
+
+            const members = [
+                { id: RELAY_CLIENT_ID, name: joinState.name || 'You', state: 'active', isLocal: true },
+                ...peers.filter(peer => peer.state !== 'suspended' && peer.active !== false)
+            ];
+
+            members
+                .sort((a, b) => ((a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device')))
+                .forEach(member => {
+                    const dotClass = member.state === 'active' ? 'bg-emerald-400' : 'bg-amber-400';
+                    const displayName = member.name?.trim() || 'Unnamed device';
 
                     const row = document.createElement('li');
                     row.className = 'flex items-center';
 
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 transition text-xs text-gray-700';
-                    button.title = 'Open chat';
+                    button.className = `flex items-center gap-2 px-3 py-1.5 rounded-full transition text-xs ${member.isLocal ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`;
+                    button.title = 'Open altar chat';
                     button.addEventListener('click', () => {
-                        openPeerModal(peer.id);
+                        openPeerModal('altar');
                     });
 
                     const dot = document.createElement('span');
                     dot.className = `w-2 h-2 rounded-full ${dotClass}`;
                     const nameSpan = document.createElement('span');
-                    nameSpan.className = 'font-medium truncate max-w-[120px]';
-                    nameSpan.textContent = displayName;
+                    nameSpan.className = 'font-medium truncate max-w-[140px]';
+                    nameSpan.textContent = `${displayName}${member.isLocal ? ' (You)' : ''}`;
 
                     button.appendChild(dot);
                     button.appendChild(nameSpan);
                     row.appendChild(button);
                     sessionStatusList.appendChild(row);
                 });
+            renderPeerChatMembers();
             if (sessionLogOpen) {
                 renderSessionLog();
             }
@@ -3345,15 +3421,16 @@
 
         function updateSessionBeaconIndicator() {
             if (!sessionBeaconDot) return;
-            const peerCount = peerPresence.size;
-            const hasPeers = peerCount > 0;
+            const livePeerCount = Array.from(peerPresence.values()).filter(peer => peer.state !== 'suspended' && peer.active !== false).length;
+            const totalLiveSessions = livePeerCount + 1;
+            const hasPeers = livePeerCount > 0;
             const baseClasses = 'w-8 h-8 rounded-full border-2 flex items-center justify-center text-[11px] font-semibold leading-none';
             const colorClasses = hasPeers
                 ? 'bg-emerald-400 text-emerald-950 border-transparent'
                 : 'bg-slate-500/60 text-white/70 border-transparent';
             const alertClasses = unreadChatCount > 0 ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-black/30' : '';
             sessionBeaconDot.className = `${baseClasses} ${colorClasses} ${alertClasses}`;
-            sessionBeaconDot.textContent = String(peerCount);
+            sessionBeaconDot.textContent = String(totalLiveSessions);
         }
 
         function touchPeerPresence(message, source = 'activity') {
@@ -3425,7 +3502,7 @@
                     queuePresencePulse('join');
                     appendDeviceLog('peer-join', `Peer ${incomingName || message.from} joined.`);
                     sendSnapshot('peer-join', message.from);
-                    requestChatSync(message.from);
+                    requestAltarChatSync();
                 } else if (wasSuspended && message.state === 'active') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.connectedAt = now;
@@ -3434,7 +3511,7 @@
                     queuePresencePulse('join');
                     appendDeviceLog('peer-return', `Peer ${incomingName || message.from} returned.`);
                     sendSnapshot('peer-return', message.from);
-                    requestChatSync(message.from);
+                    requestAltarChatSync();
                 } else if (message.state === 'suspended' && existing.state !== 'suspended') {
                     const refreshed = peerPresence.get(message.from);
                     refreshed.disconnectedAt = now;
@@ -3490,9 +3567,7 @@
                 return;
             }
 
-            if (message.type === 'chat') {
-                const peerId = message.from;
-                const chatHistory = loadPeerChat(peerId);
+            if (message.type === 'chat-room') {
                 const attachments = Array.isArray(message.attachments)
                     ? message.attachments
                         .map(normalizeChatAttachment)
@@ -3502,76 +3577,48 @@
                 const entry = normalizeChatEntry({
                     id: message.id || createChatEntryId(),
                     from: 'peer',
-                    name: message.name || peerPresence.get(peerId)?.name || 'Peer',
+                    name: message.name || peerPresence.get(message.from)?.name || 'Peer',
                     message: message.text || '',
                     attachments,
                     ts: message.ts || Date.now()
                 });
-                chatHistory.push(entry);
-                savePeerChat(peerId, chatHistory);
-                if (entry?.id) {
-                    sendRelayMessage({ type: 'chat-ack', to: peerId, id: entry.id });
-                }
-                const isActivePeer = activePeerModalId === peerId;
-                if (isActivePeer && isPeerChatOpen()) {
-                    renderPeerChat(peerId);
-                    clearUnreadForPeer(peerId);
-                    if (entry?.id) {
-                        sendRelayMessage({ type: 'chat-read', to: peerId, id: entry.id });
-                    }
+                mergeAltarChatHistory([entry]);
+                if (isPeerChatOpen()) {
+                    renderPeerChat();
+                    clearUnreadChat();
                 } else {
-                    incrementUnreadChat(peerId);
+                    incrementUnreadChat('altar');
                     if (shouldAlertChat()) {
                         notifyChat(entry);
                     }
                 }
                 return;
             }
-            if (message.type === 'chat-ack') {
-                updateChatEntryStatus(message.from, message.id, 'ack');
-                return;
-            }
-            if (message.type === 'chat-read') {
-                updateChatEntryStatus(message.from, message.id, 'read');
-                return;
-            }
-            if (message.type === 'delete') {
-                const peerId = message.from;
-                const chatHistory = loadPeerChat(peerId);
+            if (message.type === 'chat-room-delete') {
+                const chatHistory = loadAltarChat();
                 const entry = chatHistory.find(item => item.id === message.id);
                 if (entry && !entry.deleted) {
                     entry.deleted = true;
                     entry.message = 'Post deleted.';
                     entry.attachments = [];
                     entry.pending = false;
-                    savePeerChat(peerId, chatHistory);
-                    if (activePeerModalId === peerId) {
-                        renderPeerChat(peerId);
+                    saveAltarChat(chatHistory);
+                    if (isPeerChatOpen()) {
+                        renderPeerChat();
                     }
                 }
                 return;
             }
-            if (message.type === 'sync-request') {
-                const peerId = message.from;
+            if (message.type === 'chat-room-sync-request') {
                 const since = Number(message.since) || 0;
-                const history = loadPeerChat(peerId).filter(entry => entry.ts > since).slice(-50);
-                sendRelayMessage({ type: 'sync-response', to: peerId, target: message.from, history });
+                const history = loadAltarChat().filter(entry => (entry.ts || 0) > since).slice(-100);
+                sendRelayMessage({ type: 'chat-room-sync-response', to: message.from, target: message.from, history });
                 return;
             }
-            if (message.type === 'sync-response') {
+            if (message.type === 'chat-room-sync-response') {
                 if (message.target !== RELAY_CLIENT_ID) return;
                 if (!Array.isArray(message.history) || message.history.length === 0) return;
-                const incoming = message.history.map(entry => {
-                    const normalized = normalizeChatEntry(entry);
-                    if (!normalized) return null;
-                    if (normalized.from === 'local') {
-                        normalized.from = 'peer';
-                    } else if (normalized.from === 'peer') {
-                        normalized.from = 'local';
-                    }
-                    return normalized;
-                }).filter(Boolean);
-                mergeChatHistory(message.from, incoming);
+                mergeAltarChatHistory(message.history);
                 return;
             }
 
@@ -3615,13 +3662,22 @@
                 lastRelayActivityAt = message.ts;
                 relayState.ws.send(JSON.stringify(message));
                 updateSyncIndicator('live');
-                if (message.type === 'chat' && message.id && message.to) {
-                    markChatEntrySent(message.to, message.id);
+                if (message.type === 'chat-room' && message.id) {
+                    const chatHistory = loadAltarChat();
+                    const entry = chatHistory.find(item => item.id === message.id);
+                    if (entry && entry.from === 'local') {
+                        entry.pending = false;
+                        entry.status = 'sent';
+                        saveAltarChat(chatHistory);
+                        if (isPeerChatOpen()) {
+                            renderPeerChat();
+                        }
+                    }
                 }
                 return true;
             }
             const isTransient = payload.transient
-                || ['tap', 'drag', 'chat', 'presence', 'ping', 'hello', 'reattach', 'leave'].includes(payload.type);
+                || ['tap', 'drag', 'chat-room', 'presence', 'ping', 'hello', 'reattach', 'leave'].includes(payload.type);
             if (isTransient) {
                 updateSyncIndicator('connecting');
                 if (payload.type === 'tap') {
@@ -3712,7 +3768,7 @@
                 sendRelayMessage({ type: 'reattach', transient: true });
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
                 fetchRelayBackfill('reconnect');
-                Array.from(peerPresence.keys()).forEach(peerId => requestChatSync(peerId));
+                requestAltarChatSync();
                 flushPendingTransientEvents();
                 startPresenceUpdates();
                 startRelayHeartbeat();
@@ -3935,13 +3991,8 @@
                     closePeerModal();
                     return;
                 }
-                const peerId = activePeerModalId || getPreferredPeerId();
-                if (peerId) {
-                    openPeerModal(peerId);
-                    clearUnreadChat();
-                } else {
-                    showUiNotice('No peers connected yet.');
-                }
+                openPeerModal('altar');
+                clearUnreadChat();
             };
         }
         const closeSessionPanelBtn = document.getElementById('close-session-panel');
@@ -4194,6 +4245,11 @@
         }
         const chatAttachmentButton = document.getElementById('peer-chat-attach');
         const chatAttachmentInput = document.getElementById('peer-chat-attachments-input');
+        const chatImportInput = document.getElementById('peer-chat-import-input');
+        const chatCopyButton = document.getElementById('peer-chat-copy');
+        const chatExportButton = document.getElementById('peer-chat-export');
+        const chatImportTrigger = document.getElementById('peer-chat-import-trigger');
+        const chatClearButton = document.getElementById('peer-chat-clear');
         const chatAttachmentStatus = document.getElementById('peer-chat-attachments');
         const chatAttachmentClear = document.getElementById('peer-chat-attachments-clear');
         const chatAttachmentAlert = document.getElementById('peer-chat-attachments-alert');
@@ -4257,6 +4313,61 @@
                     chatAttachmentClear.classList.add('hidden');
                 }
             }
+        }
+
+        function buildAltarChatExportPayload() {
+            return {
+                session: RELAY_SESSION_ID,
+                exportedAt: new Date().toISOString(),
+                entries: loadAltarChat()
+            };
+        }
+
+        async function copyAltarChat() {
+            const text = loadAltarChat().map(entry => `[${formatTimestamp(entry.ts)}] ${entry.name || (entry.from === 'local' ? joinState.name : 'Peer')}: ${entry.deleted ? 'Post deleted.' : (entry.message || '')}`).join('\n');
+            if (!text) {
+                showUiNotice('No altar chat to copy yet.');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(text);
+                showUiNotice('Altar chat copied.');
+            } catch (_) {
+                showUiNotice('Copy failed.');
+            }
+        }
+
+        function exportAltarChat() {
+            const blob = new Blob([JSON.stringify(buildAltarChatExportPayload(), null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `altar-chat-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showUiNotice('Altar chat exported.');
+        }
+
+        function clearAltarChat() {
+            saveAltarChat([]);
+            unreadChatByPeer.delete('altar');
+            refreshUnreadChat();
+            if (isPeerChatOpen()) {
+                renderPeerChat();
+            }
+            showUiNotice('Altar chat cleared.');
+        }
+
+        function importAltarChatPayload(payload) {
+            const entries = Array.isArray(payload) ? payload : payload?.entries;
+            if (!Array.isArray(entries)) {
+                showUiNotice('Import file is not valid altar chat JSON.');
+                return;
+            }
+            mergeAltarChatHistory(entries);
+            showUiNotice(`Imported ${entries.length} altar chat entr${entries.length === 1 ? 'y' : 'ies'}.`);
         }
 
         function getFileExtension(filename) {
@@ -4344,6 +4455,41 @@
                 updateChatAttachmentUI();
             };
         }
+
+        if (chatCopyButton) {
+            chatCopyButton.onclick = () => {
+                copyAltarChat();
+            };
+        }
+        if (chatExportButton) {
+            chatExportButton.onclick = () => {
+                exportAltarChat();
+            };
+        }
+        if (chatImportTrigger && chatImportInput) {
+            bindFilePickerGuards(chatImportTrigger);
+            bindFilePickerGuards(chatImportInput);
+            chatImportTrigger.onclick = () => {
+                markFilePickerActive();
+                chatImportInput.click();
+            };
+            chatImportInput.onchange = async () => {
+                const file = chatImportInput.files?.[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    importAltarChatPayload(JSON.parse(text));
+                } catch (_) {
+                    showUiNotice('Import failed.');
+                }
+                chatImportInput.value = '';
+            };
+        }
+        if (chatClearButton) {
+            chatClearButton.onclick = () => {
+                clearAltarChat();
+            };
+        }
         if (chatAttachmentClear) {
             chatAttachmentClear.onclick = () => {
                 pendingChatAttachments = [];
@@ -4366,7 +4512,7 @@
                 showUiNotice('Slow down — 1 message per second.');
                 return;
             }
-            const chatHistory = loadPeerChat(activePeerModalId);
+            const chatHistory = loadAltarChat();
             const attachments = pendingChatAttachments.slice();
             const entryId = createChatEntryId();
             chatHistory.push({
@@ -4379,12 +4525,11 @@
                 pending: true,
                 status: 'pending'
             });
-            savePeerChat(activePeerModalId, chatHistory);
-            renderPeerChat(activePeerModalId);
+            saveAltarChat(chatHistory);
+            renderPeerChat();
             lastChatSentAt = now;
             const sent = sendRelayMessage({
-                type: 'chat',
-                to: activePeerModalId,
+                type: 'chat-room',
                 id: entryId,
                 text,
                 attachments,
@@ -4392,7 +4537,7 @@
             });
             noteLocalPresenceActivity('chat');
             if (!sent) {
-                showUiNotice('Offline — message queued.');
+                showUiNotice('Offline — message queued locally until live sync returns.');
             }
             input.value = '';
             pendingChatAttachments = [];

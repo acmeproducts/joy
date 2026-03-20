@@ -40,7 +40,9 @@
         pre { white-space: pre-wrap; word-wrap: break-word; }
         
         #custom-message-container { pointer-events: auto; }
-        #custom-message-container a { color: #8ec5fc; text-decoration: underline; }
+        #custom-message-container a,
+        #peer-chat-history a { color: #2563eb; text-decoration: underline; }
+        #peer-chat-window.dragging { user-select: none; }
     </style>
 </head>
 <body class="overflow-hidden h-screen w-screen font-sans text-slate-800">
@@ -119,12 +121,9 @@
         </div>
     </aside>
 
-    <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3">
-            <div class="min-w-0">
-                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Altar Chat</div>
-                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Live sessions: --</div>
-            </div>
+    <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
+        <div id="peer-chat-window-handle" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 cursor-move touch-none">
+            <div class="min-w-0 flex-1"></div>
             <div class="flex items-center gap-1 shrink-0">
                 <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
                 <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
@@ -1848,8 +1847,17 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function normalizeChatMessage(text) {
+            return (text || '').replace(/\/\/([^\n/][^\n]*?)\/\/((?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:[^\s]*)?)/g, (_, label, url) => {
+                const cleanLabel = label.trim();
+                const cleanUrl = url.trim();
+                const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
+                return cleanLabel ? `[${cleanLabel}](${normalizedUrl})` : _;
+            });
+        }
+
         function renderMarkdown(text) {
-            let html = escapeHtml(text || '');
+            let html = escapeHtml(normalizeChatMessage(text || ''));
             html = html.replace(/```([\s\S]*?)```/g, (_, code) => `<pre class="bg-gray-900 text-gray-100 rounded p-2 text-[11px] overflow-auto"><code>${code}</code></pre>`);
             html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>');
             html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -2155,12 +2163,80 @@
             return !hasNonAscii;
         }
 
+        function setPeerChatWindowPosition(left, top) {
+            if (!peerChatWindow) return;
+            const margin = 16;
+            const maxLeft = Math.max(margin, window.innerWidth - peerChatWindow.offsetWidth - margin);
+            const maxTop = Math.max(margin, window.innerHeight - peerChatWindow.offsetHeight - margin);
+            const clampedLeft = Math.min(Math.max(left, margin), maxLeft);
+            const clampedTop = Math.min(Math.max(top, margin), maxTop);
+            peerChatWindow.style.left = `${clampedLeft}px`;
+            peerChatWindow.style.top = `${clampedTop}px`;
+            peerChatWindow.style.right = 'auto';
+            peerChatWindow.style.transform = 'none';
+            peerChatWindow.dataset.positioned = 'true';
+        }
+
+        function initializePeerChatWindowPosition(force = false) {
+            if (!peerChatWindow) return;
+            if (!force && peerChatWindow.dataset.positioned === 'true') return;
+            const top = 16;
+            const left = Math.max(16, (window.innerWidth - peerChatWindow.offsetWidth) / 2);
+            setPeerChatWindowPosition(left, top);
+        }
+
         function showPeerChatWindow() {
-            if (peerChatWindow) peerChatWindow.classList.remove('hidden');
+            if (!peerChatWindow) return;
+            peerChatWindow.classList.remove('hidden');
+            initializePeerChatWindowPosition();
         }
 
         function closePeerChatWindow() {
             if (peerChatWindow) peerChatWindow.classList.add('hidden');
+        }
+
+        function bindPeerChatWindowDrag() {
+            if (!peerChatWindow) return;
+            const handle = document.getElementById('peer-chat-window-handle');
+            if (!handle) return;
+            let dragState = null;
+
+            handle.addEventListener('pointerdown', (event) => {
+                if (event.target.closest('button, input, select, textarea, a')) return;
+                initializePeerChatWindowPosition();
+                const rect = peerChatWindow.getBoundingClientRect();
+                dragState = {
+                    offsetX: event.clientX - rect.left,
+                    offsetY: event.clientY - rect.top,
+                    pointerId: event.pointerId
+                };
+                peerChatWindow.classList.add('dragging');
+                handle.setPointerCapture(event.pointerId);
+                event.preventDefault();
+            });
+
+            handle.addEventListener('pointermove', (event) => {
+                if (!dragState || event.pointerId !== dragState.pointerId) return;
+                setPeerChatWindowPosition(event.clientX - dragState.offsetX, event.clientY - dragState.offsetY);
+            });
+
+            const stopDragging = (event) => {
+                if (!dragState || (event && event.pointerId !== dragState.pointerId)) return;
+                try {
+                    handle.releasePointerCapture(dragState.pointerId);
+                } catch (_) {}
+                dragState = null;
+                peerChatWindow.classList.remove('dragging');
+            };
+
+            handle.addEventListener('pointerup', stopDragging);
+            handle.addEventListener('pointercancel', stopDragging);
+            window.addEventListener('resize', () => {
+                if (peerChatWindow.classList.contains('hidden')) return;
+                initializePeerChatWindowPosition(peerChatWindow.dataset.positioned !== 'true');
+                const rect = peerChatWindow.getBoundingClientRect();
+                setPeerChatWindowPosition(rect.left, rect.top);
+            });
         }
 
         function isPeerChatOpen() {
@@ -2169,7 +2245,6 @@
 
         function renderPeerChatMembers() {
             if (!peerChatMembers) return;
-            const chatMeta = document.getElementById('peer-chat-window-meta');
             const members = [
                 { id: RELAY_CLIENT_ID, name: joinState.name || 'You', isLocal: true, state: 'active' },
                 ...Array.from(peerPresence.values())
@@ -2177,9 +2252,6 @@
                     .sort((a, b) => (a.name || 'Unnamed device').localeCompare(b.name || 'Unnamed device'))
             ];
             peerChatMembers.innerHTML = '';
-            if (chatMeta) {
-                chatMeta.textContent = `Live sessions: ${members.length} • Messages saved on this altar`;
-            }
             members.forEach(member => {
                 const chip = document.createElement('span');
                 chip.className = `inline-flex items-center gap-2 px-2.5 py-1 rounded-full ${member.isLocal ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-700'}`;
@@ -2190,13 +2262,6 @@
 
         function openPeerModal(peerId = 'altar') {
             activePeerModalId = peerId || 'altar';
-            const livePeers = Array.from(peerPresence.values()).filter(peer => peer.state !== 'suspended' && peer.active !== false);
-            const chatName = document.getElementById('peer-chat-window-name');
-            const chatMeta = document.getElementById('peer-chat-window-meta');
-            if (chatName) chatName.textContent = 'Altar Chat';
-            if (chatMeta) {
-                chatMeta.textContent = `Live sessions: ${livePeers.length + 1} • Messages saved on this altar`;
-            }
             showPeerChatWindow();
             renderPeerChatMembers();
             renderPeerChat();
@@ -2216,7 +2281,7 @@
             if (!chatHistory.length) {
                 const empty = document.createElement('div');
                 empty.className = 'text-[11px] text-gray-400 text-center py-8';
-                empty.textContent = 'Altar chat will stay here on this device. Invite anyone live in the room to begin.';
+                empty.textContent = 'Start the conversation here. Invite anyone live in the room to begin.';
                 chatBox.appendChild(empty);
                 return;
             }
@@ -4498,10 +4563,11 @@
             };
         }
         updateChatAttachmentUI();
+        bindPeerChatWindowDrag();
         document.getElementById('peer-chat-send').onclick=() => {
             if (!activePeerModalId) return;
             const input = document.getElementById('peer-chat-input');
-            const text = (input.value || '').trim();
+            const text = normalizeChatMessage((input.value || '').trim());
             if (!text && pendingChatAttachments.length === 0) return;
             if (text.length > CHAT_MAX_LENGTH) {
                 showUiNotice(`Message too long (max ${CHAT_MAX_LENGTH} chars).`);

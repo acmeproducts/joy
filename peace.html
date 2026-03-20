@@ -113,23 +113,23 @@
                         Log
                     </button>
                 </div>
-                <p class="text-[11px] text-gray-400">Everyone listed here shares the same altar chat.</p>
+                <p class="text-[11px] text-gray-400">Everyone listed here shares the same chat.</p>
                 <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-gray-600"></ul>
             </div>
         </div>
     </aside>
 
-    <div id="peer-chat-window" class="fixed top-28 right-6 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
+    <div id="peer-chat-window" class="fixed top-0 right-6 w-[min(420px,92vw)] h-[100svh] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden flex flex-col">
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3">
             <div class="min-w-0">
-                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Altar Chat</div>
-                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Live sessions: --</div>
+                <div class="text-sm font-bold text-gray-800 truncate" id="peer-chat-window-name">Chat</div>
+                <div class="text-[10px] text-gray-500" id="peer-chat-window-meta">Live sessions: -- • Messages saved</div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-                <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
-                <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
-                <button id="peer-chat-import-trigger" class="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition" title="Import altar chat">Import</button>
-                <button id="peer-chat-clear" class="px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition" title="Clear altar chat">Clear</button>
+                <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy chat">Copy</button>
+                <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export chat">Export</button>
+                <button id="peer-chat-import-trigger" class="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition" title="Import chat">Import</button>
+                <button id="peer-chat-clear" class="px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition" title="Clear chat">Clear</button>
                 <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat">
                     <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
@@ -2178,7 +2178,7 @@
             ];
             peerChatMembers.innerHTML = '';
             if (chatMeta) {
-                chatMeta.textContent = `Live sessions: ${members.length} • Messages saved on this altar`;
+                chatMeta.textContent = `Live sessions: ${members.length} • Messages saved`;
             }
             members.forEach(member => {
                 const chip = document.createElement('span');
@@ -2193,9 +2193,9 @@
             const livePeers = Array.from(peerPresence.values()).filter(peer => peer.state !== 'suspended' && peer.active !== false);
             const chatName = document.getElementById('peer-chat-window-name');
             const chatMeta = document.getElementById('peer-chat-window-meta');
-            if (chatName) chatName.textContent = 'Altar Chat';
+            if (chatName) chatName.textContent = 'Chat';
             if (chatMeta) {
-                chatMeta.textContent = `Live sessions: ${livePeers.length + 1} • Messages saved on this altar`;
+                chatMeta.textContent = `Live sessions: ${livePeers.length + 1} • Messages saved`;
             }
             showPeerChatWindow();
             renderPeerChatMembers();
@@ -3374,7 +3374,7 @@
                     const button = document.createElement('button');
                     button.type = 'button';
                     button.className = `flex items-center gap-2 px-3 py-1.5 rounded-full transition text-xs ${member.isLocal ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`;
-                    button.title = 'Open altar chat';
+                    button.title = 'Open chat';
                     button.addEventListener('click', () => {
                         openPeerModal('altar');
                     });
@@ -4326,12 +4326,12 @@
         async function copyAltarChat() {
             const text = loadAltarChat().map(entry => `[${formatTimestamp(entry.ts)}] ${entry.name || (entry.from === 'local' ? joinState.name : 'Peer')}: ${entry.deleted ? 'Post deleted.' : (entry.message || '')}`).join('\n');
             if (!text) {
-                showUiNotice('No altar chat to copy yet.');
+                showUiNotice('No chat to copy yet.');
                 return;
             }
             try {
                 await navigator.clipboard.writeText(text);
-                showUiNotice('Altar chat copied.');
+                showUiNotice('Chat copied.');
             } catch (_) {
                 showUiNotice('Copy failed.');
             }
@@ -4347,7 +4347,7 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            showUiNotice('Altar chat exported.');
+            showUiNotice('Chat exported.');
         }
 
         function clearAltarChat() {
@@ -4357,17 +4357,17 @@
             if (isPeerChatOpen()) {
                 renderPeerChat();
             }
-            showUiNotice('Altar chat cleared.');
+            showUiNotice('Chat cleared.');
         }
 
         function importAltarChatPayload(payload) {
             const entries = Array.isArray(payload) ? payload : payload?.entries;
             if (!Array.isArray(entries)) {
-                showUiNotice('Import file is not valid altar chat JSON.');
+                showUiNotice('Import file is not valid chat JSON.');
                 return;
             }
             mergeAltarChatHistory(entries);
-            showUiNotice(`Imported ${entries.length} altar chat entr${entries.length === 1 ? 'y' : 'ies'}.`);
+            showUiNotice(`Imported ${entries.length} chat entr${entries.length === 1 ? 'y' : 'ies'}.`);
         }
 
         function getFileExtension(filename) {

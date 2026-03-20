@@ -107,6 +107,22 @@
                     <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
                 </div>
             </div>
+            <div class="space-y-3 border-t border-gray-100 pt-5">
+                <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
+                    <span>Channels</span>
+                    <button class="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition" id="channel-share-btn">Share</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input id="channel-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Channel label">
+                    <button id="create-channel-btn" class="px-3 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition">Create</button>
+                </div>
+                <select id="channel-select" class="w-full px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300"></select>
+                <div class="flex items-center gap-2">
+                    <input id="rename-channel-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Rename active channel">
+                    <button id="rename-channel-btn" class="px-3 py-2 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">Rename</button>
+                </div>
+                <button id="delete-channel-btn" class="w-full px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold rounded-lg hover:bg-rose-100 transition">Delete Inactive Channel</button>
+            </div>
             <div class="space-y-2">
                 <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
                     <span>Live Sessions</span>
@@ -433,6 +449,33 @@
         </div>
     </div>
 
+    <div id="channel-share-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center invisible modal">
+        <div id="channel-share-content" class="bg-white rounded-2xl shadow-2xl w-11/12 max-w-md p-6 transform scale-out modal-content">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800">Share Channel</h3>
+                    <p class="text-xs text-gray-500 mt-1">Invite someone into this exact channel.</p>
+                </div>
+                <button id="close-channel-share" class="text-gray-400 hover:text-gray-800 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] uppercase tracking-wider text-gray-400 block mb-2">Share link</label>
+                    <div class="flex items-center gap-2">
+                        <input id="channel-share-url" type="text" readonly class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg">
+                        <button id="channel-share-copy" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Copy</button>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <img id="channel-share-qr" alt="Channel share QR code" class="w-52 h-52 rounded-xl border border-gray-200 bg-white p-2">
+                </div>
+                <button id="channel-share-native" class="w-full px-3 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-100 transition">Share</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const config = {
             currentThemeIndex: 0,
@@ -466,8 +509,11 @@
 
         const BG_DB_NAME = 'garden_assets';
         const BG_STORE_NAME = 'backgrounds';
-        const BG_STORE_KEY = 'garden_bg';
+        const BG_STORE_KEY_PREFIX = 'garden_bg_';
         let bgDbPromise = null;
+        function getBackgroundStoreKey() {
+            return `${BG_STORE_KEY_PREFIX}${ACTIVE_CHANNEL_ID}`;
+        }
 
         function openBackgroundDb() {
             if (!('indexedDB' in window)) return Promise.resolve(null);
@@ -499,7 +545,7 @@
                     console.warn('Failed to persist background image.');
                     resolve(false);
                 };
-                tx.objectStore(BG_STORE_NAME).put(dataUrl, BG_STORE_KEY);
+                tx.objectStore(BG_STORE_NAME).put(dataUrl, getBackgroundStoreKey());
             });
         }
 
@@ -508,7 +554,7 @@
             if (!db) return null;
             return new Promise(resolve => {
                 const tx = db.transaction(BG_STORE_NAME, 'readonly');
-                const request = tx.objectStore(BG_STORE_NAME).get(BG_STORE_KEY);
+                const request = tx.objectStore(BG_STORE_NAME).get(getBackgroundStoreKey());
                 request.onsuccess = () => resolve(request.result || null);
                 request.onerror = () => resolve(null);
             });
@@ -521,7 +567,7 @@
                 const tx = db.transaction(BG_STORE_NAME, 'readwrite');
                 tx.oncomplete = () => resolve(true);
                 tx.onerror = () => resolve(false);
-                tx.objectStore(BG_STORE_NAME).delete(BG_STORE_KEY);
+                tx.objectStore(BG_STORE_NAME).delete(getBackgroundStoreKey());
             });
         }
 
@@ -1293,10 +1339,77 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_ID = 'relax:peace';
+        const CHANNEL_REGISTRY_STORAGE_KEY = 'relax_channel_registry_v1';
+        const ACTIVE_CHANNEL_STORAGE_KEY = 'relax_active_channel_id';
+        const CHANNEL_QUERY_PARAM = 'channel';
+        const DEFAULT_CHANNEL_NAME = 'Peace Channel';
+        function createUuid() {
+            if (crypto.randomUUID) return crypto.randomUUID();
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => {
+                const random = Math.random() * 16 | 0;
+                const value = char === 'x' ? random : (random & 0x3 | 0x8);
+                return value.toString(16);
+            });
+        }
+        function createChannelRecord(name = DEFAULT_CHANNEL_NAME, id = createUuid()) {
+            const now = new Date().toISOString();
+            return { id, name: (name || DEFAULT_CHANNEL_NAME).trim() || DEFAULT_CHANNEL_NAME, createdAt: now, updatedAt: now };
+        }
+        function readChannelRegistry() {
+            try {
+                const raw = localStorage.getItem(CHANNEL_REGISTRY_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : [];
+                return Array.isArray(parsed) ? parsed.filter(item => item?.id).map(item => ({
+                    id: item.id,
+                    name: (item.name || DEFAULT_CHANNEL_NAME).trim() || DEFAULT_CHANNEL_NAME,
+                    createdAt: item.createdAt || new Date().toISOString(),
+                    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+                })) : [];
+            } catch (_) {
+                return [];
+            }
+        }
+        function writeChannelRegistry(channels) {
+            try {
+                localStorage.setItem(CHANNEL_REGISTRY_STORAGE_KEY, JSON.stringify(channels));
+            } catch (_) {}
+        }
+        function persistChannelRegistry(channels) {
+            writeChannelRegistry(channels);
+            return channels;
+        }
+        function ensureChannelState() {
+            const params = new URLSearchParams(window.location.search);
+            const requestedChannelId = (params.get(CHANNEL_QUERY_PARAM) || '').trim();
+            let channels = readChannelRegistry();
+            if (!channels.length) {
+                channels = [createChannelRecord(DEFAULT_CHANNEL_NAME)];
+            }
+            let activeChannelId = requestedChannelId || localStorage.getItem(ACTIVE_CHANNEL_STORAGE_KEY) || channels[0]?.id;
+            let activeChannel = channels.find(channel => channel.id === activeChannelId);
+            if (!activeChannel && requestedChannelId) {
+                activeChannel = createChannelRecord(`Shared ${channels.length + 1}`, requestedChannelId);
+                channels.push(activeChannel);
+            }
+            if (!activeChannel) {
+                activeChannel = channels[0];
+                activeChannelId = activeChannel?.id;
+            }
+            persistChannelRegistry(channels);
+            try {
+                localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, activeChannelId);
+            } catch (_) {}
+            return { channels, activeChannel, activeChannelId };
+        }
+        const channelState = ensureChannelState();
+        const ACTIVE_CHANNEL_ID = channelState.activeChannelId;
+        const RELAY_SESSION_ID = `relax:peace:${ACTIVE_CHANNEL_ID}`;
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
-        const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
+        function channelStorageKey(prefix, suffix = '') {
+            return `${prefix}_${ACTIVE_CHANNEL_ID}${suffix ? `_${suffix}` : ''}`;
+        }
+        const CLIENT_ID_STORAGE_KEY = channelStorageKey('relax_client_id');
         let storedClientId = null;
         try {
             storedClientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
@@ -1309,8 +1422,8 @@
             } catch (_) {}
         }
         const RELAY_CLIENT_ID = resolvedClientId;
-        const LAMPORT_STORAGE_KEY = 'garden_lamport_clock';
-        const BG_META_STORAGE_KEY = 'garden_bg_meta';
+        const LAMPORT_STORAGE_KEY = channelStorageKey('garden_lamport_clock');
+        const BG_META_STORAGE_KEY = channelStorageKey('garden_bg_meta');
         let lamportClock = Number(localStorage.getItem(LAMPORT_STORAGE_KEY)) || 0;
         let backgroundMeta = (() => {
             try {
@@ -1328,17 +1441,17 @@
         const SNAPSHOT_DEBOUNCE_MS = 1200;
         const RELAY_LOG_SLOT_COUNT = 15;
         const RELAY_LOG_SLOT_DURATION_MS = 2 * 60 * 1000;
-        const RELAY_LOG_SLOT_PREFIX = 'relax_relay_log_slot_';
-        const RELAY_LOG_META_KEY = 'relax_relay_log_meta';
+        const RELAY_LOG_SLOT_PREFIX = `${channelStorageKey('relax_relay_log_slot')}_`;
+        const RELAY_LOG_META_KEY = channelStorageKey('relax_relay_log_meta');
         const RELAY_LOGGABLE_TYPES = new Set(['tap', 'drag', 'state', 'snapshot']);
-        const SESSION_LOG_STORAGE_KEY = 'relax_session_log_entries';
+        const SESSION_LOG_STORAGE_KEY = channelStorageKey('relax_session_log_entries');
         const SESSION_LOG_MAX_ENTRIES = 400;
-        const RELAY_SEQ_STORAGE_KEY = `relax_relay_seq_${RELAY_SESSION_ID}`;
+        const RELAY_SEQ_STORAGE_KEY = channelStorageKey('relax_relay_seq');
         const relayState = { ws: null, connectTimeoutTimer: null };
         let pendingSnapshot = false;
         let pendingSnapshotReason = null;
         let pendingSnapshotTarget = null;
-        const storedStateTs = Number(localStorage.getItem('garden_state_ts'));
+        const storedStateTs = Number(localStorage.getItem(channelStorageKey('garden_state_ts')));
         const syncState = {
             lastStateTs: 0,
             initialSent: false,
@@ -1361,6 +1474,13 @@
         const chatLocalNameInput = document.getElementById('peer-chat-local-name');
         const chatLocalNameUpdate = document.getElementById('peer-chat-local-name-update');
         const peerChatMembers = document.getElementById('peer-chat-members');
+        const channelNameInput = document.getElementById('channel-name-input');
+        const createChannelBtn = document.getElementById('create-channel-btn');
+        const channelSelect = document.getElementById('channel-select');
+        const renameChannelInput = document.getElementById('rename-channel-input');
+        const renameChannelBtn = document.getElementById('rename-channel-btn');
+        const deleteChannelBtn = document.getElementById('delete-channel-btn');
+        const channelShareBtn = document.getElementById('channel-share-btn');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1370,8 +1490,10 @@
         let snapshotTimer = null;
         let uiNoticeTimer = null;
         let lastChatSentAt = 0;
-        const JOIN_NAME_STORAGE_KEY = 'relax_join_name';
-        const ALTAR_CHAT_STORAGE_KEY = `relax_altar_chat_${RELAY_SESSION_ID}`;
+        const JOIN_NAME_STORAGE_KEY = channelStorageKey('relax_join_name');
+        const JOINED_AT_STORAGE_KEY = channelStorageKey('relax_joined_at');
+        const ALTAR_CHAT_STORAGE_KEY = channelStorageKey('relax_altar_chat');
+        const CUSTOM_WORDS_STORAGE_KEY = channelStorageKey('garden_words');
         const ALTAR_CHAT_MAX_ENTRIES = 300;
         const CHAT_MAX_LENGTH = 800;
         const CHAT_COOLDOWN_MS = 1000;
@@ -1404,7 +1526,7 @@
         const PENDING_TRANSIENT_MAX_EVENTS = 60;
         const MAX_BG_DATA_URL_LENGTH = 900000;
         const MAX_BG_BLOB_BYTES = 700000;
-        const AUTO_RELOAD_STORAGE_KEY = 'relax_auto_reload_at';
+        const AUTO_RELOAD_STORAGE_KEY = channelStorageKey('relax_auto_reload_at');
         const AUTO_RELOAD_COOLDOWN_MS = 1500;
         const FILE_PICKER_GRACE_MS = 3000;
         let isFilePickerActive = false;
@@ -1416,6 +1538,77 @@
         const chatPairSource = chatPairParts[0] || 'en';
         const chatPairTarget = chatPairParts[1] || 'en';
         const isChatPairSingleColumn = chatPairSource === 'en' && chatPairTarget === 'en';
+
+        function getChannelRegistry() {
+            return readChannelRegistry();
+        }
+
+        function saveChannelRegistry(channels) {
+            return persistChannelRegistry(channels);
+        }
+
+        function getActiveChannelRecord() {
+            return getChannelRegistry().find(channel => channel.id === ACTIVE_CHANNEL_ID) || channelState.activeChannel;
+        }
+
+        function buildChannelShareUrl(channelId = ACTIVE_CHANNEL_ID) {
+            const url = new URL(window.location.href);
+            url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
+            return url.toString();
+        }
+
+        function teardownRelayForChannelSwitch() {
+            if (snapshotTimer) {
+                clearTimeout(snapshotTimer);
+                snapshotTimer = null;
+            }
+            if (presenceTimer) {
+                clearInterval(presenceTimer);
+                presenceTimer = null;
+            }
+            if (presenceRenderTimer) {
+                clearInterval(presenceRenderTimer);
+                presenceRenderTimer = null;
+            }
+            if (relayReconnectTimer) {
+                clearTimeout(relayReconnectTimer);
+                relayReconnectTimer = null;
+            }
+            if (relayHeartbeatTimer) {
+                clearInterval(relayHeartbeatTimer);
+                relayHeartbeatTimer = null;
+            }
+            if (relayState.connectTimeoutTimer) {
+                clearTimeout(relayState.connectTimeoutTimer);
+                relayState.connectTimeoutTimer = null;
+            }
+            peerPresence.clear();
+            peerConnectionHistory.clear();
+            peerChatHistory.clear();
+            unreadChatByPeer.clear();
+            translationCache.clear();
+            pendingTranslations.clear();
+            pendingTransientEvents.length = 0;
+            recentTapEvents.length = 0;
+            seenTapIds.clear();
+            altarChatHistory = [];
+            activePeerModalId = null;
+            if (relayState.ws) {
+                try { relayState.ws.close(4001, 'channel-switch'); } catch (_) {}
+                relayState.ws = null;
+            }
+        }
+
+        function switchActiveChannel(channelId) {
+            if (!channelId || channelId === ACTIVE_CHANNEL_ID) return;
+            try {
+                localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, channelId);
+            } catch (_) {}
+            teardownRelayForChannelSwitch();
+            const url = new URL(window.location.href);
+            url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
+            window.location.replace(url.toString());
+        }
 
         function markFilePickerActive() {
             isFilePickerActive = true;
@@ -1446,7 +1639,7 @@
                     minute: '2-digit'
                 });
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
-                localStorage.setItem('relax_joined_at', new Date().toISOString());
+                localStorage.setItem(JOINED_AT_STORAGE_KEY, new Date().toISOString());
             }
             return storedName;
         }
@@ -1741,6 +1934,46 @@
 
         function updateDocumentTitle() {
             updateSessionBeaconIndicator();
+        }
+
+        function renderChannelControls() {
+            if (!channelSelect) return;
+            const channels = getChannelRegistry();
+            channelSelect.innerHTML = '';
+            channels.forEach(channel => {
+                const option = document.createElement('option');
+                option.value = channel.id;
+                option.textContent = channel.name || DEFAULT_CHANNEL_NAME;
+                option.selected = channel.id === ACTIVE_CHANNEL_ID;
+                channelSelect.appendChild(option);
+            });
+            const activeChannel = channels.find(channel => channel.id === ACTIVE_CHANNEL_ID) || getActiveChannelRecord();
+            if (renameChannelInput) {
+                renameChannelInput.value = activeChannel?.name || '';
+            }
+            if (deleteChannelBtn) {
+                deleteChannelBtn.disabled = channels.length < 2;
+                deleteChannelBtn.classList.toggle('opacity-50', channels.length < 2);
+                deleteChannelBtn.classList.toggle('cursor-not-allowed', channels.length < 2);
+            }
+        }
+
+        function updateChannelShareModal() {
+            const shareUrl = buildChannelShareUrl();
+            const shareUrlInput = document.getElementById('channel-share-url');
+            const shareQr = document.getElementById('channel-share-qr');
+            const nativeShareBtn = document.getElementById('channel-share-native');
+            if (shareUrlInput) {
+                shareUrlInput.value = shareUrl;
+            }
+            if (shareQr) {
+                shareQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(shareUrl)}`;
+            }
+            if (nativeShareBtn) {
+                nativeShareBtn.disabled = !navigator.share;
+                nativeShareBtn.classList.toggle('opacity-50', !navigator.share);
+                nativeShareBtn.classList.toggle('cursor-not-allowed', !navigator.share);
+            }
         }
 
         function refreshUnreadChat() {
@@ -3109,7 +3342,7 @@
                 syncState.lastLocalStateTs = relaxLocalClock
                     ? effectiveStateTs
                     : Math.max(syncState.lastLocalStateTs, effectiveStateTs);
-                localStorage.setItem('garden_state_ts', String(syncState.lastLocalStateTs));
+                localStorage.setItem(channelStorageKey('garden_state_ts'), String(syncState.lastLocalStateTs));
             }
             if (options.source) {
                 localStateDirty = false;
@@ -3124,7 +3357,7 @@
                 config.customWords = state.customWords.filter(Boolean);
                 if (customWordsInput) {
                     customWordsInput.value = config.customWords.join(', ');
-                    localStorage.setItem('garden_words', customWordsInput.value);
+                    localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, customWordsInput.value);
                 }
             }
 
@@ -3204,7 +3437,7 @@
         function updateLocalStateTimestamp(ts = Date.now()) {
             const nextTs = Math.max(syncState.lastLocalStateTs || 0, ts);
             syncState.lastLocalStateTs = nextTs;
-            localStorage.setItem('garden_state_ts', String(nextTs));
+            localStorage.setItem(channelStorageKey('garden_state_ts'), String(nextTs));
         }
 
         function isOnline() {
@@ -4064,6 +4297,50 @@
         if (closeSessionPanelBtn) {
             closeSessionPanelBtn.onclick = () => sessionPanel.classList.add('-translate-x-full');
         }
+        if (createChannelBtn) {
+            createChannelBtn.onclick = () => {
+                const name = (channelNameInput?.value || '').trim() || `Channel ${getChannelRegistry().length + 1}`;
+                const nextChannel = createChannelRecord(name);
+                saveChannelRegistry([...getChannelRegistry(), nextChannel]);
+                if (channelNameInput) channelNameInput.value = '';
+                renderChannelControls();
+                switchActiveChannel(nextChannel.id);
+            };
+        }
+        if (channelSelect) {
+            channelSelect.onchange = (event) => switchActiveChannel(event.target.value);
+        }
+        if (renameChannelBtn) {
+            renameChannelBtn.onclick = () => {
+                const nextName = (renameChannelInput?.value || '').trim();
+                if (!nextName) return;
+                const channels = getChannelRegistry().map(channel => channel.id === ACTIVE_CHANNEL_ID
+                    ? { ...channel, name: nextName, updatedAt: new Date().toISOString() }
+                    : channel);
+                saveChannelRegistry(channels);
+                renderChannelControls();
+                showUiNotice('Channel renamed.');
+            };
+        }
+        if (deleteChannelBtn) {
+            deleteChannelBtn.onclick = () => {
+                const channels = getChannelRegistry();
+                const targetChannel = channels.find(channel => channel.id !== ACTIVE_CHANNEL_ID);
+                if (!targetChannel) {
+                    showUiNotice('No inactive channel to delete.');
+                    return;
+                }
+                saveChannelRegistry(channels.filter(channel => channel.id !== targetChannel.id));
+                renderChannelControls();
+                showUiNotice(`Deleted ${targetChannel.name}.`);
+            };
+        }
+        if (channelShareBtn) {
+            channelShareBtn.onclick = () => {
+                updateChannelShareModal();
+                toggleModal('channel-share', true);
+            };
+        }
         document.getElementById('audio-toggle').onchange=e=>{
             ZenAudio.enabled=e.target.checked;
             appendSessionLog('audio', `Audio ${ZenAudio.enabled ? 'on' : 'muted'}.`);
@@ -4129,7 +4406,8 @@
             secrets: document.getElementById('secrets-modal'),
             peer: document.getElementById('peer-modal'),
             'session-log': document.getElementById('session-log-modal'),
-            'chat-attachment': document.getElementById('chat-attachment-modal')
+            'chat-attachment': document.getElementById('chat-attachment-modal'),
+            'channel-share': document.getElementById('channel-share-modal')
         };
 
         function toggleModal(id, show) {
@@ -4159,6 +4437,43 @@
                     toggleModal('chat-attachment', false);
                 }
             });
+        }
+        const channelShareModal = document.getElementById('channel-share-modal');
+        const closeChannelShare = document.getElementById('close-channel-share');
+        const channelShareCopy = document.getElementById('channel-share-copy');
+        const channelShareNative = document.getElementById('channel-share-native');
+        if (closeChannelShare) {
+            closeChannelShare.onclick = () => toggleModal('channel-share', false);
+        }
+        if (channelShareModal) {
+            channelShareModal.addEventListener('click', (event) => {
+                if (event.target === channelShareModal) {
+                    toggleModal('channel-share', false);
+                }
+            });
+        }
+        if (channelShareCopy) {
+            channelShareCopy.onclick = async () => {
+                const shareUrl = buildChannelShareUrl();
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    showUiNotice('Channel link copied.');
+                } catch (_) {
+                    showUiNotice('Copy failed.');
+                }
+            };
+        }
+        if (channelShareNative) {
+            channelShareNative.onclick = async () => {
+                if (!navigator.share) return;
+                try {
+                    await navigator.share({
+                        title: getActiveChannelRecord()?.name || DEFAULT_CHANNEL_NAME,
+                        text: 'Join my Peace channel',
+                        url: buildChannelShareUrl()
+                    });
+                } catch (_) {}
+            };
         }
 
         localPresenceState = getLocalPresenceState();
@@ -4757,6 +5072,8 @@
 
         updateLocalProfileUI();
         updateLocalChatNames();
+        renderChannelControls();
+        updateChannelShareModal();
         appendDeviceLog('session', 'Session initialized.');
 
         connectRelay();
@@ -5203,13 +5520,13 @@
             if (customWordsInput) {
                 customWordsInput.value = selectedWords.join(', ');
                 if (persist) {
-                    localStorage.setItem('garden_words', customWordsInput.value);
+                    localStorage.setItem(CUSTOM_WORDS_STORAGE_KEY, customWordsInput.value);
                 }
             }
         }
 
         const cBox=document.getElementById('custom-words');
-        cBox.value=localStorage.getItem('garden_words')||"";
+        cBox.value=localStorage.getItem(CUSTOM_WORDS_STORAGE_KEY)||"";
         applyCustomWordsSelection(cBox.value, { persist: false });
         cBox.onblur=e=>{
             applyCustomWordsSelection(e.target.value);

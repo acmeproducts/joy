@@ -157,7 +157,7 @@
     <div class="row" style="justify-content: space-between; align-items: center;">
       <div>
         <h1>Join a Live Session</h1>
-        <p class="lede">Drop in with the host using a session key. Works with the latest experiences (Gift, Relax, Happy, Test) and passes the key via <code>?sessionKey=</code>.</p>
+        <p class="lede">Drop in with the host using a session key. Works with the latest experiences (Gift, Camp, Relax, Happy, Test) and passes the key via <code>?sessionKey=</code>.</p>
       </div>
       <span class="tag" aria-label="connection state">Ready</span>
     </div>
@@ -172,6 +172,7 @@
         <label for="experience">Experience</label>
         <select id="experience" name="experience" aria-describedby="experienceHint">
           <option value="gift.html">A Gift for You</option>
+          <option value="camp.html">Camp</option>
           <option value="relax.html">A Time to Relax</option>
           <option value="happy.html">A Time to Relax (Beta)</option>
           <option value="test.html">Test Sandbox</option>
@@ -253,6 +254,7 @@
       const decodeExperience = (slug) => {
         const normalized = slug.trim().toLowerCase();
         if (normalized.includes('gift')) return 'gift.html';
+        if (normalized.includes('camp')) return 'camp.html';
         if (normalized.includes('relax')) return 'relax.html';
         if (normalized.includes('happy')) return 'happy.html';
         if (normalized.includes('test')) return 'test.html';

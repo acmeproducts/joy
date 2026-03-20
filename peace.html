@@ -2099,13 +2099,33 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function normalizeChatHref(rawHref) {
+            const trimmedHref = (rawHref || '').trim();
+            if (!trimmedHref) return '';
+            const candidateHref = /^https?:\/\//i.test(trimmedHref) ? trimmedHref : `https://${trimmedHref}`;
+            try {
+                const parsedUrl = new URL(candidateHref);
+                if (!parsedUrl.hostname.includes('.')) {
+                    parsedUrl.hostname = `${parsedUrl.hostname}.com`;
+                }
+                return parsedUrl.toString();
+            } catch (_) {
+                return candidateHref;
+            }
+        }
+
         function normalizeChatMessage(text) {
-            return (text || '').replace(/\/\/([^\n/][^\n]*?)\/\/((?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:[^\s]*)?)/g, (_, label, url) => {
-                const cleanLabel = label.trim();
-                const cleanUrl = url.trim();
-                const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
-                return cleanLabel ? `[${cleanLabel}](${normalizedUrl})` : _;
-            });
+            return (text || '')
+                .replace(/\/\/([^\n/][^\n]*?)\/\/((?:https?:\/\/)?[^\s)]+)/g, (_, label, url) => {
+                    const cleanLabel = label.trim();
+                    const normalizedUrl = normalizeChatHref(url);
+                    return cleanLabel && normalizedUrl ? `[${cleanLabel}](${normalizedUrl})` : _;
+                })
+                .replace(/(^|[\s(])\/\/([^\s/][^\n]*?)\/\/(?=[$\s).,!?:;])/g, (_, prefix, href) => {
+                    const cleanHref = href.trim();
+                    const normalizedUrl = normalizeChatHref(cleanHref);
+                    return normalizedUrl ? `${prefix}[${cleanHref}](${normalizedUrl})` : _;
+                });
         }
 
         function renderMarkdown(text) {

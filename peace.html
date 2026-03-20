@@ -139,7 +139,11 @@
 
     <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
         <div id="peer-chat-window-handle" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 cursor-move touch-none">
-            <div class="min-w-0 flex-1"></div>
+            <div class="min-w-0 flex-1 flex items-center">
+                <button id="peer-chat-share-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Share channel" type="button">
+                    <span class="material-symbols-outlined text-base">share</span>
+                </button>
+            </div>
             <div class="flex items-center gap-1 shrink-0">
                 <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
                 <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
@@ -1341,6 +1345,7 @@
 
         const CHANNEL_REGISTRY_STORAGE_KEY = 'relax_channel_registry_v1';
         const ACTIVE_CHANNEL_STORAGE_KEY = 'relax_active_channel_id';
+        const GLOBAL_JOIN_NAME_STORAGE_KEY = 'relax_join_name';
         const CHANNEL_QUERY_PARAM = 'channel';
         const CHANNEL_SHARE_QUERY_PARAM = 'shared';
         const RELAX_RELAY_SESSION_PREFIX = 'relax:peace:';
@@ -1643,7 +1648,7 @@
             });
         }
         function ensureJoinName() {
-            let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
+            let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY) || localStorage.getItem(GLOBAL_JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
                 storedName = new Date().toLocaleString(undefined, {
                     month: 'short',
@@ -1651,9 +1656,10 @@
                     hour: '2-digit',
                     minute: '2-digit'
                 });
-                localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
                 localStorage.setItem(JOINED_AT_STORAGE_KEY, new Date().toISOString());
             }
+            localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
+            localStorage.setItem(GLOBAL_JOIN_NAME_STORAGE_KEY, storedName);
             return storedName;
         }
         const joinState = {
@@ -3596,6 +3602,7 @@
             joinState.name = trimmed;
             try {
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
+                localStorage.setItem(GLOBAL_JOIN_NAME_STORAGE_KEY, trimmed);
             } catch (_) {}
             updateLocalProfileUI();
             updateLocalChatNames();
@@ -4551,8 +4558,15 @@
         document.getElementById('close-secrets').onclick=()=>toggleModal('secrets', false);
         document.getElementById('close-peer-modal').onclick=closePeerModal;
         const peerChatWindowClose = document.getElementById('peer-chat-window-close');
+        const peerChatShareTrigger = document.getElementById('peer-chat-share-trigger');
         if (peerChatWindowClose) {
             peerChatWindowClose.onclick = closePeerModal;
+        }
+        if (peerChatShareTrigger) {
+            peerChatShareTrigger.onclick = () => {
+                updateChannelShareModal();
+                toggleModal('channel-share', true);
+            };
         }
         if (chatLocalNameUpdate) {
             chatLocalNameUpdate.onclick = () => updateLocalName(chatLocalNameInput?.value || '');

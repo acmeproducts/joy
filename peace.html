@@ -89,88 +89,116 @@
     <aside class="fixed top-0 left-0 w-80 h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 -translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="session-panel">
         <div class="p-6 flex justify-between items-center border-b border-gray-100">
             <h2 class="text-lg font-bold text-gray-700 tracking-wide uppercase">Session</h2>
-            <button class="text-gray-400 hover:text-gray-700 transition-colors" id="close-session-panel">
+            <button class="text-gray-400 hover:text-gray-700 transition-colors" id="close-session-panel" aria-label="Close session panel">
                 <span class="material-symbols-outlined text-3xl">close</span>
             </button>
         </div>
         <div class="p-6 space-y-6 flex-1">
-            <div class="space-y-3">
-                <div class="flex items-center gap-3">
+            <section class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-gray-400">
                         <span id="local-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
                         <span id="local-status-label">Active</span>
                     </div>
-                    <div class="text-sm font-semibold text-gray-700 truncate" id="local-name-display">--</div>
+                    <div class="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Identity</div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input id="local-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Your name">
-                    <button id="update-name-btn" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+                <label class="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5" for="local-name-input" title="Your saved display label">
+                    <span class="material-symbols-outlined text-base text-gray-400" aria-hidden="true">badge</span>
+                    <input id="local-name-input" type="text" maxlength="40" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none" placeholder="Your label" aria-label="Your saved display label">
+                </label>
+                <p class="text-[11px] text-gray-400">Saved on this device until site storage is cleared.</p>
+            </section>
+            <section class="space-y-3 border-t border-gray-100 pt-5">
+                <div class="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-gray-400">
+                    <span>Current session</span>
+                    <button class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition" id="session-log-btn">Log</button>
                 </div>
-            </div>
-            <div class="space-y-3 border-t border-gray-100 pt-5">
+                <div id="session-panel-current" class="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 space-y-2">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">Active</span>
+                        <div id="local-name-display" class="min-w-0 text-sm font-semibold text-gray-700 truncate">--</div>
+                    </div>
+                    <div id="session-panel-current-name" class="text-sm font-semibold text-gray-800 truncate">Peace Channel</div>
+                    <div id="session-panel-current-meta" class="text-[11px] text-gray-500 leading-relaxed">Saved locally.</div>
+                </div>
+                <button class="w-full px-3 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition" id="channel-share-btn">Share current session</button>
+                <p class="text-[11px] text-gray-400">Create, switch, lock, and delete sessions from the altar chat toolbar.</p>
+            </section>
+            <section class="space-y-2">
                 <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
-                    <span>Channels</span>
-                    <button class="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition" id="channel-share-btn">Share</button>
+                    <span>Live sessions</span>
+                    <span class="text-[10px] text-gray-300">Shared altar chat</span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input id="channel-name-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Channel label">
-                    <button id="create-channel-btn" class="px-3 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition">Create</button>
-                </div>
-                <select id="channel-select" class="w-full px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300"></select>
-                <div class="flex items-center gap-2">
-                    <input id="rename-channel-input" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 bg-gray-50 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Rename active channel">
-                    <button id="rename-channel-btn" class="px-3 py-2 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">Rename</button>
-                </div>
-                <button id="delete-channel-btn" class="w-full px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold rounded-lg hover:bg-rose-100 transition">Delete Inactive Channel</button>
-            </div>
-            <div class="space-y-2">
-                <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-gray-400">
-                    <span>Live Sessions</span>
-                    <button class="flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 transition" id="session-log-btn">
-                        <span class="material-symbols-outlined text-base">receipt_long</span>
-                        Log
-                    </button>
-                </div>
-                <p class="text-[11px] text-gray-400">Everyone listed here shares the same altar chat.</p>
                 <ul id="session-status-list" class="flex flex-wrap items-center gap-2 text-xs text-gray-600"></ul>
-            </div>
+            </section>
         </div>
     </aside>
 
     <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/60 z-50 hidden">
         <div id="peer-chat-window-handle" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 cursor-move touch-none">
-            <div class="min-w-0 flex-1 flex items-center gap-2 relative">
-                <button id="peer-chat-share-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Share channel" type="button">
-                    <span class="material-symbols-outlined text-base">share</span>
-                </button>
-                <button id="peer-chat-session-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Saved chats" type="button">
-                    <span class="material-symbols-outlined text-base">expand_more</span>
-                </button>
-                <div id="peer-chat-session-menu" class="hidden absolute top-full left-0 mt-2 w-72 bg-white border border-gray-200 rounded-2xl shadow-2xl p-2 space-y-2">
-                    <div class="px-2 pt-1 pb-2 border-b border-gray-100">
-                        <div class="text-[10px] uppercase tracking-[0.24em] text-gray-400">Saved chats</div>
-                        <p class="text-[11px] text-gray-500 mt-1">Pick a stored invite, or remove one with the red ×.</p>
-                    </div>
-                    <div id="peer-chat-session-list" class="max-h-72 overflow-y-auto space-y-2 pr-1"></div>
-                </div>
+            <div class="min-w-0 flex-1">
+                <div class="text-[10px] uppercase tracking-[0.24em] text-gray-400">Altar chat</div>
+                <div id="peer-chat-active-session-label" class="text-sm font-semibold text-gray-700 truncate">Peace Channel</div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-                <button id="peer-chat-copy" class="px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition" title="Copy altar chat">Copy</button>
-                <button id="peer-chat-export" class="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition" title="Export altar chat">Export</button>
-                <button id="peer-chat-import-trigger" class="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition" title="Import altar chat">Import</button>
-                <button id="peer-chat-clear" class="px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 rounded-lg hover:bg-rose-100 transition" title="Clear altar chat">Clear</button>
-                <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat">
+                <button id="peer-chat-copy" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Copy altar chat" aria-label="Copy altar chat" type="button">
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">content_copy</span>
+                </button>
+                <button id="peer-chat-export" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Export altar chat" aria-label="Export altar chat" type="button">
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">download</span>
+                </button>
+                <button id="peer-chat-import-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Import altar chat" aria-label="Import altar chat" type="button">
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">upload</span>
+                </button>
+                <button id="peer-chat-clear" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Clear altar chat" aria-label="Clear altar chat" type="button">
+                    <span class="material-symbols-outlined text-base" aria-hidden="true">delete_sweep</span>
+                </button>
+                <button id="peer-chat-window-close" class="text-gray-400 hover:text-gray-700 transition-colors" title="Close chat" aria-label="Close chat">
                     <span class="material-symbols-outlined text-2xl">close</span>
                 </button>
             </div>
         </div>
         <div class="px-4 py-3 border-b border-gray-100 space-y-3">
-            <div>
-                <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">You</div>
-                <div class="flex items-center gap-2">
-                    <input id="peer-chat-local-name" type="text" maxlength="40" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Local name">
-                    <button id="peer-chat-local-name-update" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Update</button>
+            <div class="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+                <span class="material-symbols-outlined text-base text-gray-400" aria-hidden="true">badge</span>
+                <label for="peer-chat-local-name" class="sr-only">Your saved display label</label>
+                <input id="peer-chat-local-name" type="text" maxlength="40" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none" placeholder="Your label" aria-label="Your saved display label">
+                <span class="text-[10px] uppercase tracking-wider text-gray-400">saved</span>
+            </div>
+            <div class="space-y-2 rounded-2xl border border-gray-200 bg-white p-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="text-[10px] uppercase tracking-wider text-gray-400">Sessions</div>
+                        <div id="peer-chat-session-summary" class="text-sm font-semibold text-gray-800 truncate">Active session: Peace Channel</div>
+                        <div id="peer-chat-session-meta" class="text-[11px] text-gray-500 leading-relaxed">Saved locally.</div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button id="peer-chat-lock-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Set a session password" aria-label="Set a session password" type="button">
+                            <span class="material-symbols-outlined text-base" aria-hidden="true">lock</span>
+                        </button>
+                        <button id="peer-chat-share-trigger" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Share selected session" aria-label="Share selected session" type="button">
+                            <span class="material-symbols-outlined text-base" aria-hidden="true">share</span>
+                        </button>
+                        <button id="peer-chat-session-delete" class="p-2 text-gray-500 hover:text-rose-700 border border-gray-200 rounded-lg hover:bg-rose-50 transition" title="Delete selected session" aria-label="Delete selected session" type="button">
+                            <span class="material-symbols-outlined text-base" aria-hidden="true">delete</span>
+                        </button>
+                    </div>
                 </div>
+                <div class="space-y-2">
+                    <label for="peer-chat-session-omnibox" class="text-[10px] uppercase tracking-wider text-gray-400 block">Find or create a session</label>
+                    <input id="peer-chat-session-omnibox" type="text" maxlength="40" list="peer-chat-session-options" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Search saved sessions or press Enter to create" aria-describedby="peer-chat-session-help peer-chat-session-meta" autocomplete="off">
+                    <datalist id="peer-chat-session-options"></datalist>
+                    <p id="peer-chat-session-help" class="text-[11px] text-gray-400">Press Enter to open the highlighted match, or create a new session with this exact name.</p>
+                </div>
+                <div id="peer-chat-lock-panel" class="hidden rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-2">
+                    <label for="peer-chat-session-password" class="text-[10px] uppercase tracking-wider text-amber-700 block">Session password</label>
+                    <div class="flex items-center gap-2">
+                        <input id="peer-chat-session-password" type="password" maxlength="40" class="min-w-0 flex-1 px-3 py-2 text-xs border border-amber-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-200 focus:border-amber-300" placeholder="Local session password hint">
+                        <button id="peer-chat-session-password-clear" class="px-3 py-2 text-xs font-semibold text-amber-700 bg-white border border-amber-200 rounded-lg hover:bg-amber-100 transition" type="button">Clear</button>
+                    </div>
+                    <p class="text-[11px] text-amber-700/80">This is a local reminder only for now. It does not block joins yet.</p>
+                </div>
+                <div id="peer-chat-session-list" class="max-h-40 overflow-y-auto space-y-2 pr-1"></div>
             </div>
             <div>
                 <div class="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Participants</div>
@@ -1370,43 +1398,58 @@
                 return value.toString(16);
             });
         }
-        function createChannelRecord(name = DEFAULT_CHANNEL_NAME, id = createUuid(), meta = {}) {
+        function getChannelShortId(channelOrId) {
+            const id = typeof channelOrId === 'string' ? channelOrId : channelOrId?.id;
+            return id ? id.slice(0, 8) : 'local';
+        }
+        function getDeterministicChannelName(channelOrId) {
+            const shortId = getChannelShortId(channelOrId);
+            return shortId === 'local' ? DEFAULT_CHANNEL_NAME : `Channel ${shortId}`;
+        }
+        function sanitizeChannelName(name, fallback = DEFAULT_CHANNEL_NAME) {
+            return (name || '').trim() || fallback;
+        }
+        function normalizeChannelRecord(channel = {}) {
             const now = new Date().toISOString();
-            return {
-                id,
-                name: (name || DEFAULT_CHANNEL_NAME).trim() || DEFAULT_CHANNEL_NAME,
-                createdAt: meta.createdAt || now,
-                updatedAt: meta.updatedAt || now,
-                invitedBy: (meta.invitedBy || '').trim(),
-                joinedAt: meta.joinedAt || '',
-                source: meta.source || 'local'
+            const normalized = {
+                id: channel.id || createUuid(),
+                name: sanitizeChannelName(channel.name, getDeterministicChannelName(channel.id)),
+                createdAt: channel.createdAt || now,
+                updatedAt: channel.updatedAt || channel.createdAt || now,
+                invitedBy: (channel.invitedBy || '').trim(),
+                joinedAt: channel.joinedAt || '',
+                source: channel.source || 'local',
+                password: (channel.password || '').trim(),
+                passwordUpdatedAt: channel.passwordUpdatedAt || ''
             };
+            if (!normalized.name) {
+                normalized.name = getDeterministicChannelName(normalized.id);
+            }
+            return normalized;
+        }
+        function createChannelRecord(name = DEFAULT_CHANNEL_NAME, id = createUuid(), meta = {}) {
+            return normalizeChannelRecord({ ...meta, id, name: sanitizeChannelName(name, getDeterministicChannelName(id)) });
         }
         function readChannelRegistry() {
             try {
                 const raw = localStorage.getItem(CHANNEL_REGISTRY_STORAGE_KEY);
                 const parsed = raw ? JSON.parse(raw) : [];
-                return Array.isArray(parsed) ? parsed.filter(item => item?.id).map(item => ({
-                    id: item.id,
-                    name: (item.name || DEFAULT_CHANNEL_NAME).trim() || DEFAULT_CHANNEL_NAME,
-                    createdAt: item.createdAt || new Date().toISOString(),
-                    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
-                    invitedBy: (item.invitedBy || '').trim(),
-                    joinedAt: item.joinedAt || '',
-                    source: item.source || 'local'
-                })) : [];
+                return Array.isArray(parsed)
+                    ? parsed.filter(item => item?.id).map(normalizeChannelRecord)
+                    : [];
             } catch (_) {
                 return [];
             }
         }
         function writeChannelRegistry(channels) {
             try {
-                localStorage.setItem(CHANNEL_REGISTRY_STORAGE_KEY, JSON.stringify(channels));
+                localStorage.setItem(CHANNEL_REGISTRY_STORAGE_KEY, JSON.stringify(channels.map(normalizeChannelRecord)));
             } catch (_) {}
         }
         function persistChannelRegistry(channels) {
-            writeChannelRegistry(channels);
-            return channels;
+            const normalized = channels.map(normalizeChannelRecord);
+            writeChannelRegistry(normalized);
+            return normalized;
         }
         function parseSharedChannelId(rawValue = '') {
             const value = (rawValue || '').trim();
@@ -1429,23 +1472,23 @@
             let activeChannel = channels.find(channel => channel.id === activeChannelId);
             if (requestedChannelId) {
                 const inviteName = invitedBy || activeChannel?.invitedBy || '';
-                const baseName = inviteName ? `${inviteName}'s chat` : `Shared ${channels.length + 1}`;
+                const deterministicName = activeChannel?.name || getDeterministicChannelName(requestedChannelId);
                 if (!activeChannel) {
-                    activeChannel = createChannelRecord(baseName, requestedChannelId, {
+                    activeChannel = createChannelRecord(deterministicName, requestedChannelId, {
                         invitedBy: inviteName,
                         joinedAt,
                         source: 'invite'
                     });
                     channels.push(activeChannel);
                 } else {
-                    activeChannel = {
+                    activeChannel = normalizeChannelRecord({
                         ...activeChannel,
-                        name: activeChannel.name || baseName,
+                        name: sanitizeChannelName(activeChannel.name, deterministicName),
                         invitedBy: inviteName || activeChannel.invitedBy || '',
                         joinedAt: activeChannel.joinedAt || joinedAt,
-                        source: 'invite',
+                        source: activeChannel.source || 'invite',
                         updatedAt: joinedAt
-                    };
+                    });
                     channels = channels.map(channel => channel.id === activeChannel.id ? activeChannel : channel);
                 }
             }
@@ -1453,7 +1496,8 @@
                 activeChannel = channels[0];
                 activeChannelId = activeChannel?.id;
             }
-            persistChannelRegistry(channels);
+            channels = persistChannelRegistry(channels);
+            activeChannel = channels.find(channel => channel.id === activeChannelId) || normalizeChannelRecord(activeChannel);
             try {
                 localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, activeChannelId);
             } catch (_) {}
@@ -1525,23 +1569,25 @@
         const localNameInput = document.getElementById('local-name-input');
         const localStatusDot = document.getElementById('local-status-dot');
         const localStatusLabel = document.getElementById('local-status-label');
-        const updateNameBtn = document.getElementById('update-name-btn');
+        const sessionPanelCurrentName = document.getElementById('session-panel-current-name');
+        const sessionPanelCurrentMeta = document.getElementById('session-panel-current-meta');
         const sessionBeacon = document.getElementById('session-beacon');
         const sessionBeaconDot = document.getElementById('session-beacon-dot');
         const peerChatWindow = document.getElementById('peer-chat-window');
+        const peerChatActiveSessionLabel = document.getElementById('peer-chat-active-session-label');
         const chatLocalNameInput = document.getElementById('peer-chat-local-name');
-        const chatLocalNameUpdate = document.getElementById('peer-chat-local-name-update');
         const peerChatMembers = document.getElementById('peer-chat-members');
-        const channelNameInput = document.getElementById('channel-name-input');
-        const createChannelBtn = document.getElementById('create-channel-btn');
-        const channelSelect = document.getElementById('channel-select');
-        const renameChannelInput = document.getElementById('rename-channel-input');
-        const renameChannelBtn = document.getElementById('rename-channel-btn');
-        const deleteChannelBtn = document.getElementById('delete-channel-btn');
         const channelShareBtn = document.getElementById('channel-share-btn');
-        const peerChatSessionTrigger = document.getElementById('peer-chat-session-trigger');
-        const peerChatSessionMenu = document.getElementById('peer-chat-session-menu');
+        const peerChatSessionSummary = document.getElementById('peer-chat-session-summary');
+        const peerChatSessionMeta = document.getElementById('peer-chat-session-meta');
+        const peerChatSessionOmnibox = document.getElementById('peer-chat-session-omnibox');
+        const peerChatSessionOptions = document.getElementById('peer-chat-session-options');
         const peerChatSessionList = document.getElementById('peer-chat-session-list');
+        const peerChatSessionDelete = document.getElementById('peer-chat-session-delete');
+        const peerChatLockTrigger = document.getElementById('peer-chat-lock-trigger');
+        const peerChatLockPanel = document.getElementById('peer-chat-lock-panel');
+        const peerChatSessionPassword = document.getElementById('peer-chat-session-password');
+        const peerChatSessionPasswordClear = document.getElementById('peer-chat-session-password-clear');
 
         let lastTap=0, lastTapX=null, lastTapY=null, isDragging=false, dragStart=0, startX=null, startY=null, lastDragSound=0;
         let lastRelayDragSend = 0;
@@ -1621,6 +1667,21 @@
             return url.toString();
         }
 
+        function updateSelectedSessionPassword(nextPassword = '') {
+            const targetId = getSessionCandidateId();
+            if (!targetId) return;
+            const channels = getChannelRegistry().map(channel => channel.id === targetId
+                ? {
+                    ...channel,
+                    password: (nextPassword || '').trim(),
+                    passwordUpdatedAt: (nextPassword || '').trim() ? new Date().toISOString() : '',
+                    updatedAt: new Date().toISOString()
+                }
+                : channel);
+            saveChannelRegistry(channels);
+            renderChannelControls();
+        }
+
         function teardownRelayForChannelSwitch() {
             if (snapshotTimer) {
                 clearTimeout(snapshotTimer);
@@ -1697,14 +1758,10 @@
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY) || localStorage.getItem(GLOBAL_JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
-                storedName = new Date().toLocaleString(undefined, {
-                    month: 'short',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                storedName = 'You';
                 localStorage.setItem(JOINED_AT_STORAGE_KEY, new Date().toISOString());
             }
+            storedName = storedName.trim().slice(0, 40) || 'You';
             localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
             localStorage.setItem(GLOBAL_JOIN_NAME_STORAGE_KEY, storedName);
             return storedName;
@@ -1712,6 +1769,11 @@
         const joinState = {
             name: ensureJoinName()
         };
+        const sessionPickerState = {
+            selectedId: ACTIVE_CHANNEL_ID,
+            query: formatStoredSessionLabel(channelState.activeChannel)
+        };
+        let currentShareChannelId = ACTIVE_CHANNEL_ID;
         const DOUBLE_TAP_WINDOW = 240;
         const DOUBLE_TAP_DISTANCE = 40;
         const RELAY_PRESENCE_INTERVAL_MS = 12000;
@@ -2003,7 +2065,7 @@
         }
 
         function formatStoredSessionLabel(channel) {
-            return channel?.invitedBy || channel?.name || DEFAULT_CHANNEL_NAME;
+            return sanitizeChannelName(channel?.name, getDeterministicChannelName(channel));
         }
 
         function formatStoredSessionTimestamp(channel) {
@@ -2019,116 +2081,204 @@
             });
         }
 
-        function hidePeerChatSessionMenu() {
-            if (!peerChatSessionMenu) return;
-            peerChatSessionMenu.classList.add('hidden');
+        function describeStoredSession(channel) {
+            if (!channel) return 'Saved locally.';
+            const details = [];
+            details.push(channel.id === ACTIVE_CHANNEL_ID ? 'Active now' : 'Saved session');
+            if (channel.source === 'invite') details.push('Shared invite');
+            if (channel.invitedBy) details.push(`Invited by ${channel.invitedBy}`);
+            details.push(`Updated ${formatStoredSessionTimestamp(channel)}`);
+            details.push(`ID ${getChannelShortId(channel)}`);
+            return details.join(' · ');
+        }
+
+        function getSessionCandidateId() {
+            return sessionPickerState.selectedId || ACTIVE_CHANNEL_ID;
+        }
+
+        function findSessionMatch(query, channels = getChannelRegistry()) {
+            const value = (query || '').trim().toLowerCase();
+            if (!value) return null;
+            return channels.find(channel => {
+                const label = formatStoredSessionLabel(channel).toLowerCase();
+                const invitedBy = (channel.invitedBy || '').toLowerCase();
+                const shortId = getChannelShortId(channel).toLowerCase();
+                return label === value || label.includes(value) || invitedBy.includes(value) || shortId.includes(value);
+            }) || null;
+        }
+
+        function setSessionSelection(channelId, { syncInput = true, preserveQuery = false } = {}) {
+            const channels = getChannelRegistry();
+            const selected = channels.find(channel => channel.id === channelId) || channels.find(channel => channel.id === ACTIVE_CHANNEL_ID) || channels[0] || null;
+            sessionPickerState.selectedId = selected?.id || '';
+            if (!preserveQuery) {
+                sessionPickerState.query = syncInput ? (selected ? formatStoredSessionLabel(selected) : '') : sessionPickerState.query;
+            }
+            if (syncInput && peerChatSessionOmnibox && document.activeElement !== peerChatSessionOmnibox) {
+                peerChatSessionOmnibox.value = sessionPickerState.query;
+            }
+            renderChannelControls();
+        }
+
+        function openOrCreateSessionFromOmnibox() {
+            const rawValue = (peerChatSessionOmnibox?.value || '').trim();
+            const channels = getChannelRegistry();
+            const matchedChannel = findSessionMatch(rawValue, channels);
+            if (matchedChannel && formatStoredSessionLabel(matchedChannel).toLowerCase() === rawValue.toLowerCase()) {
+                setSessionSelection(matchedChannel.id, { syncInput: true });
+                if (matchedChannel.id !== ACTIVE_CHANNEL_ID) {
+                    switchActiveChannel(matchedChannel.id);
+                }
+                return;
+            }
+            if (!rawValue) {
+                const selectedId = getSessionCandidateId();
+                if (selectedId && selectedId !== ACTIVE_CHANNEL_ID) {
+                    switchActiveChannel(selectedId);
+                }
+                return;
+            }
+            const nextChannel = createChannelRecord(rawValue);
+            saveChannelRegistry([...channels, nextChannel]);
+            sessionPickerState.query = formatStoredSessionLabel(nextChannel);
+            sessionPickerState.selectedId = nextChannel.id;
+            renderChannelControls();
+            switchActiveChannel(nextChannel.id);
         }
 
         function removeStoredChannel(channelId) {
-            if (!channelId) return;
+            if (!channelId) {
+                showUiNotice('Select a session to delete.');
+                return;
+            }
             const channels = getChannelRegistry();
+            const targetChannel = channels.find(channel => channel.id === channelId);
+            if (!targetChannel) {
+                showUiNotice('Select a saved session first.');
+                return;
+            }
             const remaining = channels.filter(channel => channel.id !== channelId);
             if (!remaining.length) {
                 const fallback = createChannelRecord(DEFAULT_CHANNEL_NAME);
                 saveChannelRegistry([fallback]);
+                sessionPickerState.query = formatStoredSessionLabel(fallback);
+                sessionPickerState.selectedId = fallback.id;
                 renderChannelControls();
-                hidePeerChatSessionMenu();
                 switchActiveChannel(fallback.id);
                 return;
             }
             saveChannelRegistry(remaining);
+            const fallbackSelection = remaining.find(channel => channel.id === ACTIVE_CHANNEL_ID) || remaining[0];
+            sessionPickerState.selectedId = fallbackSelection?.id || '';
+            sessionPickerState.query = fallbackSelection ? formatStoredSessionLabel(fallbackSelection) : '';
             renderChannelControls();
-            hidePeerChatSessionMenu();
             if (channelId === ACTIVE_CHANNEL_ID) {
-                switchActiveChannel(remaining[0].id);
+                switchActiveChannel((remaining[0] || fallbackSelection).id);
                 return;
             }
-            showUiNotice('Chat removed.');
+            showUiNotice(`Deleted ${formatStoredSessionLabel(targetChannel)}.`);
         }
 
         function renderPeerChatSessionMenu() {
             if (!peerChatSessionList) return;
             const channels = getChannelRegistry();
+            const query = (sessionPickerState.query || '').trim().toLowerCase();
+            const filtered = query
+                ? channels.filter(channel => {
+                    const haystacks = [
+                        formatStoredSessionLabel(channel),
+                        channel.invitedBy || '',
+                        getChannelShortId(channel)
+                    ].map(value => value.toLowerCase());
+                    return haystacks.some(value => value.includes(query));
+                })
+                : channels;
+            if (!sessionPickerState.selectedId && channels.length) {
+                sessionPickerState.selectedId = ACTIVE_CHANNEL_ID;
+            }
+            if (peerChatSessionOptions) {
+                peerChatSessionOptions.innerHTML = channels.map(channel => `<option value="${formatStoredSessionLabel(channel).replace(/"/g, '&quot;')}"></option>`).join('');
+            }
             peerChatSessionList.innerHTML = '';
-            if (!channels.length) {
+            if (!filtered.length) {
                 const empty = document.createElement('div');
-                empty.className = 'px-2 py-3 text-[11px] text-gray-400 text-center';
-                empty.textContent = 'No saved chats yet.';
+                empty.className = 'px-2 py-3 text-[11px] text-gray-400 text-center border border-dashed border-gray-200 rounded-xl';
+                empty.textContent = query ? `Press Enter to create “${sessionPickerState.query.trim()}”.` : 'No saved sessions yet.';
                 peerChatSessionList.appendChild(empty);
                 return;
             }
-            channels.forEach(channel => {
-                const row = document.createElement('div');
-                row.className = `flex items-start gap-2 rounded-xl border px-3 py-2 ${channel.id === ACTIVE_CHANNEL_ID ? 'border-blue-200 bg-blue-50/80' : 'border-gray-200 bg-white'}`;
-
-                const pick = document.createElement('button');
-                pick.type = 'button';
-                pick.className = 'flex-1 min-w-0 text-left';
-                pick.onclick = () => {
-                    hidePeerChatSessionMenu();
-                    if (channel.id !== ACTIVE_CHANNEL_ID) {
-                        switchActiveChannel(channel.id);
-                    }
+            filtered.forEach(channel => {
+                const isActive = channel.id === ACTIVE_CHANNEL_ID;
+                const isSelected = channel.id === getSessionCandidateId();
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = `w-full text-left rounded-xl border px-3 py-2 transition ${isSelected ? 'border-blue-300 bg-blue-50/80' : 'border-gray-200 bg-white hover:bg-gray-50'}`;
+                row.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                row.onclick = () => {
+                    sessionPickerState.query = formatStoredSessionLabel(channel);
+                    setSessionSelection(channel.id, { syncInput: true });
                 };
 
-                const title = document.createElement('div');
-                title.className = 'text-xs font-semibold text-gray-700 truncate';
-                title.textContent = formatStoredSessionLabel(channel);
-                pick.appendChild(title);
+                const badges = [
+                    isActive ? '<span class="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">Active</span>' : '<span class="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-600">Saved</span>'
+                ];
+                if (channel.source === 'invite') badges.push('<span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Shared</span>');
+                if (channel.password) badges.push('<span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Locked</span>');
 
-                const stamp = document.createElement('div');
-                stamp.className = 'text-[10px] text-gray-400 mt-1';
-                stamp.textContent = formatStoredSessionTimestamp(channel);
-                pick.appendChild(stamp);
-
-                if (channel.invitedBy && channel.name && channel.name !== channel.invitedBy) {
-                    const detail = document.createElement('div');
-                    detail.className = 'text-[10px] text-gray-500 mt-1 truncate';
-                    detail.textContent = channel.name;
-                    pick.appendChild(detail);
-                }
-
-                const remove = document.createElement('button');
-                remove.type = 'button';
-                remove.className = 'shrink-0 text-rose-500 hover:text-rose-700 text-sm font-bold leading-none px-1';
-                remove.textContent = '✕';
-                remove.title = 'Exit and remove chat';
-                remove.onclick = (event) => {
-                    event.stopPropagation();
-                    removeStoredChannel(channel.id);
-                };
-
-                row.appendChild(pick);
-                row.appendChild(remove);
+                row.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-semibold text-gray-800 truncate">${formatStoredSessionLabel(channel)}</div>
+                            <div class="text-[11px] text-gray-500 mt-1 leading-relaxed">${describeStoredSession(channel)}</div>
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-1 shrink-0">${badges.join('')}</div>
+                    </div>
+                `;
                 peerChatSessionList.appendChild(row);
             });
         }
 
         function renderChannelControls() {
-            if (!channelSelect) return;
             const channels = getChannelRegistry();
-            channelSelect.innerHTML = '';
-            channels.forEach(channel => {
-                const option = document.createElement('option');
-                option.value = channel.id;
-                option.textContent = channel.name || DEFAULT_CHANNEL_NAME;
-                option.selected = channel.id === ACTIVE_CHANNEL_ID;
-                channelSelect.appendChild(option);
-            });
             const activeChannel = channels.find(channel => channel.id === ACTIVE_CHANNEL_ID) || getActiveChannelRecord();
-            if (renameChannelInput) {
-                renameChannelInput.value = activeChannel?.name || '';
+            const selectedChannel = channels.find(channel => channel.id === getSessionCandidateId()) || activeChannel;
+            if (sessionPanelCurrentName) {
+                sessionPanelCurrentName.textContent = formatStoredSessionLabel(activeChannel);
             }
-            if (deleteChannelBtn) {
-                deleteChannelBtn.disabled = channels.length < 2;
-                deleteChannelBtn.classList.toggle('opacity-50', channels.length < 2);
-                deleteChannelBtn.classList.toggle('cursor-not-allowed', channels.length < 2);
+            if (sessionPanelCurrentMeta) {
+                sessionPanelCurrentMeta.textContent = describeStoredSession(activeChannel);
+            }
+            if (peerChatActiveSessionLabel) {
+                peerChatActiveSessionLabel.textContent = formatStoredSessionLabel(activeChannel);
+            }
+            if (peerChatSessionSummary) {
+                const prefix = selectedChannel?.id === ACTIVE_CHANNEL_ID ? 'Active session' : 'Selected session';
+                peerChatSessionSummary.textContent = `${prefix}: ${formatStoredSessionLabel(selectedChannel)}`;
+            }
+            if (peerChatSessionMeta) {
+                peerChatSessionMeta.textContent = describeStoredSession(selectedChannel);
+            }
+            if (peerChatSessionOmnibox && document.activeElement !== peerChatSessionOmnibox) {
+                peerChatSessionOmnibox.value = sessionPickerState.query || formatStoredSessionLabel(selectedChannel);
+            }
+            if (peerChatSessionDelete) {
+                const canDelete = Boolean(selectedChannel && channels.length > 1);
+                peerChatSessionDelete.disabled = !canDelete;
+                peerChatSessionDelete.classList.toggle('opacity-50', !canDelete);
+                peerChatSessionDelete.classList.toggle('cursor-not-allowed', !canDelete);
+            }
+            if (peerChatLockTrigger) {
+                peerChatLockTrigger.classList.toggle('text-amber-600', Boolean(selectedChannel?.password));
+                peerChatLockTrigger.classList.toggle('border-amber-200', Boolean(selectedChannel?.password));
+            }
+            if (peerChatSessionPassword && document.activeElement !== peerChatSessionPassword) {
+                peerChatSessionPassword.value = selectedChannel?.password || '';
             }
             renderPeerChatSessionMenu();
         }
 
-        function updateChannelShareModal() {
-            const shareUrl = buildChannelShareUrl();
+        function updateChannelShareModal(channelId = ACTIVE_CHANNEL_ID) {
+            const shareUrl = buildChannelShareUrl(channelId);
             const shareUrlInput = document.getElementById('channel-share-url');
             const shareQr = document.getElementById('channel-share-qr');
             const nativeShareBtn = document.getElementById('channel-share-native');
@@ -2703,7 +2853,7 @@
 
         function closePeerModal() {
             activePeerModalId = null;
-            hidePeerChatSessionMenu();
+            peerChatLockPanel?.classList.add('hidden');
             closePeerChatWindow();
         }
 
@@ -3765,7 +3915,7 @@
         }
 
         function updateLocalProfileUI() {
-            if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'Unnamed';
+            if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'You';
             if (localNameInput && document.activeElement !== localNameInput) {
                 localNameInput.value = joinState.name || '';
             }
@@ -3779,8 +3929,7 @@
         }
 
         function updateLocalName(nextName) {
-            const trimmed = (nextName || '').trim();
-            if (!trimmed) return;
+            const trimmed = (nextName || '').trim().slice(0, 40) || 'You';
             joinState.name = trimmed;
             try {
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
@@ -4499,48 +4648,85 @@
         if (closeSessionPanelBtn) {
             closeSessionPanelBtn.onclick = () => sessionPanel.classList.add('-translate-x-full');
         }
-        if (createChannelBtn) {
-            createChannelBtn.onclick = () => {
-                const name = (channelNameInput?.value || '').trim() || `Channel ${getChannelRegistry().length + 1}`;
-                const nextChannel = createChannelRecord(name);
-                saveChannelRegistry([...getChannelRegistry(), nextChannel]);
-                if (channelNameInput) channelNameInput.value = '';
-                renderChannelControls();
-                switchActiveChannel(nextChannel.id);
-            };
-        }
-        if (channelSelect) {
-            channelSelect.onchange = (event) => switchActiveChannel(event.target.value);
-        }
-        if (renameChannelBtn) {
-            renameChannelBtn.onclick = () => {
-                const nextName = (renameChannelInput?.value || '').trim();
-                if (!nextName) return;
-                const channels = getChannelRegistry().map(channel => channel.id === ACTIVE_CHANNEL_ID
-                    ? { ...channel, name: nextName, updatedAt: new Date().toISOString() }
-                    : channel);
-                saveChannelRegistry(channels);
-                renderChannelControls();
-                showUiNotice('Channel renamed.');
-            };
-        }
-        if (deleteChannelBtn) {
-            deleteChannelBtn.onclick = () => {
-                const channels = getChannelRegistry();
-                const targetChannel = channels.find(channel => channel.id !== ACTIVE_CHANNEL_ID);
-                if (!targetChannel) {
-                    showUiNotice('No inactive channel to delete.');
-                    return;
+        const commitLocalName = source => updateLocalName(source?.value || '');
+        if (localNameInput) {
+            localNameInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitLocalName(localNameInput);
+                    localNameInput.blur();
                 }
-                saveChannelRegistry(channels.filter(channel => channel.id !== targetChannel.id));
-                renderChannelControls();
-                showUiNotice(`Deleted ${targetChannel.name}.`);
-            };
+            });
+            localNameInput.addEventListener('blur', () => commitLocalName(localNameInput));
+        }
+        if (chatLocalNameInput) {
+            chatLocalNameInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitLocalName(chatLocalNameInput);
+                    chatLocalNameInput.blur();
+                }
+            });
+            chatLocalNameInput.addEventListener('blur', () => commitLocalName(chatLocalNameInput));
         }
         if (channelShareBtn) {
             channelShareBtn.onclick = () => {
-                updateChannelShareModal();
+                currentShareChannelId = ACTIVE_CHANNEL_ID;
+                updateChannelShareModal(currentShareChannelId);
                 toggleModal('channel-share', true);
+            };
+        }
+        if (peerChatSessionOmnibox) {
+            peerChatSessionOmnibox.addEventListener('input', () => {
+                sessionPickerState.query = peerChatSessionOmnibox.value;
+                const matched = findSessionMatch(sessionPickerState.query);
+                if (matched) {
+                    sessionPickerState.selectedId = matched.id;
+                }
+                renderChannelControls();
+            });
+            peerChatSessionOmnibox.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    openOrCreateSessionFromOmnibox();
+                }
+            });
+            peerChatSessionOmnibox.addEventListener('blur', () => {
+                const matched = findSessionMatch(peerChatSessionOmnibox.value);
+                if (matched) {
+                    sessionPickerState.query = formatStoredSessionLabel(matched);
+                    setSessionSelection(matched.id, { syncInput: true });
+                    return;
+                }
+                renderChannelControls();
+            });
+        }
+        if (peerChatSessionDelete) {
+            peerChatSessionDelete.onclick = () => removeStoredChannel(getSessionCandidateId());
+        }
+        if (peerChatLockTrigger) {
+            peerChatLockTrigger.onclick = () => {
+                peerChatLockPanel?.classList.toggle('hidden');
+                if (!peerChatLockPanel?.classList.contains('hidden')) {
+                    peerChatSessionPassword?.focus();
+                }
+            };
+        }
+        if (peerChatSessionPassword) {
+            peerChatSessionPassword.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    updateSelectedSessionPassword(peerChatSessionPassword.value || '');
+                    showUiNotice((peerChatSessionPassword.value || '').trim() ? 'Session password saved.' : 'Session password cleared.');
+                }
+            });
+            peerChatSessionPassword.addEventListener('blur', () => updateSelectedSessionPassword(peerChatSessionPassword.value || ''));
+        }
+        if (peerChatSessionPasswordClear) {
+            peerChatSessionPasswordClear.onclick = () => {
+                if (peerChatSessionPassword) peerChatSessionPassword.value = '';
+                updateSelectedSessionPassword('');
+                showUiNotice('Session password cleared.');
             };
         }
         document.getElementById('audio-toggle').onchange=e=>{
@@ -4656,7 +4842,7 @@
         }
         if (channelShareCopy) {
             channelShareCopy.onclick = async () => {
-                const shareUrl = buildChannelShareUrl();
+                const shareUrl = buildChannelShareUrl(currentShareChannelId);
                 try {
                     await navigator.clipboard.writeText(shareUrl);
                     showUiNotice('Channel link copied.');
@@ -4668,11 +4854,12 @@
         if (channelShareNative) {
             channelShareNative.onclick = async () => {
                 if (!navigator.share) return;
+                const shareChannel = getChannelRegistry().find(channel => channel.id === currentShareChannelId) || getActiveChannelRecord();
                 try {
                     await navigator.share({
-                        title: getActiveChannelRecord()?.name || DEFAULT_CHANNEL_NAME,
+                        title: formatStoredSessionLabel(shareChannel) || DEFAULT_CHANNEL_NAME,
                         text: 'Join my Peace channel',
-                        url: buildChannelShareUrl()
+                        url: buildChannelShareUrl(currentShareChannelId)
                     });
                 } catch (_) {}
             };
@@ -4746,36 +4933,10 @@
         }
         if (peerChatShareTrigger) {
             peerChatShareTrigger.onclick = () => {
-                hidePeerChatSessionMenu();
-                updateChannelShareModal();
+                currentShareChannelId = getSessionCandidateId();
+                updateChannelShareModal(currentShareChannelId);
                 toggleModal('channel-share', true);
             };
-        }
-        if (peerChatSessionTrigger) {
-            peerChatSessionTrigger.onclick = (event) => {
-                event.stopPropagation();
-                renderPeerChatSessionMenu();
-                peerChatSessionMenu.classList.toggle('hidden');
-            };
-        }
-        if (peerChatSessionMenu) {
-            peerChatSessionMenu.addEventListener('click', event => event.stopPropagation());
-        }
-        document.addEventListener('click', event => {
-            if (!peerChatSessionMenu || !peerChatSessionTrigger) return;
-            if (peerChatSessionMenu.contains(event.target) || peerChatSessionTrigger.contains(event.target)) return;
-            hidePeerChatSessionMenu();
-        });
-        if (chatLocalNameUpdate) {
-            chatLocalNameUpdate.onclick = () => updateLocalName(chatLocalNameInput?.value || '');
-        }
-        if (chatLocalNameInput) {
-            chatLocalNameInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    updateLocalName(chatLocalNameInput.value || '');
-                }
-            });
         }
         if (sessionLogBtn) {
             sessionLogBtn.onclick = () => {

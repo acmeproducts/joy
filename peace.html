@@ -1342,6 +1342,8 @@
         const CHANNEL_REGISTRY_STORAGE_KEY = 'relax_channel_registry_v1';
         const ACTIVE_CHANNEL_STORAGE_KEY = 'relax_active_channel_id';
         const CHANNEL_QUERY_PARAM = 'channel';
+        const CHANNEL_SHARE_QUERY_PARAM = 'shared';
+        const RELAX_RELAY_SESSION_PREFIX = 'relax:peace:';
         const DEFAULT_CHANNEL_NAME = 'Peace Channel';
         function createUuid() {
             if (crypto.randomUUID) return crypto.randomUUID();
@@ -1378,9 +1380,17 @@
             writeChannelRegistry(channels);
             return channels;
         }
+        function parseSharedChannelId(rawValue = '') {
+            const value = (rawValue || '').trim();
+            if (!value) return '';
+            const channelId = value.startsWith(RELAX_RELAY_SESSION_PREFIX)
+                ? value.slice(RELAX_RELAY_SESSION_PREFIX.length).trim()
+                : value;
+            return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(channelId) ? channelId : '';
+        }
         function ensureChannelState() {
             const params = new URLSearchParams(window.location.search);
-            const requestedChannelId = (params.get(CHANNEL_QUERY_PARAM) || '').trim();
+            const requestedChannelId = parseSharedChannelId(params.get(CHANNEL_SHARE_QUERY_PARAM) || params.get(CHANNEL_QUERY_PARAM) || '');
             let channels = readChannelRegistry();
             if (!channels.length) {
                 channels = [createChannelRecord(DEFAULT_CHANNEL_NAME)];
@@ -1403,7 +1413,7 @@
         }
         const channelState = ensureChannelState();
         const ACTIVE_CHANNEL_ID = channelState.activeChannelId;
-        const RELAY_SESSION_ID = `relax:peace:${ACTIVE_CHANNEL_ID}`;
+        const RELAY_SESSION_ID = `${RELAX_RELAY_SESSION_PREFIX}${ACTIVE_CHANNEL_ID}`;
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         function channelStorageKey(prefix, suffix = '') {
@@ -1553,7 +1563,9 @@
 
         function buildChannelShareUrl(channelId = ACTIVE_CHANNEL_ID) {
             const url = new URL(window.location.href);
+            const relaySessionId = `${RELAX_RELAY_SESSION_PREFIX}${channelId}`;
             url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
+            url.searchParams.set(CHANNEL_SHARE_QUERY_PARAM, relaySessionId);
             return url.toString();
         }
 
@@ -1607,6 +1619,7 @@
             teardownRelayForChannelSwitch();
             const url = new URL(window.location.href);
             url.searchParams.set(CHANNEL_QUERY_PARAM, channelId);
+            url.searchParams.set(CHANNEL_SHARE_QUERY_PARAM, `${RELAX_RELAY_SESSION_PREFIX}${channelId}`);
             window.location.replace(url.toString());
         }
 

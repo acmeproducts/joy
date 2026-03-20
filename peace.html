@@ -5443,19 +5443,6 @@
             recBtn.classList.remove('bg-red-100','text-red-700','animate-pulse'); 
         }
 
-        if (updateNameBtn && localNameInput) {
-            updateNameBtn.onclick = () => {
-                updateLocalName(localNameInput.value);
-                requestAutoReload('name-update');
-            };
-            localNameInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    updateNameBtn.click();
-                }
-            });
-        }
-
         updateLocalProfileUI();
         updateLocalChatNames();
         renderChannelControls();

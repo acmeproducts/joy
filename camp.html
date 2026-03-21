@@ -237,6 +237,20 @@
                     <button class="shrink-0 px-3 py-2 bg-gray-100 text-gray-500 text-xs font-medium rounded-lg hover:bg-gray-200 transition" id="reset-bg-btn" type="button">Reset</button>
                 </div>
             </div>
+            <div class="settings-row items-start">
+                <span class="settings-label pt-2">Splash Link</span>
+                <div class="settings-field space-y-2">
+                    <input id="splash-link-input" type="url" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="Google Sheet / Drive link">
+                    <p class="text-[11px] text-gray-400">Saved locally for this session key. Leave blank to use the default splash feed.</p>
+                </div>
+            </div>
+            <div class="settings-row items-start">
+                <span class="settings-label pt-2">Session Key</span>
+                <div class="settings-field space-y-2">
+                    <input id="session-key-input" type="text" maxlength="64" class="w-full px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-blue-300 focus:border-blue-300" placeholder="room-key">
+                    <p class="text-[11px] text-gray-400">Chats, room state, and saved splash settings are isolated by session key.</p>
+                </div>
+            </div>
             <div class="settings-row">
                 <span class="settings-label">Fade</span>
                 <div class="settings-field">
@@ -1228,7 +1242,36 @@
             isDead() { return this.alpha <= 0; }
         }
 
-        const RELAY_SESSION_ID = 'relax:peace';
+        const SESSION_KEY_STORAGE_KEY = 'garden_session_key';
+
+        function normalizeSessionKey(value, fallback = '') {
+            const normalized = String(value || '')
+                .trim()
+                .replace(/[^A-Za-z0-9_-]+/g, '-')
+                .replace(/-{2,}/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 64);
+            return normalized || fallback;
+        }
+
+        const resolvedSessionKey = (() => {
+            const fromUrl = normalizeSessionKey(new URLSearchParams(window.location.search).get('sessionKey'));
+            let fromStorage = '';
+            try {
+                fromStorage = normalizeSessionKey(localStorage.getItem(SESSION_KEY_STORAGE_KEY));
+            } catch (_) {}
+            const nextKey = fromUrl || fromStorage || 'peace';
+            try {
+                localStorage.setItem(SESSION_KEY_STORAGE_KEY, nextKey);
+            } catch (_) {}
+            if (fromUrl !== nextKey) {
+                const nextUrl = new URL(window.location.href);
+                nextUrl.searchParams.set('sessionKey', nextKey);
+                history.replaceState(null, '', nextUrl.toString());
+            }
+            return nextKey;
+        })();
+        const RELAY_SESSION_ID = `relax:${resolvedSessionKey}`;
         const RELAY_SIGNAL_HTTP_URL = 'https://gift-signal.myacctfortracking.workers.dev/signal';
         const RELAY_SIGNAL_WS_URL = 'wss://gift-signal.myacctfortracking.workers.dev/signal';
         const CLIENT_ID_STORAGE_KEY = `relax_client_id_${RELAY_SESSION_ID}`;
@@ -1245,7 +1288,7 @@
         }
         const RELAY_CLIENT_ID = resolvedClientId;
         const LAMPORT_STORAGE_KEY = 'garden_lamport_clock';
-        const BG_META_STORAGE_KEY = 'garden_bg_meta';
+        const BG_META_STORAGE_KEY = `garden_bg_meta_${RELAY_SESSION_ID}`;
         let lamportClock = Number(localStorage.getItem(LAMPORT_STORAGE_KEY)) || 0;
         let backgroundMeta = (() => {
             try {
@@ -4967,8 +5010,44 @@
 
     <script>
         const AppState = { bgImage: null, useGradient: true };
-        const SHEET_ID = '1lSxTIZbtXWdxCUWqdqan-hCV1f5_aWQCoV-HXSRHxng';
-        const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+        const DEFAULT_SHEET_ID = '1lSxTIZbtXWdxCUWqdqan-hCV1f5_aWQCoV-HXSRHxng';
+        const DEFAULT_SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${DEFAULT_SHEET_ID}/gviz/tq?tqx=out:csv`;
+        const SPLASH_LINK_STORAGE_KEY = `garden_splash_link_${RELAY_SESSION_ID}`;
+
+        function resolveGoogleSheetCsvUrl(rawValue) {
+            const value = String(rawValue || '').trim();
+            if (!value) return '';
+            if (/^https?:\/\//i.test(value) && /tqx=out:csv/i.test(value)) {
+                return value;
+            }
+            const spreadsheetMatch = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+            if (spreadsheetMatch?.[1]) {
+                return `https://docs.google.com/spreadsheets/d/${spreadsheetMatch[1]}/gviz/tq?tqx=out:csv`;
+            }
+            const idMatch = value.match(/[?&]id=([a-zA-Z0-9-_]+)/i) || value.match(/^([a-zA-Z0-9-_]{20,})$/);
+            if (idMatch?.[1]) {
+                return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/gviz/tq?tqx=out:csv`;
+            }
+            return value;
+        }
+
+        function loadSplashLinkPreference() {
+            try {
+                return (localStorage.getItem(SPLASH_LINK_STORAGE_KEY) || '').trim();
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function persistSplashLinkPreference(value) {
+            try {
+                if (value) {
+                    localStorage.setItem(SPLASH_LINK_STORAGE_KEY, value);
+                } else {
+                    localStorage.removeItem(SPLASH_LINK_STORAGE_KEY);
+                }
+            } catch (_) {}
+        }
 
         function parseCsvRowValue(row) {
             const trimmed = row.trim();
@@ -5075,6 +5154,7 @@
             }
         }
 
+        let splashSheetSource = loadSplashLinkPreference();
         let sheetRows = [];
 
         function parseWordList(raw) {
@@ -5116,9 +5196,37 @@
         }
 
         const cBox=document.getElementById('custom-words');
+        const splashLinkInput = document.getElementById('splash-link-input');
+        const sessionKeyInput = document.getElementById('session-key-input');
         const customWordsImportBtn = document.getElementById('custom-words-import-btn');
         const customWordsExportBtn = document.getElementById('custom-words-export-btn');
         const customWordsImportInput = document.getElementById('custom-words-import-input');
+        if (splashLinkInput) {
+            splashLinkInput.value = splashSheetSource;
+            splashLinkInput.addEventListener('change', async (event) => {
+                splashSheetSource = (event.target?.value || '').trim();
+                persistSplashLinkPreference(splashSheetSource);
+                const loaded = await loadSplashCopyFromSheet();
+                showUiNotice(loaded ? 'Splash feed updated.' : 'Unable to load that splash feed.');
+            });
+        }
+        if (sessionKeyInput) {
+            sessionKeyInput.value = resolvedSessionKey;
+            sessionKeyInput.addEventListener('change', (event) => {
+                const nextKey = normalizeSessionKey(event.target?.value, resolvedSessionKey);
+                event.target.value = nextKey;
+                try {
+                    localStorage.setItem(SESSION_KEY_STORAGE_KEY, nextKey);
+                } catch (_) {}
+                if (nextKey === resolvedSessionKey) {
+                    showUiNotice('Session key saved.');
+                    return;
+                }
+                const nextUrl = new URL(window.location.href);
+                nextUrl.searchParams.set('sessionKey', nextKey);
+                window.location.href = nextUrl.toString();
+            });
+        }
         cBox.value=localStorage.getItem('garden_words')||"";
         applyCustomWordsSelection(cBox.value, { persist: false });
         const applyCustomWordsInput = (value) => {
@@ -5158,22 +5266,27 @@
         }
 
         async function loadSplashCopyFromSheet() {
-            try {
-                const response = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
-                if (!response.ok) return false;
-                const csvText = await response.text();
-                const rows = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
-                if (rows.length === 0) return false;
-                sheetRows = rows.map(parseCsvRowValue);
-                const values = sheetRows.slice(0, 4);
-                if (values[0]) document.getElementById('main-title').innerHTML = values[0];
-                if (values[1]) document.getElementById('main-subtitle-container').innerHTML = values[1];
-                if (values[2]) setFooterText(values[2]);
-                applyCustomWordsSelection(document.getElementById('custom-words')?.value || '', { persist: false });
-                return true;
-            } catch (e) {
-                return false;
+            const sources = [];
+            const preferredUrl = resolveGoogleSheetCsvUrl(splashSheetSource);
+            if (preferredUrl) sources.push(preferredUrl);
+            if (!sources.includes(DEFAULT_SHEET_CSV_URL)) sources.push(DEFAULT_SHEET_CSV_URL);
+            for (const sourceUrl of sources) {
+                try {
+                    const response = await fetch(sourceUrl, { cache: 'no-store' });
+                    if (!response.ok) continue;
+                    const csvText = await response.text();
+                    const rows = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+                    if (rows.length === 0) continue;
+                    sheetRows = rows.map(parseCsvRowValue);
+                    const values = sheetRows.slice(0, 4);
+                    if (values[0]) document.getElementById('main-title').innerHTML = values[0];
+                    if (values[1]) document.getElementById('main-subtitle-container').innerHTML = values[1];
+                    if (values[2]) setFooterText(values[2]);
+                    applyCustomWordsSelection(document.getElementById('custom-words')?.value || '', { persist: false });
+                    return true;
+                } catch (e) {}
             }
+            return false;
         }
         
         async function initEnvironment() {

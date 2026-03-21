@@ -173,6 +173,8 @@
         <select id="experience" name="experience" aria-describedby="experienceHint">
           <option value="gift.html">A Gift for You</option>
           <option value="camp.html">Camp</option>
+          <option value="campfire.html">Campfire</option>
+          <option value="camper.html">Camper</option>
           <option value="relax.html">A Time to Relax</option>
           <option value="happy.html">A Time to Relax (Beta)</option>
           <option value="test.html">Test Sandbox</option>
@@ -254,6 +256,8 @@
       const decodeExperience = (slug) => {
         const normalized = slug.trim().toLowerCase();
         if (normalized.includes('gift')) return 'gift.html';
+        if (normalized.includes('campfire')) return 'campfire.html';
+        if (normalized.includes('camper')) return 'camper.html';
         if (normalized.includes('camp')) return 'camp.html';
         if (normalized.includes('relax')) return 'relax.html';
         if (normalized.includes('happy')) return 'happy.html';

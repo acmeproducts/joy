@@ -174,7 +174,7 @@
                 </button>
                 <input id="peer-chat-attachments-input" type="file" accept="image/*,application/pdf,text/html,audio/mpeg,audio/wav,audio/x-wav,video/x-msvideo,video/mp4" multiple class="hidden">
                 <input id="peer-chat-import-input" type="file" accept="application/json" class="hidden">
-                <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok)">
+                <input id="peer-chat-input" type="text" class="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-300 focus:border-blue-300" placeholder="Type a message... (Markdown ok, linktext--url)">
                 <button id="peer-chat-send" class="px-3 py-2 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition">Send</button>
             </div>
             <div class="flex flex-col gap-2 text-[10px] text-gray-400" id="peer-chat-attachments">
@@ -1847,12 +1847,30 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function normalizeChatHref(rawUrl) {
+            const value = (rawUrl || '').trim();
+            if (!value) return '';
+            if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return value;
+
+            const hasLeadingSlashes = value.startsWith('//');
+            const candidate = hasLeadingSlashes ? value.slice(2) : value;
+            const slashIndex = candidate.search(/[/?#]/);
+            const host = (slashIndex === -1 ? candidate : candidate.slice(0, slashIndex)).trim();
+            const rest = slashIndex === -1 ? '' : candidate.slice(slashIndex);
+            if (!host) return '';
+            const normalizedHost = host.includes('.') ? host : `${host}.com`;
+            return `https://${normalizedHost}${rest}`;
+        }
+
         function normalizeChatMessage(text) {
-            return (text || '').replace(/\/\/([^\n/][^\n]*?)\/\/((?:https?:\/\/)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:[^\s]*)?)/g, (_, label, url) => {
+            // linktext--url examples:
+            // yo--google => [**yo**](https://google.com)
+            // yo -- example.org => [**yo**](https://example.org)
+            // yo--https://example.org/path => [**yo**](https://example.org/path)
+            return (text || '').replace(/(^|\n)([^\n]+?)\s*--\s*([^\s][^\n]*)/g, (match, prefix, label, url) => {
                 const cleanLabel = label.trim();
-                const cleanUrl = url.trim();
-                const normalizedUrl = /^https?:\/\//i.test(cleanUrl) ? cleanUrl : `https://${cleanUrl}`;
-                return cleanLabel ? `[${cleanLabel}](${normalizedUrl})` : _;
+                const normalizedUrl = normalizeChatHref(url);
+                return cleanLabel && normalizedUrl ? `${prefix}[**${cleanLabel}**](${normalizedUrl})` : match;
             });
         }
 

@@ -1272,6 +1272,7 @@ var pendingMsgAcks={};
 var pendingTrAcks={};
 var msgSeq=0;
 var lastRelaySeq=0;
+var backfillSinceSeq=0;
 var socketState='closed';
 var reconnectGraceUntil=0;
 var transportHandlers=[];
@@ -1302,7 +1303,7 @@ function setSocketState(s){socketState=s;if(s!=='open'){peerState.connected=fals
 function markPeerSeen(){peerState.connected=true;peerState.lastSeenAt=Date.now();updateDot();}
 function markPeerAnnounced(){peerState.connected=true;peerState.lastSeenAt=Date.now();updateDot();}
 function peerIsFresh(){return peerState.connected&&(Date.now()-peerState.lastSeenAt)<PEER_STALE_MS;}
-function resetBackfillCursor(){lastRelaySeq=0;}
+function resetBackfillCursor(){backfillSinceSeq=0;}
 function getPendingEntry(kind,id){var store=kind==='msg'?pendingMsgAcks:pendingTrAcks;return store[id]||null;}
 function getPendingEvent(kind,id){var entry=getPendingEntry(kind,id);return entry&&entry.event?entry.event:entry;}
 function markMessageDeliveryState(convId,msgId,status){
@@ -1353,7 +1354,7 @@ function sendInitialHello(sess){
 // Fetch missed messages via HTTP GET (like peace.html's fetchRelayBackfill)
 function fetchBackfill(){
   if(!connectedConvId)return;
-  var since=Math.max(0,lastRelaySeq||0);
+  var since=Math.max(0,Number.isFinite(backfillSinceSeq)?backfillSinceSeq:(lastRelaySeq||0));
   var url=RELAY_WS_URL.replace('wss://','https://').replace('ws://','http://')
     +'?session='+encodeURIComponent(connectedConvId)
     +'&client='+encodeURIComponent(DEVICE_ID)
@@ -1366,8 +1367,13 @@ function fetchBackfill(){
     if(!newMsgs.length){addDiagLog('BACKFILL: '+msgs.length+' fetched, 0 new since seq='+since);return;}
     addDiagLog('BACKFILL: '+newMsgs.length+' new of '+msgs.length+' fetched since seq='+since);
     newMsgs.forEach(function(m){
-      if(m.seq&&m.seq>lastRelaySeq)lastRelaySeq=m.seq;
-      if(m.seq)msgSeq=Math.max(msgSeq,m.seq);
+      var seq=Number(m.seq);
+      if(Number.isFinite(seq)){
+        if(seq<=lastRelaySeq){return;}
+        lastRelaySeq=seq;
+        backfillSinceSeq=seq;
+        msgSeq=Math.max(msgSeq,seq);
+      }
       transportHandlers.forEach(function(h){h(m);});
     });
   }).catch(function(e){addDiagLog('BACKFILL failed: '+String(e),'warn');});
@@ -1418,7 +1424,13 @@ function transportConnect(convId,participant,opts){
         return;
       }
       if(m.type==='pong'){lastPongAt=Date.now();markPeerSeen();return;}
-      if(m.seq){msgSeq=Math.max(msgSeq,m.seq);if(m.seq>lastRelaySeq)lastRelaySeq=m.seq;}
+      var seq=Number(m.seq);
+      if(Number.isFinite(seq)){
+        msgSeq=Math.max(msgSeq,seq);
+        if(seq<=lastRelaySeq){return;}
+        lastRelaySeq=seq;
+        backfillSinceSeq=seq;
+      }
       transportHandlers.forEach(function(h){h(m);});
     }catch(_){}
   };

@@ -78,6 +78,8 @@ textarea.field-input{resize:none;}
 .shell-dot.yellow{background:#F59E0B;animation:connPulse 1.5s ease-in-out infinite;}
 .shell-dot.red{background:#EF4444;}
 .shell-dot.gray{background:var(--ink-dim);}
+.shell-dot.presence{cursor:default;}
+.shell-dot.presence.off{background:var(--ink-dim);}
 @keyframes connPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
 .shell-partner{text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;}
 .shell-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
@@ -391,6 +393,8 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </button>
     <div style="flex:1;"></div>
     <div class="shell-dot" id="shell-dot" onclick="forceReconnect()" title="Connection"></div>
+    <div class="shell-dot presence off" id="self-dot" title="You"></div>
+    <div class="shell-dot presence off" id="peer-dot" title="Partner"></div>
   </div>
 
   <!-- Partner name -->
@@ -827,8 +831,28 @@ var recognition=null,sttActive=false;
 // ════════════════════════════════════════════════════════
 // STORAGE HELPERS
 // ════════════════════════════════════════════════════════
-function getAllSessions(){return lsJSON(SK.sessions,[]);}
-function saveSessions(l){lsW(SK.sessions,JSON.stringify((l||[]).slice(0,MAX_SESSIONS_STORED)));}
+function normalizeSession(sess){
+  var raw=(sess&&typeof sess==='object')?sess:{};
+  var p=getPrefs();
+  var now=Date.now();
+  var createdAt=Number(raw.createdAt)||now;
+  var lastActivity=Number(raw.lastActivity)||createdAt;
+  var out={
+    convId:raw.convId||uid(),
+    myName:firstRealName(raw.myName,raw.names&&raw.names.meAlias,p.userName)||p.userName||'yournamehere',
+    peerName:firstRealName(raw.peerName,raw.partnerName,raw.names&&raw.names.themAlias,raw.invitePartnerName,raw.title)||'',
+    createdAt:createdAt,
+    lastActivity:lastActivity,
+    myLang:raw.myLang||p.myLang||'en',
+    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en'
+  };
+  if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
+  if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
+  if(Number(raw.inviteCreatedAt))out.inviteCreatedAt=Number(raw.inviteCreatedAt);
+  return out;
+}
+function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId;});}
+function saveSessions(l){lsW(SK.sessions,JSON.stringify((l||[]).map(normalizeSession).slice(0,MAX_SESSIONS_STORED)));}
 function getSessionOrder(){return lsJSON(SK.order,[]);}
 function saveSessionOrder(o){lsW(SK.order,JSON.stringify(o));}
 function normalizeSessionOrder(order,appendMissing){var validIds=getAllSessions().map(function(s){return s&&s.convId;}).filter(Boolean);var validSet=new Set(validIds);var out=[];(Array.isArray(order)?order:[]).forEach(function(id){if(validSet.has(id)&&out.indexOf(id)<0)out.push(id);});if(appendMissing!==false)validIds.forEach(function(id){if(out.indexOf(id)<0)out.push(id);});return out;}
@@ -839,7 +863,16 @@ function saveSessionNotes(n){lsW(SK.notes,JSON.stringify(n||{}));}
 function getActiveConvId(){return ls(SK.activeConv)||null;}
 function setActiveConvId(id){if(id)lsW(SK.activeConv,id);else lsDel(SK.activeConv);}
 function getSession(cid){return getAllSessions().find(function(s){return s.convId===cid;})||null;}
-function putSession(sess){if(!sess)return;var ss=getAllSessions();var idx=ss.findIndex(function(s){return s.convId===sess.convId;});if(idx>=0)ss[idx]=sess;else ss.unshift(sess);saveSessions(ss);setActiveConvId(sess.convId);}
+function putSession(sess){
+  if(!sess)return null;
+  var next=normalizeSession(sess);
+  var ss=getAllSessions();
+  var idx=ss.findIndex(function(s){return s.convId===next.convId;});
+  if(idx>=0)ss[idx]=next;else ss.unshift(next);
+  saveSessions(ss);
+  setActiveConvId(next.convId);
+  return next;
+}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1053,31 +1086,16 @@ function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&tar
 function isPlaceholderName(name){var v=(name||'').trim().toLowerCase();return !v||v==='new chat'||v==='partner'||v==='yournamehere';}
 function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]||'').trim();if(v&&!isPlaceholderName(v))return v;}return '';}
 
-function ensureSessionNames(sess){
-  if(!sess)return {meAlias:'yournamehere',themAlias:'Partner',version:1};
-  var p=getPrefs();
-  if(!sess.names||typeof sess.names!=='object')sess.names={};
-  if(typeof sess.names.meAlias!=='string'||!sess.names.meAlias.trim())sess.names.meAlias=sess.myName||p.userName||'yournamehere';
-  var preferredThem=firstRealName(sess.names.themAlias,sess.partnerName,sess.title);
-  if(preferredThem)sess.names.themAlias=preferredThem;
-  else if(typeof sess.names.themAlias!=='string'||!sess.names.themAlias.trim())sess.names.themAlias='new chat';
-  if(typeof sess.names.version!=='number'||!isFinite(sess.names.version)||sess.names.version<1)sess.names.version=1;
-  sess.myName=sess.names.meAlias;
-  sess.partnerName=sess.names.themAlias;
-  if(sess.title==='new chat'&&sess.names.themAlias)sess.title=sess.names.themAlias;
-  return sess.names;
-}
 function stampMsgNames(msg,sess){
-  var names=ensureSessionNames(sess);
+  var s=sess?normalizeSession(sess):normalizeSession({});
   if(msg.from==='me'){
-    msg.displayFromName=names.meAlias||'Me';
-    msg.displayToName=names.themAlias||'Partner';
+    msg.displayFromName=s.myName||'Me';
+    msg.displayToName=s.peerName||'Partner';
   }else if(msg.from==='them'){
-    // Prefer name from wire envelope (set before this call), fall back to session
-    if(!msg.displayFromName)msg.displayFromName=names.themAlias||'Partner';
-    msg.displayToName=names.meAlias||'Me';
+    if(!msg.displayFromName)msg.displayFromName=s.peerName||'Partner';
+    msg.displayToName=s.myName||'Me';
   }
-  msg.nameVersion=names.version;
+  msg.nameVersion=1;
 }
 function stampExistingMessageNames(msgs,sess){var changed=false;(msgs||[]).forEach(function(m){if((m.from==='me'||m.from==='them')&&(!m.displayFromName||!m.displayToName||!m.nameVersion)){stampMsgNames(m,sess);changed=true;}});return changed;}
 
@@ -1090,21 +1108,6 @@ function addSystemNote(convId,text,timestamp){
   var sess=getSession(convId);if(sess){sess.lastActivity=m.timestamp;putSession(sess);}
   saveMsgs(convId,msgs);
 }
-function updateSessionNames(sess,nextMe,nextThem,changedBy){
-  if(!sess)return false;
-  var names=ensureSessionNames(sess);
-  var actor=(changedBy||names.meAlias||'Someone').trim()||'Someone';
-  var me=(nextMe||names.meAlias||'').trim();
-  var them=(nextThem||names.themAlias||'').trim();
-  if(!me||!them)return false;
-  if(me===names.meAlias&&them===names.themAlias)return false;
-  names.meAlias=me;names.themAlias=them;names.version+=1;
-  sess.myName=me;sess.partnerName=them;
-  putSession(sess);
-  addSystemNote(sess.convId,actor+' changed names to '+me+'/'+them+' \u00b7 '+fmtDateTime(Date.now()));
-  return true;
-}
-
 // ════════════════════════════════════════════════════════
 // UTILITIES
 // ════════════════════════════════════════════════════════
@@ -1274,9 +1277,15 @@ var msgSeq=0;
 var lastRelaySeq=0;
 var backfillSinceSeq=0;
 var socketState='closed';
+var activeSocketState='closed';
 var reconnectGraceUntil=0;
 var transportHandlers=[];
-var peerState={connected:false,lastSeenAt:0};
+var selfPresent=false;
+var peerPresent=false;
+var peerLastSeenAt=0;
+var peerEverSeen=false;
+var openedSessionsInPage={};
+var reconnectNotePending=false;
 var hbTimer=null;
 var lastRxAt=0;
 var lastPongAt=0;
@@ -1299,10 +1308,65 @@ var EPHEMERAL_EVENT_TYPES=['ping','pong','typing','reattach','hello'];
 var inboundSeen=new Map();
 var INBOUND_DEDUPE_TTL_MS=12000;
 
-function setSocketState(s){socketState=s;if(s!=='open'){peerState.connected=false;}updateDot();}
-function markPeerSeen(){peerState.connected=true;peerState.lastSeenAt=Date.now();updateDot();}
-function markPeerAnnounced(){peerState.connected=true;peerState.lastSeenAt=Date.now();updateDot();}
-function peerIsFresh(){return peerState.connected&&(Date.now()-peerState.lastSeenAt)<PEER_STALE_MS;}
+function formatPresenceTime(ts){return ts?fmtDateTime(ts):'Not seen yet';}
+function notePresenceTransition(kind){
+  if(!state.activeConvId)return;
+  if(kind==='self-open'&&!openedSessionsInPage[state.activeConvId]){
+    openedSessionsInPage[state.activeConvId]=true;
+    addSystemNote(state.activeConvId,'You joined',Date.now());
+  }else if(kind==='peer-join'){
+    addSystemNote(state.activeConvId,'Partner joined',Date.now());
+  }else if(kind==='peer-left'){
+    addSystemNote(state.activeConvId,'Partner left',Date.now());
+  }else if(kind==='reconnected'){
+    addSystemNote(state.activeConvId,'Reconnected',Date.now());
+  }
+}
+function updateInviteCardStatus(){
+  var cid=state.activeConvId;
+  var el=cid&&document.getElementById('invite-status-'+cid);
+  if(!el)return;
+  el.style.color='var(--ink-dim)';
+  if(!peerEverSeen){el.textContent='Waiting for partner';return;}
+  if(peerPresent){el.textContent='Partner connected';el.style.color='var(--green)';return;}
+  el.textContent='Partner last seen '+formatPresenceTime(peerLastSeenAt);
+}
+function updatePresenceIndicators(){
+  var selfDot=document.getElementById('self-dot');
+  var peerDot=document.getElementById('peer-dot');
+  if(selfDot){
+    selfDot.className='shell-dot presence '+(selfPresent?'green':'off');
+    selfDot.title=selfPresent?'You are here now':'Not attached to a conversation';
+  }
+  if(peerDot){
+    peerDot.className='shell-dot presence '+(peerPresent?'green':(peerEverSeen?'yellow':'off'));
+    peerDot.title=peerPresent?'Present now':(peerEverSeen?('Last seen '+formatPresenceTime(peerLastSeenAt)):'Not seen yet');
+  }
+  updateInviteCardStatus();
+}
+function setSocketState(s){socketState=s;activeSocketState=s;if(s!=='open')peerPresent=false;updateDot();}
+function refreshPeerPresence(opts){
+  opts=opts||{};
+  var ts=opts.timestamp||Date.now();
+  var wasPresent=peerPresent;
+  peerLastSeenAt=ts;
+  peerPresent=true;
+  peerEverSeen=true;
+  if(!opts.historical&&!wasPresent)notePresenceTransition('peer-join');
+  updateDot();
+}
+function markPeerSeen(opts){refreshPeerPresence(opts);}
+function markPeerAnnounced(opts){refreshPeerPresence(opts);}
+function peerIsFresh(){return peerPresent&&(Date.now()-peerLastSeenAt)<PEER_STALE_MS;}
+function resetActivePresence(convId){
+  selfPresent=!!convId;
+  peerPresent=false;
+  peerLastSeenAt=0;
+  peerEverSeen=false;
+  reconnectNotePending=false;
+  updateDot();
+  if(convId)notePresenceTransition('self-open');
+}
 function resetBackfillCursor(){backfillSinceSeq=0;}
 function getPendingEntry(kind,id){var store=kind==='msg'?pendingMsgAcks:pendingTrAcks;return store[id]||null;}
 function getPendingEvent(kind,id){var entry=getPendingEntry(kind,id);return entry&&entry.event?entry.event:entry;}
@@ -1336,7 +1400,11 @@ function startHeartbeatLoop(){
     var now=Date.now();
     try{ws.send(JSON.stringify({type:'ping',session:connectedConvId,from:DEVICE_ID,participant:PART_ID,ts:now}));}catch(_){return;}
     if(now<reconnectGraceUntil){updateDot();return;}
-    var lastSignal=Math.max(lastPongAt,lastRxAt,peerState.lastSeenAt);
+    var lastSignal=Math.max(lastPongAt,lastRxAt,peerLastSeenAt);
+    if(peerPresent&&peerLastSeenAt&&(now-peerLastSeenAt)>PEER_STALE_MS){
+      peerPresent=false;
+      notePresenceTransition('peer-left');
+    }
     if(lastSignal&&now-lastSignal>HEARTBEAT_STALE_MS){
       addDiagLog('HEARTBEAT stale — closing socket','warn');
       ws.close(4002,'heartbeat-stale');
@@ -1374,7 +1442,7 @@ function fetchBackfill(){
         backfillSinceSeq=seq;
         msgSeq=Math.max(msgSeq,seq);
       }
-      transportHandlers.forEach(function(h){h(m);});
+      transportHandlers.forEach(function(h){h(Object.assign({_historical:true},m));});
     });
   }).catch(function(e){addDiagLog('BACKFILL failed: '+String(e),'warn');});
 }
@@ -1395,6 +1463,8 @@ function transportConnect(convId,participant,opts){
     if(rcTimer){clearTimeout(rcTimer);rcTimer=null;}
     rcAttempts=0;
     setSocketState('open');
+    if(reconnectNotePending&&state.activeConvId===connectedConvId)notePresenceTransition('reconnected');
+    reconnectNotePending=false;
     reconnectInProgress=false;
     reconnectCooldownUntil=Date.now()+RECONNECT_COOLDOWN_MS;
     lastRxAt=Date.now();lastPongAt=Date.now();missedHeartbeats=0;
@@ -1419,11 +1489,11 @@ function transportConnect(convId,participant,opts){
     try{
       var m=JSON.parse(e.data);
       if(m.type==='ping'){
-        markPeerSeen();
+        markPeerSeen({timestamp:Date.now()});
         try{ws.send(JSON.stringify({type:'pong',session:connectedConvId,from:DEVICE_ID,participant:PART_ID,ts:Date.now()}));}catch(_){}
         return;
       }
-      if(m.type==='pong'){lastPongAt=Date.now();markPeerSeen();return;}
+      if(m.type==='pong'){lastPongAt=Date.now();markPeerSeen({timestamp:Date.now()});return;}
       var seq=Number(m.seq);
       if(Number.isFinite(seq)){
         msgSeq=Math.max(msgSeq,seq);
@@ -1439,6 +1509,7 @@ function transportConnect(convId,participant,opts){
     ws=null;stopHeartbeatLoop();
     addDiagLog('DISCONNECTED code='+e.code+' reason='+(e.reason||'none')+(intentionalClose?' (intentional)':''));
     if(intentionalClose){setSocketState('closed');return;}
+    reconnectNotePending=state.activeConvId===connectedConvId;
     setSocketState('reconnecting');
     scheduleReconnect();
   };
@@ -1539,7 +1610,8 @@ function transportDisconnect(opts){
   connectedConvId=null;
   stopHeartbeatLoop();
   lastRxAt=0;lastPongAt=0;missedHeartbeats=0;reconnectGraceUntil=0;
-  peerState.connected=false;
+  peerPresent=false;
+  selfPresent=!!state.activeConvId;
   setSocketState('closed');
   updateDot();
 }
@@ -1622,6 +1694,7 @@ window.addEventListener('focus',function(){
 function onTransportEvent(h){transportHandlers.push(h);}
 
 function updateDot(){
+  activeSocketState=socketState;
   var cls,title;
   if(!navigator.onLine){cls='shell-dot gray';title='Offline';}
   else if(socketState==='open'){cls='shell-dot '+(peerIsFresh()?'green':'yellow');title=peerIsFresh()?'Connected (peer active)':'Relay connected';}
@@ -1629,6 +1702,7 @@ function updateDot(){
   else{cls='shell-dot red';title='Disconnected';}
   var dot=document.getElementById('shell-dot');if(dot){dot.className=cls;dot.title=title;}
   var idot=document.getElementById('invite-dot');if(idot){idot.className=cls;idot.title=title;}
+  updatePresenceIndicators();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1642,10 +1716,11 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
 function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
 function saveLocalName(el){
+  var prev=getPrefs().userName||'yournamehere';
   var v=(el.textContent||'').trim();
-  if(!v){el.textContent=getPrefs().userName||'yournamehere';return;}
+  if(!v){el.textContent=prev;return;}
   var p=getPrefs();p.userName=v;savePrefs(p);
-  if(state.activeConvId){var sess=getSession(state.activeConvId);if(sess){ensureSessionNames(sess);updateSessionNames(sess,v,sess.names.themAlias,sess.names.meAlias||'Someone');renderSessionList();}}
+  el.textContent=v;
   toast('Name saved');
 }
 
@@ -1662,8 +1737,8 @@ function ensureUserName(callback){
 }
 function createNewSession(silent){
   ensureUserName(function(name){
-    var cid=uid();var p=getPrefs();
-    var sess={convId:cid,partId:PART_ID,title:'new chat',myName:name,partnerName:'',names:{meAlias:name,themAlias:'new chat',version:1},myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:Date.now(),lastActivity:Date.now(),lastViewedAt:Date.now(),status:'active'};
+    var cid=uid();var p=getPrefs();var now=Date.now();
+    var sess={convId:cid,myName:name,peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now};
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -1688,6 +1763,7 @@ function openInviteScreen(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
+  resetActivePresence(cid);
   transportConnect(cid,PART_ID);
   renderAllMessages();
   scrollBottom();
@@ -1728,7 +1804,7 @@ function resendInvite(){
 
 function openSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
-  ensureSessionNames(sess);putSession(sess);
+  sess=putSession(sess);
   if(connectedConvId&&connectedConvId!==cid){
     addDiagLog('openSession: disconnecting from '+connectedConvId.slice(0,8)+' to switch to '+cid.slice(0,8));
     transportDisconnect({preserveQueue:false});
@@ -1746,51 +1822,50 @@ function openSession(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
+  resetActivePresence(cid);
   transportConnect(cid,PART_ID);
-  // Ensure invite message exists if partner hasn't joined
-  if(!sess._partnerJoined){
-    state.pendingInviteId=cid;
-    addInviteMessage(cid);
-  }
+  state.pendingInviteId=cid;
+  addInviteMessage(cid);
   renderAllMessages();
   scrollBottom();
   showScreen('chat-screen');
 }
 
-// Fix 4: Smart header — shows waiting state or "Me ↔ Partner"
 function updatePartnerHeader(sess){
-  var el=document.getElementById('shell-partner-name');if(!el||!sess)return;
-  var names=ensureSessionNames(sess);
-  var partnerName=firstRealName(names.themAlias,sess.partnerName,sess.title);
-  var myName=firstRealName(names.meAlias,sess.myName);
-  if(myName&&!isPlaceholderName(myName)&&partnerName&&!isPlaceholderName(partnerName)){
-    el.textContent=myName+' \u2194 '+partnerName;
-  }else if(myName&&!isPlaceholderName(myName)){
-    el.textContent=myName+' \u2194 ?';
-  }else if(partnerName&&!isPlaceholderName(partnerName)){
-    el.textContent=partnerName;
-  }else{
-    el.textContent='new chat';
-  }
+  var el=document.getElementById('shell-partner-name');if(!el)return;
+  var s=sess?normalizeSession(sess):normalizeSession({});
+  var partnerName=firstRealName(s.peerName);
+  el.textContent=partnerName&&!isPlaceholderName(partnerName)?partnerName:'new chat';
 }
 
 function showEmptyShell(){
   state.activeConvId=null;
+  selfPresent=false;peerPresent=false;peerEverSeen=false;peerLastSeenAt=0;
   document.getElementById('shell-empty').style.display='flex';
   document.getElementById('messages').style.display='none';
   document.getElementById('composer').style.display='none';
   document.getElementById('shell-partner-name').textContent='';
+  updateDot();
 }
 
 function savePartnerName(el){
-  var v=(el.textContent||'').trim();if(!v||!state.activeConvId){el.textContent='new chat';return;}
+  var v=(el.textContent||'').trim();
+  if(!state.activeConvId){el.textContent='new chat';return;}
   var sess=getSession(state.activeConvId);if(!sess)return;
-  ensureSessionNames(sess);
-  if(updateSessionNames(sess,sess.names.meAlias,v,sess.names.meAlias||'Someone'))renderSessionList();
+  sess.peerName=v;
+  putSession(sess);
+  el.textContent=v||'new chat';
+  updatePartnerHeader(sess);
+  renderSessionList();
 }
 function saveCardTitle(cid,el){
-  var v=(el.textContent||'').trim();if(!v){el.textContent='new chat';return;}
-  var sess=getSession(cid);if(!sess)return;sess.title=v;putSession(sess);renderSessionList();
+  var v=(el.textContent||'').trim();
+  var sess=getSession(cid);if(!sess)return;
+  sess.peerName=v;
+  putSession(sess);
+  el.textContent=v||'new chat';
+  if(state.activeConvId===cid)updatePartnerHeader(sess);
+  renderSessionList();
 }
 
 // Session list with drag-sort
@@ -1808,7 +1883,7 @@ function renderSessionList(){
     var isPending=false;
     var statusBadge='';
     return '<div class="sess-card'+(isActive?' active':'')+'" draggable="true" data-conv="'+s.convId+'" ondragstart="dragStart(event)" ondragover="event.preventDefault()" ondrop="dragDrop(event)" ondragend="dragEnd(event)" onclick="onSessCardClick(event,\''+s.convId+'\')">'
-      +'<div class="sess-card-info"><div class="sess-card-title" contenteditable="true" spellcheck="false" onclick="event.stopPropagation();this.focus();" onblur="saveCardTitle(\''+s.convId+'\',this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'+escHtml(s.title||s.partnerName||'new chat')+'</div><div class="sess-card-sub">'+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
+      +'<div class="sess-card-info"><div class="sess-card-title" contenteditable="true" spellcheck="false" onclick="event.stopPropagation();this.focus();" onblur="saveCardTitle(\''+s.convId+'\',this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}">'+escHtml(s.peerName||'new chat')+'</div><div class="sess-card-sub">'+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
       +statusBadge
       +'<div style="display:flex;gap:2px;flex-shrink:0;">'
       +'<button class="sess-card-act" onclick="event.stopPropagation();exportSessionChat(\''+s.convId+'\')" title="Export chat">⇩</button>'
@@ -1827,7 +1902,7 @@ function dragStart(e){dragSrcId=e.currentTarget.dataset.conv;e.currentTarget.cla
 function dragDrop(e){e.preventDefault();var tgt=e.currentTarget.dataset.conv;if(!tgt||tgt===dragSrcId)return;var order=normalizeSessionOrder(getSessionOrder());var fi=order.indexOf(dragSrcId);var ti=order.indexOf(tgt);if(fi<0||ti<0)return;order.splice(fi,1);order.splice(ti,0,dragSrcId);saveSessionOrder(normalizeSessionOrder(order,false));renderSessionList();}
 function dragEnd(e){e.currentTarget.classList.remove('dragging');dragSrcId=null;}
 
-function softDelete(cid){var r=getRecycled();var sess=getSession(cid);if(!sess)return;r.push({convId:cid,title:sess.title||'',deletedAt:Date.now()});saveRecycled(r);if(state.activeConvId===cid){transportDisconnect();showEmptyShell();}renderSessionList();toast('Deleted — see Recently Deleted to undo');}
+function softDelete(cid){var r=getRecycled();var sess=getSession(cid);if(!sess)return;r.push({convId:cid,title:sess.peerName||'',deletedAt:Date.now()});saveRecycled(r);if(state.activeConvId===cid){transportDisconnect();showEmptyShell();}renderSessionList();toast('Deleted — see Recently Deleted to undo');}
 function restoreSession(cid){saveRecycled(getRecycled().filter(function(r){return r.convId!==cid;}));saveSessionOrder(normalizeSessionOrder(getSessionOrder()));renderSessionList();toast('Restored');}
 function permDelete(cid){saveRecycled(getRecycled().filter(function(r){return r.convId!==cid;}));saveSessions(getAllSessions().filter(function(s){return s.convId!==cid;}));deleteSessData(cid);saveSessionOrder(normalizeSessionOrder(getSessionOrder().filter(function(id){return id!==cid;}),false));renderSessionList();toast('Permanently deleted');}
 function renderRecycleBin(){var bin=document.getElementById('recycle-bin');if(!bin)return;var r=getRecycled();var now=Date.now();r=r.filter(function(x){return(now-x.deletedAt)<30*86400000;});saveRecycled(r);if(!r.length){bin.innerHTML='';return;}bin.innerHTML='<div class="recycle-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">▸ Recently Deleted ('+r.length+')</div><div class="recycle-list" style="display:none;">'+r.map(function(x){return '<div class="recycle-item"><span style="flex:1;">'+escHtml(x.title||x.convId)+'</span><button class="restore" onclick="restoreSession(\''+x.convId+'\')">Restore</button><button class="purge" onclick="permDelete(\''+x.convId+'\')">Delete</button></div>';}).join('')+'</div>';}
@@ -1863,14 +1938,12 @@ function buildInviteUrl(sess,prefs){
 
 function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
-  ensureSessionNames(sess);
   var inviteName=firstRealName(invite.initiatorGlobalName);
-  if(inviteName){sess.partnerName=inviteName;sess.title=inviteName;sess.names.themAlias=inviteName;sess.invitePartnerName=inviteName;}
+  if(inviteName)sess.peerName=inviteName;
   if(!sess.partnerLang&&invite.initiatorLang)sess.partnerLang=invite.initiatorLang;
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
-  sess._partnerAnnounced=!!(invite.initiatorDeviceId||invite.initiatorGlobalName);
-  return sess;
+  return normalizeSession(sess);
 }
 function shareSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
@@ -1905,7 +1978,7 @@ function openDiagModal(cid){
   diagCurrentSess=cid||state.activeConvId;
   var label=document.getElementById('diag-sess-label');
   var sess=diagCurrentSess?getSession(diagCurrentSess):null;
-  if(label)label.textContent='Session: '+(sess&&(sess.title||sess.partnerName)||diagCurrentSess||'global');
+  if(label)label.textContent='Session: '+(sess&&sess.peerName||diagCurrentSess||'global');
   var body=document.getElementById('diag-log-body');
   if(body){body.textContent=diagLog.length?diagLog.join('\n'):'No log entries yet.';body.scrollTop=body.scrollHeight;}
   document.getElementById('diag-overlay').hidden=false;
@@ -2031,13 +2104,8 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
-  var names=ensureSessionNames(sess);
-  var lockedInviteName=firstRealName(sess.invitePartnerName,sess.partnerName,names.themAlias,sess.title);
-  var envelopeName=firstRealName(d.name);
-  var partnerName=firstRealName(envelopeName,lockedInviteName);
-  if(partnerName){sess.partnerName=partnerName;names.themAlias=partnerName;}
-  // partnerLang: NEVER overwrite from hello envelope — partner's UI lang ≠ what they type.
-  // Only set partnerLang if completely absent (first join). Actual send-lang is detected from messages.
+  var partnerName=firstRealName(d.name,sess.peerName);
+  if(partnerName)sess.peerName=partnerName;
   if(!sess.partnerLang&&d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
   putSession(sess);
@@ -2059,15 +2127,12 @@ function handleRelayEvent(d){
   if(shouldDropInboundDuplicate(d)){addDiagLog('RX dedupe-dropped: '+d.type,'warn');return;}
 
   if(d.type==='hello'){
-    markPeerSeen();
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     upsertPartnerFromEnvelope(sess,d);
     addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
     updatePartnerHeader(sess);
     renderSessionList();
-    if(!sess._partnerJoined){
-      sess._partnerJoined=true;putSession(sess);
-      addSystemNote(sess.convId,(d.name||'Partner')+' joined \u00b7 '+fmtDateTime(Date.now()),Date.now());
-      // Resend any messages sent before partner joined
+    if(!d._historical){
       resendPreJoinMessages();
       renderAllMessages();scrollBottom();
       toast((d.name||'Partner')+' joined!');
@@ -2076,7 +2141,7 @@ function handleRelayEvent(d){
   }
 
   if(d.type==='msg'){
-    markPeerSeen();
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     var srcTxt=d.sourceText||d.orig||d.text||'';
     var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,sess.partnerLang||'en')||sess.partnerLang||'en';
     // Receiver always wants translation in their own language
@@ -2092,9 +2157,8 @@ function handleRelayEvent(d){
     var tally=ps&&ps.langTally||{};
     var totalPartnerMsgs=0;
     Object.keys(tally).forEach(function(l){totalPartnerMsgs+=tally[l];});
-    if(!sess._partnerLangFromMsg){
-      // First message ever from partner — strongest signal
-      sess.partnerLang=srcLang;sess._partnerLangFromMsg=true;putSession(sess);
+    if(totalPartnerMsgs<=1){
+      sess.partnerLang=srcLang;putSession(sess);
       addDiagLog('partnerLang set (first signal): '+srcLang);
     }else if(srcLang!==sess.partnerLang){
       var srcCount=tally[srcLang]||0;
@@ -2120,16 +2184,12 @@ function handleRelayEvent(d){
 
     upsertPartnerFromEnvelope(sess,d);
     updatePartnerHeader(sess);
-    if(!sess._partnerJoined){
-      sess._partnerJoined=true;putSession(sess);
-      addSystemNote(sess.convId,(d.name||'Partner')+' joined \u00b7 '+fmtDateTime(Date.now()),Date.now());
-    }
     if(state.pendingInviteId===sess.convId){
       state.pendingInviteId=null;
     }
     var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:d.targetText||'',orig:srcTxt,text:null,lang:srcLang,status:'received',timestamp:d.timestamp||Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
     // Use wire name for display, not stale session name
-    msg.displayFromName=d.name||sess.names.themAlias||'Partner';
+    msg.displayFromName=d.name||sess.peerName||'Partner';
     mergeMsgTranslations(msg,d.translations||{});
     stampMsgNames(msg,sess);
     state.messages.push(msg);renderMsg(msg);scrollBottom();
@@ -2155,7 +2215,7 @@ function handleRelayEvent(d){
   }
 
   if(d.type==='tr'){
-    markPeerSeen();
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     var m2=findMsg(d.id);
     if(m2){
       normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?(sess.partnerLang||'en'):(sess.myLang||'en'))});
@@ -2166,7 +2226,7 @@ function handleRelayEvent(d){
   }
 
   if(d.type==='ack'){
-    markPeerSeen();
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     if(d.ackType==='msg'){
       var pendingAck=getPendingEvent('msg',d.id);
       clearReliableAck('msg',d.id);
@@ -2176,15 +2236,16 @@ function handleRelayEvent(d){
     return;
   }
 
-  if(d.type==='typing'){markPeerSeen();showTyping(d.name);return;}
+  if(d.type==='typing'){markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});showTyping(d.name);return;}
 
   if(d.type==='clarify-note'){
-    markPeerSeen();
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     var m5=findMsg(d.id);
     if(m5){appendClarifyNote(m5,d.text||'',d.name||'Partner',d.timestamp||Date.now());saveMsgs(state.activeConvId,state.messages);updateBblClarify(m5);}
     return;
   }
   if(d.type==='card'){
+    markPeerSeen({timestamp:d.timestamp||d.ts||Date.now(),historical:!!d._historical});
     if(d.card&&d.card.source){
       upsertCardLastWins(d.card,false);
       addDiagLog('RX card source='+String(d.card.source||'').slice(0,20));
@@ -2362,8 +2423,7 @@ function renderMsg(msg){
   var isMine=msg.from==='me';
   var sides=getSides(msg);
   var sess=getSession(state.activeConvId);
-  ensureSessionNames(sess);
-  var name=msg.displayFromName||(isMine?(sess&&sess.names&&sess.names.meAlias||'Me'):(sess&&sess.names&&sess.names.themAlias||'Partner'));
+  var name=msg.displayFromName||(isMine?((sess&&sess.myName)||'Me'):((sess&&sess.peerName)||'Partner'));
   var bt=getMsgBacktranslate(msg);
   var thread=ensureClarifyThread(msg);
 
@@ -2643,7 +2703,7 @@ function sendClarifyNote(id,ctx){
   var input=document.getElementById('bclarify-input-'+id);if(!input)return;
   var note=(input.value||'').trim();if(!note)return;
   var sess=getSession(state.activeConvId);
-  var myName=(sess&&sess.names&&sess.names.meAlias)||'Me';
+  var myName=(sess&&sess.myName)||'Me';
 
   if(ctx==='phrasebook'){
     var card=getCardById(id);if(!card)return;
@@ -2829,9 +2889,7 @@ function renderInviteCard(msg){
   var statusDiv=document.createElement('div');
   statusDiv.id='invite-status-'+msg.convId;
   statusDiv.style.cssText='font-size:11px;color:var(--ink-dim);';
-  var sess=getSession(msg.convId||state.activeConvId);
-  statusDiv.textContent=(sess&&sess._partnerJoined)?((sess.partnerName||'Partner')+' connected \u2713'):'Send link to connect';
-  if(sess&&sess._partnerJoined)statusDiv.style.color='var(--green)';
+  statusDiv.textContent='Waiting for partner';
   card.appendChild(statusDiv);
   c.appendChild(card);
   // Draw QR
@@ -2848,7 +2906,7 @@ function composerInput(){
   var now=Date.now();if(now-lastTypingTs>2000){sendTyping();lastTypingTs=now;}
 }
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
-function sendTyping(){var sess=getSession(state.activeConvId);transportSend({type:'typing',name:(sess&&sess.myName)||getPrefs().userName});}
+function sendTyping(){var sess=getSession(state.activeConvId);transportSend({type:'typing',name:(sess&&sess.myName)||getPrefs().userName,timestamp:Date.now()});}
 function showTyping(n){var el=document.getElementById('typing-bar');if(el)el.textContent=(n||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
 function sendMessage(){
@@ -2868,7 +2926,6 @@ function sendMessage(){
   // If both languages are the same (no translation pair), skip
   if(outLang===targetLang)targetLang=outLang;
 
-  ensureSessionNames(sess);
   var msg=normalizeMsgSchema({id:uid(),from:'me',sourceText:text,sourceLang:outLang,targetLang:targetLang,targetText:'',text:text,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:targetLang});
   stampMsgNames(msg,sess);
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
@@ -3163,7 +3220,7 @@ function printPhrasebookSelection(){document.getElementById('print-overlay').hid
 // Search
 function openSearch(){document.getElementById('search-overlay').classList.add('open');document.getElementById('omni-search').focus();}
 function closeSearch(){document.getElementById('search-overlay').classList.remove('open');}
-function runOmniSearch(){var q=(document.getElementById('omni-search').value||'').trim().toLowerCase();var r=document.getElementById('search-results');if(!q){r.innerHTML='';return;}var h='';getAllSessions().forEach(function(s){if((s.title||'').toLowerCase().indexOf(q)>=0||(s.partnerName||'').toLowerCase().indexOf(q)>=0)h+='<div class="search-result" onclick="closeSearch();openSession(\''+s.convId+'\')"><div class="search-result-type">Session</div>'+escHtml(s.title||s.convId)+'</div>';});getCards().forEach(function(c){if((c.source||'').toLowerCase().indexOf(q)>=0||(c.target||'').toLowerCase().indexOf(q)>=0||(c.tags||[]).join(' ').toLowerCase().indexOf(q)>=0)h+='<div class="search-result"><div class="search-result-type">Phrase</div>'+escHtml(c.source)+' → '+escHtml(c.target)+'</div>';});r.innerHTML=h||'<div style="padding:20px;text-align:center;color:var(--ink-dim);">No results</div>';}
+function runOmniSearch(){var q=(document.getElementById('omni-search').value||'').trim().toLowerCase();var r=document.getElementById('search-results');if(!q){r.innerHTML='';return;}var h='';getAllSessions().forEach(function(s){if((s.peerName||'').toLowerCase().indexOf(q)>=0)h+='<div class="search-result" onclick="closeSearch();openSession(\''+s.convId+'\')"><div class="search-result-type">Session</div>'+escHtml(s.peerName||s.convId)+'</div>';});getCards().forEach(function(c){if((c.source||'').toLowerCase().indexOf(q)>=0||(c.target||'').toLowerCase().indexOf(q)>=0||(c.tags||[]).join(' ').toLowerCase().indexOf(q)>=0)h+='<div class="search-result"><div class="search-result-type">Phrase</div>'+escHtml(c.source)+' → '+escHtml(c.target)+'</div>';});r.innerHTML=h||'<div style="padding:20px;text-align:center;color:var(--ink-dim);">No results</div>';}
 
 // ════════════════════════════════════════════════════════
 // PHRASEBOOK NAVIGATION
@@ -3437,8 +3494,8 @@ function formatExportMessageBlock(msg,sess){
   var ts=fmtDateTime(msg.timestamp||Date.now());
   if(msg.from==='system')return '['+ts+'] System\n'+String(msg.text||'').trim();
   if(msg.from==='invite')return '['+ts+'] Invite\n'+String(msg.inviteUrl||msg.text||'').trim();
-  var names=ensureSessionNames(sess||{});
-  var sender=msg.from==='me'?(msg.displayFromName||names.meAlias||'Me'):(msg.displayFromName||names.themAlias||'Partner');
+  var s=normalizeSession(sess||{});
+  var sender=msg.from==='me'?(msg.displayFromName||s.myName||'Me'):(msg.displayFromName||s.peerName||'Partner');
   return '['+ts+'] '+sender+'\n'
     +'Source ('+String(msg.sourceLang||msg.lang||'').toUpperCase()+'): '+String(msg.sourceText||msg.orig||msg.text||'').trim()+'\n'
     +'Target ('+String(msg.targetLang||'').toUpperCase()+'): '+String(msg.targetText||msg.translated||'').trim()
@@ -3447,7 +3504,7 @@ function formatExportMessageBlock(msg,sess){
 function exportSessionChat(cid){
   var sess=getSession(cid);if(!sess){toast('Session not found');return;}
   var msgs=getMsgs(cid);
-  var title=(sess.title||sess.partnerName||cid||'chat').trim()||'chat';
+  var title=(sess.peerName||cid||'chat').trim()||'chat';
   var safeTitle=title.replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'').toLowerCase()||'chat';
   var blocks=['Talk + Say chat export','Session: '+title,'Conversation ID: '+cid,'Exported: '+fmtDateTime(Date.now())];
   if(msgs.length){blocks.push('','Conversation');msgs.forEach(function(msg){blocks.push('',formatExportMessageBlock(msg,sess));});}
@@ -3596,6 +3653,7 @@ document.addEventListener('DOMContentLoaded',function(){
   populateLangSelect('ncat-lang',p.partnerLang||'en');
   ncatLangChanged();
   initTagPickerInput();
+  updateDot();
 
   // Deep link — short ?j= format (responder joining)
   var up=new URLSearchParams(location.search);
@@ -3609,14 +3667,14 @@ document.addEventListener('DOMContentLoaded',function(){
     }
     var sess=getSession(invite.sessionId);
     if(!sess){
-      sess={convId:invite.sessionId,partId:PART_ID,title:'new chat',myName:p.userName||'yournamehere',partnerName:'',names:{meAlias:p.userName||'yournamehere',themAlias:'new chat',version:1},myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:Date.now(),lastActivity:Date.now(),lastViewedAt:Date.now(),status:'active'};
+      var now=Date.now();
+      sess={convId:invite.sessionId,myName:p.userName||'yournamehere',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now};
       putSession(sess);
       var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
     }else{
-      sess.status='active';putSession(sess);
+      putSession(sess);
     }
-    hydrateSessionFromInvite(sess,invite);
-    // Responder gets invite card too — don't set _partnerJoined before openSession
+    sess=hydrateSessionFromInvite(sess,invite);
     state.activeConvId=invite.sessionId;
     state.messages=getMsgs(invite.sessionId);
     addInviteMessage(invite.sessionId);

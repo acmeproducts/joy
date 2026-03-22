@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>App1 · Room AV Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <div class="flex h-screen overflow-hidden">
+    <aside class="flex w-80 shrink-0 flex-col border-r border-white/10 bg-slate-900/95">
+      <div class="border-b border-white/10 p-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase tracking-[0.25em] text-slate-400">App1</p>
+            <h1 class="text-lg font-semibold">Room-scoped AV chat</h1>
+          </div>
+          <button id="new-room" class="rounded-full bg-blue-500 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-400">New room</button>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Users only see the room name. Relay traffic is published with the hidden GUID session key stored inside each room.</p>
+      </div>
+      <div class="flex-1 overflow-y-auto p-3">
+        <ul id="room-list" class="space-y-2"></ul>
+      </div>
+      <div class="border-t border-white/10 p-3">
+        <button id="deleted-toggle" class="flex w-full items-center justify-between rounded-2xl border border-white/10 px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/5">
+          <span>Recently deleted</span>
+          <span id="deleted-chevron" class="material-symbols-outlined text-base">chevron_left</span>
+        </button>
+        <div id="deleted-stack" class="mt-2 hidden space-y-2"></div>
+      </div>
+    </aside>
+
+    <main class="flex min-w-0 flex-1 flex-col">
+      <header class="border-b border-white/10 bg-slate-900/70 px-5 py-4 backdrop-blur">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="active-room-name" class="text-xl font-semibold">Select a room</h2>
+              <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300">Live AV</span>
+            </div>
+            <p id="active-room-meta" class="mt-1 text-sm text-slate-400">The left rail owns room/session state. The AV surface mounts per active room.</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="rounded-full bg-white/5 px-3 py-1">Hidden relay GUID: <span id="relay-guid">—</span></span>
+          </div>
+        </div>
+      </header>
+
+      <div class="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1.4fr)_22rem]">
+        <section class="flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/70 shadow-2xl">
+          <div class="border-b border-white/10 px-4 py-3 text-sm text-slate-300">Conversation shell</div>
+          <div id="message-list" class="flex-1 space-y-3 overflow-y-auto px-4 py-4"></div>
+          <form id="composer" class="border-t border-white/10 p-4">
+            <label class="mb-2 block text-xs uppercase tracking-[0.2em] text-slate-500">Message composer</label>
+            <div class="flex gap-3">
+              <textarea id="message-input" rows="3" class="min-h-[84px] flex-1 rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 outline-none focus:border-blue-400" placeholder="Write into the active room..."></textarea>
+              <button class="rounded-2xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-400">Send</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="flex min-h-0 flex-col gap-4">
+          <div class="overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/70 shadow-2xl">
+            <div class="border-b border-white/10 px-4 py-3 text-sm text-slate-300">Active room AV runtime</div>
+            <div id="av-stage" class="aspect-[4/5] min-h-[320px]"></div>
+          </div>
+
+          <div class="rounded-[28px] border border-white/10 bg-slate-900/70 p-4 shadow-2xl">
+            <div class="mb-3 flex items-center justify-between">
+              <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Look & feel</h3>
+              <span class="text-[11px] text-slate-500">Room-scoped controls</span>
+            </div>
+            <div class="grid gap-3">
+              <label class="text-sm text-slate-300">Theme
+                <input id="theme" type="range" min="0" max="4" value="0" class="mt-1 w-full">
+              </label>
+              <label class="text-sm text-slate-300">Fade
+                <input id="decay" type="range" min="0" max="5" value="2" class="mt-1 w-full">
+              </label>
+              <label class="text-sm text-slate-300">Trail
+                <input id="trail" type="range" min="1" max="10" value="5" class="mt-1 w-full">
+              </label>
+              <label class="text-sm text-slate-300">Growth
+                <input id="grow" type="range" min="1" max="100" value="50" class="mt-1 w-full">
+              </label>
+              <label class="text-sm text-slate-300">Sprite pack
+                <select id="sprite" class="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm">
+                  <option value="flowers">Flowers</option>
+                  <option value="fireworks">Fireworks</option>
+                  <option value="shapes">Shapes</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import createAVPlugin from './av-plugin.js';
+
+    const STORAGE_KEY = 'app1-room-shell-v1';
+    const DEFAULT_ROOM_NAME = 'New room';
+    const plugin = createAVPlugin();
+    const roomList = document.getElementById('room-list');
+    const deletedStack = document.getElementById('deleted-stack');
+    const activeRoomName = document.getElementById('active-room-name');
+    const activeRoomMeta = document.getElementById('active-room-meta');
+    const relayGuid = document.getElementById('relay-guid');
+    const messageList = document.getElementById('message-list');
+    const messageInput = document.getElementById('message-input');
+    const controls = {
+      theme: document.getElementById('theme'),
+      decay: document.getElementById('decay'),
+      trail: document.getElementById('trail'),
+      grow: document.getElementById('grow'),
+      sprite: document.getElementById('sprite')
+    };
+
+    const state = loadState();
+    let activeChannel = null;
+
+    function createGuid() {
+      return crypto.randomUUID?.() || `room-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    }
+
+    function defaultAvState(name) {
+      return {
+        themeIndex: 0,
+        decaySetting: 2,
+        trailSetting: 5,
+        growSetting: 50,
+        spritePack: 'flowers',
+        overlayTitle: name,
+        overlaySubtitle: 'Live room canvas · relay uses hidden GUID session key',
+        recentEvents: []
+      };
+    }
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (parsed?.rooms?.length) return parsed;
+      } catch (_) {}
+      const firstRoom = {
+        id: createGuid(),
+        name: 'Morning check-in',
+        createdAt: Date.now(),
+        messages: [{ id: createGuid(), author: 'System', text: 'Room created. The visible name stays here while AV relay uses the hidden GUID.', ts: Date.now() }],
+        avState: defaultAvState('Morning check-in')
+      };
+      return { rooms: [firstRoom], deleted: [], activeRoomId: firstRoom.id };
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function getActiveRoom() {
+      return state.rooms.find((room) => room.id === state.activeRoomId) || state.rooms[0] || null;
+    }
+
+    function broadcastToRoom(payload) {
+      const room = getActiveRoom();
+      if (!room) return;
+      const channel = new BroadcastChannel(`app1-av-${room.id}`);
+      channel.postMessage(payload);
+      channel.close();
+    }
+
+    function bindChannel(room) {
+      activeChannel?.close();
+      if (!room) return;
+      activeChannel = new BroadcastChannel(`app1-av-${room.id}`);
+      activeChannel.onmessage = (event) => {
+        if (event.data?.source === 'local-shell') return;
+        if (event.data?.kind === 'av-event') plugin.applyEvent(event.data.event);
+        if (event.data?.kind === 'av-state') {
+          room.avState = event.data.state;
+          saveState();
+        }
+      };
+    }
+
+    function renderRooms() {
+      roomList.innerHTML = '';
+      state.rooms.forEach((room) => {
+        const li = document.createElement('li');
+        li.className = 'rounded-2xl border border-white/10 bg-white/5 p-3';
+        li.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <button class="room-select min-w-0 flex-1 text-left">
+              <div class="truncate text-sm font-semibold ${room.id === state.activeRoomId ? 'text-white' : 'text-slate-200'}">${room.name}</div>
+              <div class="mt-1 text-xs text-slate-500">Visible room name only</div>
+            </button>
+            <div class="flex shrink-0 items-center gap-1">
+              <button class="rename rounded-full p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><span class="material-symbols-outlined text-base">edit</span></button>
+              <button class="delete rounded-full p-1.5 text-slate-400 hover:bg-rose-500/15 hover:text-rose-300"><span class="material-symbols-outlined text-base">delete</span></button>
+            </div>
+          </div>`;
+        li.querySelector('.room-select').onclick = () => {
+          state.activeRoomId = room.id;
+          saveState();
+          render();
+        };
+        li.querySelector('.rename').onclick = () => {
+          const nextName = prompt('Rename room', room.name)?.trim();
+          if (!nextName) return;
+          room.name = nextName;
+          room.avState.overlayTitle = nextName;
+          saveState();
+          render();
+        };
+        li.querySelector('.delete').onclick = () => {
+          const idx = state.rooms.findIndex((candidate) => candidate.id === room.id);
+          if (idx < 0) return;
+          const [removed] = state.rooms.splice(idx, 1);
+          state.deleted.unshift({ ...removed, deletedAt: Date.now() });
+          state.deleted = state.deleted.slice(0, 8);
+          if (!state.rooms.length) {
+            const fallback = { id: createGuid(), name: DEFAULT_ROOM_NAME, createdAt: Date.now(), messages: [], avState: defaultAvState(DEFAULT_ROOM_NAME) };
+            state.rooms.push(fallback);
+          }
+          if (state.activeRoomId === room.id) state.activeRoomId = state.rooms[0].id;
+          saveState();
+          render();
+        };
+        roomList.appendChild(li);
+      });
+      renderDeleted();
+    }
+
+    function renderDeleted() {
+      deletedStack.innerHTML = '';
+      if (!state.deleted.length) {
+        deletedStack.innerHTML = '<div class="rounded-2xl border border-dashed border-white/10 px-3 py-4 text-xs text-slate-500">Nothing to restore.</div>';
+        return;
+      }
+      state.deleted.forEach((room, index) => {
+        const item = document.createElement('div');
+        item.className = 'rounded-2xl border border-white/10 bg-white/5 p-3';
+        item.innerHTML = `<div class="flex items-center justify-between gap-3"><div><div class="text-sm font-semibold text-slate-200">${room.name}</div><div class="text-xs text-slate-500">Deleted room kept behind the chevron.</div></div><button class="restore rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-white/20">Restore</button></div>`;
+        item.querySelector('.restore').onclick = () => {
+          const [restored] = state.deleted.splice(index, 1);
+          state.rooms.unshift(restored);
+          state.activeRoomId = restored.id;
+          saveState();
+          render();
+        };
+        deletedStack.appendChild(item);
+      });
+    }
+
+    function renderMessages(room) {
+      messageList.innerHTML = '';
+      if (!room.messages.length) {
+        messageList.innerHTML = '<div class="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">No messages yet for this room.</div>';
+        return;
+      }
+      room.messages.forEach((message) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-3xl border border-white/10 bg-white/5 px-4 py-3';
+        card.innerHTML = `<div class="text-xs uppercase tracking-[0.2em] text-slate-500">${message.author}</div><div class="mt-2 text-sm text-slate-100">${message.text}</div>`;
+        messageList.appendChild(card);
+      });
+    }
+
+    function syncControls(room) {
+      controls.theme.value = String(room.avState.themeIndex || 0);
+      controls.decay.value = String(room.avState.decaySetting || 2);
+      controls.trail.value = String(room.avState.trailSetting || 5);
+      controls.grow.value = String(room.avState.growSetting || 50);
+      controls.sprite.value = room.avState.spritePack || 'flowers';
+    }
+
+    function mountRoom(room) {
+      if (!room) return;
+      bindChannel(room);
+      plugin.mount(document.getElementById('av-stage'), {
+        mode: 'live',
+        initialState: room.avState,
+        onEvent(event) {
+          room.avState = plugin.serializeState();
+          saveState();
+          broadcastToRoom({ kind: 'av-event', event, source: 'local-shell' });
+        },
+        onStateChange(nextState) {
+          room.avState = nextState;
+          saveState();
+          broadcastToRoom({ kind: 'av-state', state: nextState, source: 'local-shell' });
+        }
+      });
+      syncControls(room);
+    }
+
+    function render() {
+      const room = getActiveRoom();
+      renderRooms();
+      if (!room) return;
+      activeRoomName.textContent = room.name;
+      activeRoomMeta.textContent = `Relay calls use hidden GUID session key ${room.id}, while the UI shows only “${room.name}”.`;
+      relayGuid.textContent = room.id;
+      renderMessages(room);
+      mountRoom(room);
+    }
+
+    document.getElementById('new-room').onclick = () => {
+      const name = prompt('Room name', `Room ${state.rooms.length + 1}`)?.trim() || `Room ${state.rooms.length + 1}`;
+      const room = { id: createGuid(), name, createdAt: Date.now(), messages: [], avState: defaultAvState(name) };
+      state.rooms.unshift(room);
+      state.activeRoomId = room.id;
+      saveState();
+      render();
+    };
+
+    document.getElementById('deleted-toggle').onclick = () => {
+      deletedStack.classList.toggle('hidden');
+      document.getElementById('deleted-chevron').textContent = deletedStack.classList.contains('hidden') ? 'chevron_left' : 'expand_more';
+    };
+
+    document.getElementById('composer').onsubmit = (event) => {
+      event.preventDefault();
+      const room = getActiveRoom();
+      const text = messageInput.value.trim();
+      if (!room || !text) return;
+      room.messages.push({ id: createGuid(), author: 'You', text, ts: Date.now() });
+      messageInput.value = '';
+      saveState();
+      renderMessages(room);
+      messageList.scrollTop = messageList.scrollHeight;
+    };
+
+    Object.entries(controls).forEach(([key, input]) => {
+      input.addEventListener('input', () => {
+        const room = getActiveRoom();
+        if (!room) return;
+        if (key === 'theme') room.avState.themeIndex = Number(input.value);
+        if (key === 'decay') room.avState.decaySetting = Number(input.value);
+        if (key === 'trail') room.avState.trailSetting = Number(input.value);
+        if (key === 'grow') room.avState.growSetting = Number(input.value);
+        if (key === 'sprite') room.avState.spritePack = input.value;
+        plugin.updateState(room.avState);
+        room.avState = plugin.serializeState();
+        saveState();
+        broadcastToRoom({ kind: 'av-state', state: room.avState, source: 'local-shell' });
+      });
+    });
+
+    render();
+    window.addEventListener('beforeunload', () => activeChannel?.close());
+  </script>
+</body>
+</html>

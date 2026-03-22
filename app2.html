@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>App2 · Message Scoped AV</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <div class="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-5">
+    <header class="rounded-[28px] border border-white/10 bg-slate-900/80 px-5 py-4 shadow-2xl backdrop-blur">
+      <p class="text-xs uppercase tracking-[0.25em] text-slate-400">App2</p>
+      <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-semibold">Message-scoped live AV thread</h1>
+          <p class="mt-1 text-sm text-slate-400">One AV message is active at a time. Older AV messages stay visible as inert history cards with preview state.</p>
+        </div>
+        <button id="add-message" class="rounded-2xl bg-blue-500 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-400">Add AV message</button>
+      </div>
+    </header>
+
+    <main class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_24rem]">
+      <section class="min-h-0 rounded-[28px] border border-white/10 bg-slate-900/80 shadow-2xl">
+        <div class="border-b border-white/10 px-5 py-4">
+          <h2 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Thread / timeline</h2>
+        </div>
+        <div id="timeline" class="space-y-4 overflow-y-auto px-5 py-4"></div>
+      </section>
+
+      <aside class="flex min-h-0 flex-col gap-4">
+        <div class="overflow-hidden rounded-[28px] border border-white/10 bg-slate-900/80 shadow-2xl">
+          <div class="border-b border-white/10 px-4 py-3 text-sm text-slate-300">Active AV message</div>
+          <div id="active-stage" class="aspect-[4/5] min-h-[320px]"></div>
+        </div>
+        <div class="rounded-[28px] border border-white/10 bg-slate-900/80 p-4 shadow-2xl">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Message controls</h3>
+          <div class="mt-3 grid gap-3">
+            <label class="text-sm text-slate-300">Caption
+              <textarea id="caption" rows="3" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm outline-none focus:border-blue-400"></textarea>
+            </label>
+            <label class="text-sm text-slate-300">Theme
+              <input id="theme" type="range" min="0" max="4" value="0" class="mt-1 w-full">
+            </label>
+            <label class="text-sm text-slate-300">Sprite pack
+              <select id="sprite" class="mt-1 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-sm">
+                <option value="flowers">Flowers</option>
+                <option value="fireworks">Fireworks</option>
+                <option value="shapes">Shapes</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module">
+    import createAVPlugin from './av-plugin.js';
+
+    const STORAGE_KEY = 'app2-message-thread-v1';
+    const plugin = createAVPlugin();
+    const previewPlugins = new Map();
+    const timeline = document.getElementById('timeline');
+    const caption = document.getElementById('caption');
+    const theme = document.getElementById('theme');
+    const sprite = document.getElementById('sprite');
+
+    const state = loadState();
+
+    function createId() {
+      return crypto.randomUUID?.() || `msg-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    }
+
+    function defaultMessage(index) {
+      return {
+        id: createId(),
+        caption: `AV message ${index}`,
+        createdAt: Date.now(),
+        avState: {
+          themeIndex: index % 5,
+          spritePack: ['flowers', 'fireworks', 'shapes'][index % 3],
+          overlayTitle: `AV message ${index}`,
+          overlaySubtitle: 'Message-scoped live runtime',
+          recentEvents: []
+        }
+      };
+    }
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (parsed?.messages?.length) return parsed;
+      } catch (_) {}
+      const first = defaultMessage(1);
+      return { messages: [first], activeMessageId: first.id };
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function getActiveMessage() {
+      return state.messages.find((message) => message.id === state.activeMessageId) || state.messages[0] || null;
+    }
+
+    function mountActive(message) {
+      if (!message) return;
+      plugin.mount(document.getElementById('active-stage'), {
+        mode: 'live',
+        initialState: message.avState,
+        onEvent() {
+          message.avState = plugin.serializeState();
+          save();
+          renderTimeline();
+        },
+        onStateChange(nextState) {
+          message.avState = nextState;
+          save();
+          renderTimeline();
+        }
+      });
+      caption.value = message.caption;
+      theme.value = String(message.avState.themeIndex || 0);
+      sprite.value = message.avState.spritePack || 'flowers';
+    }
+
+    function renderTimeline() {
+      const active = getActiveMessage();
+      timeline.innerHTML = '';
+      previewPlugins.forEach((instance) => instance.destroy());
+      previewPlugins.clear();
+
+      state.messages.forEach((message) => {
+        const card = document.createElement('article');
+        card.className = `rounded-[28px] border p-4 ${message.id === active?.id ? 'border-blue-400/60 bg-blue-500/10' : 'border-white/10 bg-white/5'}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-xs uppercase tracking-[0.2em] ${message.id === active?.id ? 'text-blue-200' : 'text-slate-500'}">${message.id === active?.id ? 'Active AV message' : 'History preview'}</div>
+              <h3 class="mt-1 text-lg font-semibold">${message.caption}</h3>
+              <p class="mt-1 text-sm text-slate-400">${message.id === active?.id ? 'Currently interactive.' : 'Older message remains inert and visible in the thread.'}</p>
+            </div>
+            <button class="open rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/20">${message.id === active?.id ? 'Live' : 'Open live'}</button>
+          </div>
+          <div class="mt-4 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/70">
+            <div class="preview-stage aspect-[16/9] min-h-[180px]"></div>
+          </div>`;
+        card.querySelector('.open').onclick = () => {
+          state.activeMessageId = message.id;
+          save();
+          render();
+        };
+        timeline.appendChild(card);
+
+        const stage = card.querySelector('.preview-stage');
+        const instance = message.id === active?.id ? createAVPlugin() : createAVPlugin();
+        instance.mount(stage, { mode: message.id === active?.id ? 'inert' : 'inert', initialState: message.avState });
+        previewPlugins.set(message.id, instance);
+      });
+    }
+
+    function render() {
+      const active = getActiveMessage();
+      if (!active) return;
+      mountActive(active);
+      renderTimeline();
+    }
+
+    document.getElementById('add-message').onclick = () => {
+      const message = defaultMessage(state.messages.length + 1);
+      state.messages.unshift(message);
+      state.activeMessageId = message.id;
+      save();
+      render();
+    };
+
+    caption.addEventListener('input', () => {
+      const active = getActiveMessage();
+      if (!active) return;
+      active.caption = caption.value || 'Untitled AV message';
+      active.avState.overlayTitle = active.caption;
+      plugin.updateState(active.avState);
+      active.avState = plugin.serializeState();
+      save();
+      renderTimeline();
+    });
+
+    theme.addEventListener('input', () => {
+      const active = getActiveMessage();
+      if (!active) return;
+      active.avState.themeIndex = Number(theme.value);
+      plugin.updateState(active.avState);
+      active.avState = plugin.serializeState();
+      save();
+      renderTimeline();
+    });
+
+    sprite.addEventListener('input', () => {
+      const active = getActiveMessage();
+      if (!active) return;
+      active.avState.spritePack = sprite.value;
+      plugin.updateState(active.avState);
+      active.avState = plugin.serializeState();
+      save();
+      renderTimeline();
+    });
+
+    render();
+  </script>
+</body>
+</html>

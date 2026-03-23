@@ -78,13 +78,16 @@ textarea.field-input{resize:none;}
 .shell-dot.yellow{background:#F59E0B;animation:connPulse 1.5s ease-in-out infinite;}
 .shell-dot.red{background:#EF4444;}
 .shell-dot.gray{background:var(--ink-dim);}
-.presence-strip{display:flex;align-items:center;gap:4px;margin-left:2px;}
-.shell-dot.presence,.presence-dot{cursor:default;}
-.shell-dot.presence.off,.presence-dot.gray{background:var(--ink-dim);}
-.presence-dot.green{background:#22C55E;}
-.presence-dot.yellow{background:#F59E0B;}
 @keyframes connPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
-.shell-partner{text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;}
+.shell-partner{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;min-height:39px;color:var(--ink);}
+.shell-participant{display:inline-flex;align-items:center;gap:6px;min-width:0;}
+.shell-participant::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;transition:background .2s ease;}
+.shell-participant.online::before{background:#22C55E;}
+.shell-participant.editable{border-radius:8px;padding:1px 6px;outline:none;border:1px solid transparent;}
+.shell-participant.editable:hover{background:var(--paper);border-color:var(--border);}
+.shell-participant.editable:focus{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
+.shell-participant-label{display:inline-block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.shell-partner-arrow{color:var(--ink-dim);font-weight:500;flex-shrink:0;}
 .shell-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
 .shell-empty-logo{font-family:"Lora",serif;font-size:48px;font-weight:600;color:var(--teal);opacity:.25;}
 
@@ -396,14 +399,10 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </button>
     <div style="flex:1;"></div>
     <div class="shell-dot" id="shell-dot" onclick="forceReconnect()" title="Connection"></div>
-    <div class="presence-strip">
-      <div class="shell-dot presence off presence-dot gray" id="self-dot" title="You"></div>
-      <div class="shell-dot presence off presence-dot gray" id="peer-dot" title="Partner"></div>
-    </div>
   </div>
 
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name" contenteditable="true" spellcheck="false" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">new chat</div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -844,8 +843,8 @@ function normalizeSession(sess){
   var lastActivity=Number(raw.lastActivity)||createdAt;
   var out={
     convId:raw.convId||uid(),
-    myName:firstRealName(raw.myName,raw.names&&raw.names.meAlias,p.userName)||p.userName||'yournamehere',
-    peerName:firstRealName(raw.peerName,raw.partnerName,raw.names&&raw.names.themAlias,raw.invitePartnerName)||'',
+    myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
+    peerName:firstRealName(raw.peerName)||'',
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
@@ -1335,18 +1334,36 @@ function refreshInviteStatus(convId){
   el.textContent='Partner last seen '+fmtPresenceTime(rt.peerLastSeenAt);
 }
 function updatePresenceIndicators(){
-  var rt=getRoomRuntime(state.activeConvId||connectedConvId);
-  var selfDot=document.getElementById('self-dot');
-  var peerDot=document.getElementById('peer-dot');
-  if(selfDot){
-    selfDot.className='shell-dot presence presence-dot '+((rt&&rt.selfPresent)?'green':'gray');
-    selfDot.title=(rt&&rt.selfPresent)?'You are attached to this chat':'Not attached to this chat';
+  var cid=state.activeConvId||connectedConvId;
+  var rt=getRoomRuntime(cid);
+  var sess=cid?getSession(cid):null;
+  var selfEl=document.getElementById('shell-self-name');
+  var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
+  var peerEl=document.getElementById('shell-peer-name');
+  var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
+  var arrowEl=document.getElementById('shell-partner-arrow');
+  var s=sess?normalizeSession(sess):normalizeSession({});
+  var myName=firstRealName(s.myName);
+  var peerName=firstRealName(s.peerName);
+  if(selfEl){
+    selfEl.classList.toggle('online',!!(rt&&rt.selfPresent));
+    selfEl.title=(rt&&rt.selfPresent)?'You are attached to this chat':'Not attached to this chat';
   }
-  if(peerDot){
-    peerDot.className='shell-dot presence presence-dot '+((rt&&rt.peerPresent)?'green':((rt&&rt.peerEverSeen)?'yellow':'gray'));
-    peerDot.title=(rt&&rt.peerPresent)?'Present now':((rt&&rt.peerEverSeen)?('Away · last seen '+fmtPresenceTime(rt.peerLastSeenAt)):'Not seen yet');
+  if(peerEl){
+    peerEl.classList.toggle('online',!!(rt&&rt.peerPresent));
+    peerEl.title=(rt&&rt.peerPresent)?'Present now':((rt&&rt.peerEverSeen)?('Last seen '+fmtPresenceTime(rt.peerLastSeenAt)):'Not seen yet');
   }
-  refreshInviteStatus(state.activeConvId);
+  if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
+  if(peerLabel)peerLabel.textContent=peerName||'?';
+  if(arrowEl)arrowEl.hidden=!(myName&&peerEl&&!peerEl.hidden);
+  refreshInviteStatus(cid);
+}
+function refreshActiveSessionChrome(convId){
+  var cid=convId||state.activeConvId;
+  var sess=cid?getSession(cid):null;
+  updatePartnerHeader(sess);
+  updateDot();
+  refreshInviteStatus(cid);
 }
 function setSocketState(s){
   socketState=s;activeSocketState=s;
@@ -1379,7 +1396,10 @@ function peerIsFresh(){
 }
 function resetActivePresence(convId){
   var rt=getRoomRuntime(convId);
-  if(rt){rt.selfPresent=!!convId;noteRuntimeJoin(convId,'localJoin','You joined',Date.now());}
+  if(rt){
+    if(!rt.selfPresent&&convId)noteRuntimeJoin(convId,'localJoin','You joined',Date.now());
+    rt.selfPresent=!!convId;
+  }
   updateDot();
 }
 function resetBackfillCursor(){backfillSinceSeq=0;}
@@ -1788,6 +1808,7 @@ function openInviteScreen(cid){
   renderAllMessages();
   scrollBottom();
   showScreen('chat-screen');
+  refreshActiveSessionChrome(cid);
   renderSessionList();
   addDiagLog('Session created: '+cid.slice(0,8));
 }
@@ -1849,14 +1870,25 @@ function openSession(cid){
   renderAllMessages();
   scrollBottom();
   showScreen('chat-screen');
+  refreshActiveSessionChrome(cid);
 }
 
 function updatePartnerHeader(sess){
-  var el=document.getElementById('shell-partner-name');if(!el)return;
+  var root=document.getElementById('shell-partner-name');if(!root)return;
+  var selfEl=document.getElementById('shell-self-name');
+  var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
+  var peerEl=document.getElementById('shell-peer-name');
+  var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
+  var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
   var myName=firstRealName(s.myName);
   var peerName=firstRealName(s.peerName);
-  el.textContent=myName&&peerName?(myName+' ↔ '+peerName):(myName?(myName+' ↔ ?'):(peerName||'new chat'));
+  if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
+  if(peerLabel)peerLabel.textContent=peerName||'?';
+  if(selfEl)selfEl.hidden=!!peerName&&!myName;
+  if(peerEl)peerEl.hidden=!myName&&!peerName;
+  if(arrowEl)arrowEl.hidden=!(myName&&peerEl&&!peerEl.hidden);
+  updatePresenceIndicators();
 }
 
 function showEmptyShell(){
@@ -1864,7 +1896,7 @@ function showEmptyShell(){
   document.getElementById('shell-empty').style.display='flex';
   document.getElementById('messages').style.display='none';
   document.getElementById('composer').style.display='none';
-  document.getElementById('shell-partner-name').textContent='';
+  updatePartnerHeader(null);
   updateDot();
 }
 
@@ -1874,7 +1906,8 @@ function savePartnerName(el){
   var sess=getSession(state.activeConvId);if(!sess)return;
   sess.peerName=v;
   putSession(sess);
-  el.textContent=v||'new chat';
+  var label=el.querySelector('.shell-participant-label');
+  if(label)label.textContent=v||'?';
   updatePartnerHeader(sess);
   renderSessionList();
 }
@@ -2173,9 +2206,10 @@ function handleRelayEvent(d){
       addDiagLog('partnerLang set (first signal): '+srcLang);
     }else if(srcLang!==sess.partnerLang){
       var srcCount=tally[srcLang]||0;
-      if(srcCount>=2){
+      var currentCount=tally[sess.partnerLang]||0;
+      if(srcCount>currentCount){
         sess.partnerLang=srcLang;putSession(sess);
-        addDiagLog('partnerLang updated (tally majority): '+srcLang+' ('+getLangTallySummary(partnerId)+')');
+        addDiagLog('partnerLang updated (tally lead): '+srcLang+' ('+getLangTallySummary(partnerId)+')');
       }
     }
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));

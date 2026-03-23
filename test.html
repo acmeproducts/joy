@@ -80,12 +80,12 @@ textarea.field-input{resize:none;}
 .shell-dot.gray{background:var(--ink-dim);}
 @keyframes connPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
 .shell-partner{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;min-height:39px;color:var(--ink);}
-.shell-participant{display:inline-flex;align-items:center;gap:6px;min-width:0;}
-.shell-participant::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;transition:background .2s ease;}
-.shell-participant.online::before{background:#22C55E;}
-.shell-participant.editable{border-radius:8px;padding:1px 6px;outline:none;border:1px solid transparent;}
+.shell-participant{display:inline-flex;align-items:center;min-width:0;max-width:100%;color:var(--ink-dim);border-bottom:1px solid rgba(154,149,146,.45);transition:color .2s ease,border-color .2s ease;}
+.shell-participant.online{color:var(--green);border-bottom-color:rgba(46,125,79,.45);}
+.shell-participant.editable{border-radius:8px;padding:1px 6px;outline:none;border:1px solid transparent;border-bottom-color:transparent;}
 .shell-participant.editable:hover{background:var(--paper);border-color:var(--border);}
 .shell-participant.editable:focus{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
+.shell-participant.editable.online:focus{color:var(--teal);}
 .shell-participant-label{display:inline-block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .shell-partner-arrow{color:var(--ink-dim);font-weight:500;flex-shrink:0;}
 .shell-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
@@ -1322,7 +1322,7 @@ var INBOUND_DEDUPE_TTL_MS=12000;
 
 function getRoomRuntime(convId){
   if(!convId)return null;
-  if(!roomRuntimeByConv[convId])roomRuntimeByConv[convId]={selfPresent:false,peerPresent:false,peerEverSeen:false,peerLastSeenAt:0,localJoinNoted:false,peerJoinNoted:false,peerLeftNoted:false,connectedOnce:false};
+  if(!roomRuntimeByConv[convId])roomRuntimeByConv[convId]={selfPresent:false,peerPresent:false,peerEverSeen:false,peerLastSeenAt:0,localJoinNoted:false,localJoinPending:false,peerJoinNoted:false,peerLeftNoted:false,connectedOnce:false};
   return roomRuntimeByConv[convId];
 }
 function fmtPresenceTime(ts){return ts?fmtDateTime(ts):'Not seen yet';}
@@ -1337,45 +1337,60 @@ function noteRuntimeJoin(convId,key,text,ts){
 function refreshInviteStatus(convId){
   var cid=convId||state.activeConvId;
   var el=cid&&document.getElementById('invite-status-'+cid);
-  var rt=getRoomRuntime(cid);
+  var rt=cid&&getRoomRuntime(cid);
   var sess=cid&&getSession(cid);
-  if(!el||!rt)return;
+  var peerLabel=firstRealName(sess&&normalizeSession(sess).peerName)||'Partner';
+  if(!el)return;
   el.style.color='var(--ink-dim)';
+  if(!cid||!rt||!sess){el.textContent='Waiting for partner';return;}
   if(!rt.peerEverSeen){el.textContent='Waiting for partner';return;}
-  if(rt.peerPresent){el.textContent=getSessionLabel(sess)+' connected ✓';el.style.color='var(--green)';return;}
+  if(rt.peerPresent){el.textContent=peerLabel+' connected ✓';el.style.color='var(--green)';return;}
   el.textContent='Partner last seen '+fmtPresenceTime(rt.peerLastSeenAt);
 }
-function updatePresenceIndicators(){
-  var cid=state.activeConvId||connectedConvId;
-  var rt=getRoomRuntime(cid);
+function updatePresenceIndicators(convId){
+  var cid=typeof convId==='string'?convId:(state.activeConvId||'');
   var sess=cid?getSession(cid):null;
+  var rt=cid?getRoomRuntime(cid):null;
   var selfEl=document.getElementById('shell-self-name');
   var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
-  var s=sess?normalizeSession(sess):normalizeSession({});
+  if(!selfEl||!peerEl)return;
+  if(!cid||!sess){
+    selfEl.classList.remove('online');
+    peerEl.classList.remove('online');
+    selfEl.title='No active chat attached';
+    peerEl.title='Not seen yet';
+    if(selfLabel)selfLabel.textContent='new chat';
+    if(peerLabel)peerLabel.textContent='?';
+    selfEl.hidden=false;
+    peerEl.hidden=true;
+    if(arrowEl)arrowEl.hidden=true;
+    refreshInviteStatus('');
+    return;
+  }
+  var s=normalizeSession(sess);
   var myName=firstRealName(s.myName);
   var peerName=firstRealName(s.peerName);
-  if(selfEl){
-    selfEl.classList.toggle('online',!!(rt&&rt.selfPresent));
-    selfEl.title=(rt&&rt.selfPresent)?'You are attached to this chat':'Not attached to this chat';
-  }
-  if(peerEl){
-    peerEl.classList.toggle('online',!!(rt&&rt.peerPresent));
-    peerEl.title=(rt&&rt.peerPresent)?'Present now':((rt&&rt.peerEverSeen)?('Last seen '+fmtPresenceTime(rt.peerLastSeenAt)):'Not seen yet');
-  }
+  var selfAttached=!!(rt&&rt.selfPresent&&connectedConvId===cid&&socketState==='open');
+  selfEl.classList.toggle('online',selfAttached);
+  peerEl.classList.toggle('online',!!(rt&&rt.peerPresent));
+  selfEl.title=selfAttached?'You are connected to this chat':'You are not connected to this chat';
+  peerEl.title=(rt&&rt.peerPresent)?'present now':((rt&&rt.peerEverSeen)?('last seen '+fmtPresenceTime(rt.peerLastSeenAt)):'not seen yet');
   if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
   if(peerLabel)peerLabel.textContent=peerName||'?';
+  selfEl.hidden=!!peerName&&!myName;
+  peerEl.hidden=!myName&&!peerName;
   if(arrowEl)arrowEl.hidden=!(myName&&peerEl&&!peerEl.hidden);
   refreshInviteStatus(cid);
 }
 function refreshActiveSessionChrome(convId){
-  var cid=convId||state.activeConvId;
+  var cid=convId||state.activeConvId||'';
   var sess=cid?getSession(cid):null;
   updatePartnerHeader(sess);
   updateDot();
-  refreshInviteStatus(cid);
+  requestAnimationFrame(function(){updatePresenceIndicators(cid);refreshInviteStatus(cid);});
 }
 function setSocketState(s){
   socketState=s;activeSocketState=s;
@@ -1408,10 +1423,12 @@ function peerIsFresh(){
 }
 function resetActivePresence(convId){
   var rt=getRoomRuntime(convId);
-  if(rt){
-    if(!rt.selfPresent&&convId)noteRuntimeJoin(convId,'localJoin','You joined',Date.now());
-    rt.selfPresent=!!convId;
+  if(rt&&convId){
+    if(!rt.selfPresent&&!rt.localJoinPending)noteRuntimeJoin(convId,'localJoin','You joined',Date.now());
+    rt.localJoinPending=true;
+    rt.selfPresent=true;
   }
+  updatePresenceIndicators(convId||'');
   updateDot();
 }
 function resetBackfillCursor(){backfillSinceSeq=0;}
@@ -1512,6 +1529,7 @@ function transportConnect(convId,participant,opts){
     var rt=getRoomRuntime(connectedConvId);
     if(rt){
       rt.selfPresent=true;
+      rt.localJoinPending=false;
       if(rt.connectedOnce&&state.activeConvId===connectedConvId)addSystemNote(connectedConvId,'Reconnected',Date.now());
       rt.connectedOnce=true;
     }
@@ -1558,9 +1576,14 @@ function transportConnect(convId,participant,opts){
     if(ws!==ref)return;
     ws=null;stopHeartbeatLoop();
     addDiagLog('DISCONNECTED code='+e.code+' reason='+(e.reason||'none')+(intentionalClose?' (intentional)':''));
-    if(intentionalClose){setSocketState('closed');return;}
+    if(intentionalClose){
+      var closedRt=getRoomRuntime(connectedConvId);
+      if(closedRt){closedRt.selfPresent=false;closedRt.localJoinPending=false;}
+      setSocketState('closed');
+      return;
+    }
     var rt=getRoomRuntime(connectedConvId);
-    if(rt)rt.selfPresent=false;
+    if(rt){rt.selfPresent=false;rt.localJoinPending=false;}
     setSocketState('reconnecting');
     scheduleReconnect();
   };
@@ -1906,7 +1929,16 @@ function updatePartnerHeader(sess){
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
-  var s=sess?normalizeSession(sess):normalizeSession({});
+  if(!sess){
+    if(selfLabel)selfLabel.textContent='new chat';
+    if(peerLabel)peerLabel.textContent='?';
+    if(selfEl)selfEl.hidden=false;
+    if(peerEl)peerEl.hidden=true;
+    if(arrowEl)arrowEl.hidden=true;
+    updatePresenceIndicators('');
+    return;
+  }
+  var s=normalizeSession(sess);
   var myName=firstRealName(s.myName);
   var peerName=firstRealName(s.peerName);
   if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
@@ -1914,16 +1946,17 @@ function updatePartnerHeader(sess){
   if(selfEl)selfEl.hidden=!!peerName&&!myName;
   if(peerEl)peerEl.hidden=!myName&&!peerName;
   if(arrowEl)arrowEl.hidden=!(myName&&peerEl&&!peerEl.hidden);
-  updatePresenceIndicators();
+  updatePresenceIndicators(s.convId);
 }
 
 function showEmptyShell(){
   state.activeConvId=null;
+  state.pendingInviteId=null;
   document.getElementById('shell-empty').style.display='flex';
   document.getElementById('messages').style.display='none';
   document.getElementById('composer').style.display='none';
   updatePartnerHeader(null);
-  updateDot();
+  refreshActiveSessionChrome('');
 }
 
 function savePartnerName(el){
@@ -2233,7 +2266,7 @@ function handleRelayEvent(d){
     }else if(srcLang!==sess.partnerLang){
       var srcCount=tally[srcLang]||0;
       var currentCount=tally[sess.partnerLang]||0;
-      if(srcCount>currentCount){
+      if(srcCount>currentCount&&srcCount>1){
         sess.partnerLang=srcLang;putSession(sess);
         addDiagLog('partnerLang updated (tally lead): '+srcLang+' ('+getLangTallySummary(partnerId)+')');
       }

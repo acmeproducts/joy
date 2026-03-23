@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Test Version for Joy· Build 2026-03-17T13:00:00Z -->
+<!-- Test Version for Joy · Build 2026-03-17T13:00:00Z -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1717,7 +1717,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId){var sess=getSession(state.pendingInviteId);if(sess)sendInitialHello(sess);}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:sess.myName||getPrefs().userName||'yournamehere',lang:sess.myLang||getPrefs().myLang||'en'});}
   toast('Invite resent');
 }
 
@@ -2046,7 +2046,7 @@ function handleRelayEvent(d){
 
   // ACK for durable events only
   if((d.type==='msg'||d.type==='tr')&&d.id)transportSend({type:'ack',ackType:d.type,id:d.id,timestamp:Date.now()});
-  if(shouldDropInboundDuplicate(d)){addDiagLog('RX dedupe-dropped: '+d.type,'warn');return;}
+  if(shouldDrop(d)){addDiagLog('RX dedupe-dropped: '+d.type,'warn');return;}
 
   if(d.type==='hello'){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});

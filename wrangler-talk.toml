@@ -14,3 +14,4 @@ new_classes = ["TalkSession"]
 Then add `worker-talk.js` to the root of the repo. Push both files. Then in your Cloudflare dashboard go to the `talk-signal` Worker → Settings → Build and set the deploy command to:
 ```
 npx wrangler deploy --config wrangler-talk.toml
+

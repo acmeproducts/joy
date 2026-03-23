@@ -946,10 +946,12 @@ function getMsgs(cid){
     if(before!==JSON.stringify(next))changed=true;
     return next;
   });
+  var sorted=sortMessagesChronologically(norm);
+  if(JSON.stringify(sorted)!==JSON.stringify(norm)){norm=sorted;changed=true;}
   if(changed)saveMsgs(cid,norm);
   return norm;
 }
-function saveMsgs(cid,m){lsW('ts3_m_'+cid,JSON.stringify((m||[]).slice(-MAX_MSGS_PER_SESSION)));}
+function saveMsgs(cid,m){lsW('ts3_m_'+cid,JSON.stringify(sortMessagesChronologically(m).slice(-MAX_MSGS_PER_SESSION)));}
 function getMsgTranslatedText(msg,targetLang,fallback){var map=ensureMsgTranslations(msg);if(targetLang&&typeof map[targetLang]==='string'&&map[targetLang].trim())return map[targetLang];return fallback||'';}
 function deleteSessData(cid){lsDel('ts3_m_'+cid);}
 function markViewed(cid){var ss=getAllSessions();var s=ss.find(function(x){return x.convId===cid;});if(s){s.lastViewedAt=Date.now();saveSessions(ss);}}
@@ -1104,12 +1106,22 @@ function stampMsgNames(msg,sess){
 }
 function stampExistingMessageNames(msgs,sess){var changed=false;(msgs||[]).forEach(function(m){if((m.from==='me'||m.from==='them')&&(!m.displayFromName||!m.displayToName||!m.nameVersion)){stampMsgNames(m,sess);changed=true;}});return changed;}
 
+function sortMessagesChronologically(msgs){
+  return (msgs||[]).map(function(msg,idx){return {msg:msg,idx:idx};}).sort(function(a,b){
+    var at=Number(a.msg&&a.msg.timestamp)||0;
+    var bt=Number(b.msg&&b.msg.timestamp)||0;
+    if(at!==bt)return at-bt;
+    return a.idx-b.idx;
+  }).map(function(entry){return entry.msg;});
+}
+
 function addSystemNote(convId,text,timestamp){
   if(!convId)return;
   var m={id:uid(),from:'system',text:text,timestamp:timestamp||Date.now()};
-  var msgs=(convId===state.activeConvId)?state.messages:getMsgs(convId);
+  var msgs=(convId===state.activeConvId)?state.messages.slice():getMsgs(convId);
   msgs.push(m);
-  if(convId===state.activeConvId){state.messages=msgs;renderMsg(m);}
+  msgs=sortMessagesChronologically(msgs);
+  if(convId===state.activeConvId){state.messages=msgs;renderAllMessages();}
   var sess=getSession(convId);if(sess){sess.lastActivity=m.timestamp;putSession(sess);}
   saveMsgs(convId,msgs);
 }
@@ -1633,8 +1645,22 @@ function resendPreJoinMessages(){
   var sess=getSession(connectedConvId);if(!sess)return;
   var sent=0;
   state.messages.forEach(function(m){
-    if(m.from===DEVICE_ID&&(m.type==='msg'||m.type==='tr')){
-      try{ws.send(JSON.stringify(Object.assign({},m,{session:connectedConvId})));sent++;}catch(_){}
+    if(m&&m.from==='me'&&m.id){
+      var payload={
+        type:'msg',
+        id:m.id,
+        session:connectedConvId,
+        sourceText:m.sourceText||m.orig||m.text||'',
+        sourceLang:m.sourceLang||m.lang||sess.myLang||getPrefs().myLang||'en',
+        targetText:m.targetText||'',
+        targetLang:m.targetLang||sess.partnerLang||getPrefs().partnerLang||'en',
+        translations:m.translations||{},
+        orig:m.sourceText||m.orig||m.text||'',
+        lang:m.sourceLang||m.lang||sess.myLang||getPrefs().myLang||'en',
+        timestamp:m.timestamp||Date.now(),
+        name:sess.myName||getPrefs().userName||'yournamehere'
+      };
+      try{ws.send(JSON.stringify(payload));sent++;}catch(_){}
     }
   });
   if(sent)addDiagLog('RESEND pre-join: '+sent+' messages');

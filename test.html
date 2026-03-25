@@ -1596,7 +1596,7 @@ document.addEventListener('visibilitychange',function(){
   }
 });
 window.addEventListener('focus',function(){
-  var hiddenMs=Date.now()-(_hiddenAt||0);
+  var hiddenMs=_hiddenAt?Date.now()-_hiddenAt:0;
   if(state.activeConvId){
     if(hiddenMs>20000||!ws||ws.readyState!==1){addDiagLog('FOCUS return — reconnecting');rcAttempts=0;transportConnect(state.activeConvId,{preserveQueue:true});}
     else{fetchBackfill();}
@@ -2096,8 +2096,6 @@ function handleRelayEvent(d){
       }
     }
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));
-    // If message is already in my language, no translation needed
-    var targetLang=(srcLang===myLang)?myLang:myLang;
 
     if(d.id&&findMsg(d.id)){
       var existing=findMsg(d.id);
@@ -2133,7 +2131,7 @@ function handleRelayEvent(d){
     }
     translate(msg.sourceText,srcLang,myLang).then(function(tr){
       var translated=tr||msg.sourceText;
-      addDiagLog(tr?('TRANSLATE ok '+srcLang+'>'+myLang+' "'+tr.slice(0,25)+'"'):('TRANSLATE null '+srcLang+'>'+myLang+' fallback=source'),'warn');
+      addDiagLog(tr?('TRANSLATE ok '+srcLang+'>'+myLang+' "'+tr.slice(0,25)+'"'):('TRANSLATE null '+srcLang+'>'+myLang+' fallback=source'));
       applyMsgTarget(msg,myLang,translated);
       updateTransDOM(msg);saveMsgs(sess.convId,state.messages);
       sendReliable({type:'tr',id:d.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:msg.targetText,targetLang:myLang,translations:msg.translations});

@@ -73,12 +73,20 @@ textarea.field-input{resize:none;}
 .shell-ribbon{display:flex;align-items:center;gap:4px;padding:8px 10px 4px;background:var(--cream);flex-shrink:0;}
 .ribbon-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s,color .12s;}
 .ribbon-btn:hover{background:var(--paper);color:var(--teal);}
-.shell-dot{width:10px;height:10px;border-radius:50%;background:var(--ink-dim);transition:background .3s;flex-shrink:0;cursor:pointer;}
-.shell-dot.green{background:#22C55E;}
-.shell-dot.yellow{background:#F59E0B;animation:connPulse 1.5s ease-in-out infinite;}
-.shell-dot.red{background:#EF4444;}
-.shell-dot.gray{background:var(--ink-dim);}
-@keyframes connPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+.autoread-chip{display:inline-flex;align-items:center;gap:5px;background:var(--teal);color:#fff;border-radius:20px;padding:2px 8px 2px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;font-family:'DM Sans',sans-serif;line-height:1.4;transition:opacity .15s;}
+.autoread-chip:hover{opacity:.85;}
+.autoread-chip-x{font-size:11px;opacity:.75;padding:0 2px;}
+.autoread-chip-x:hover{opacity:1;}
+.toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:.2s;}
+.toggle-slider:before{position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;}
+.toggle-switch input:checked+.toggle-slider{background:var(--teal);}
+.toggle-switch input:checked+.toggle-slider:before{transform:translateX(20px);}
+.data-mgmt-grid{width:100%;border-collapse:collapse;margin-top:4px;}
+.data-mgmt-grid th,.data-mgmt-grid td{padding:5px 8px;font-size:12px;text-align:center;}
+.data-mgmt-grid th{font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;padding-bottom:8px;}
+.data-mgmt-grid td:first-child{text-align:left;font-size:13px;color:var(--ink-mid);font-weight:500;}
 .shell-partner{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;min-height:39px;color:var(--ink);}
 .shell-participant{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .shell-participant::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;transition:background .2s ease;}
@@ -384,10 +392,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <span class="left-name" id="left-local-name" contenteditable="true" spellcheck="false" onblur="saveLocalName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">yournamehere</span>
-      <div style="position:relative" id="lang-pill-wrap">
-        <button class="lang-pill" id="my-lang-pill" onclick="toggleLangPicker(event)" title="My language — tap to change">🇺🇸 EN</button>
-        <div class="lang-dropdown" id="lang-dropdown" hidden></div>
-      </div>
     </div>
     <div class="left-body" id="left-body">
       <div id="session-list"></div>
@@ -401,21 +405,10 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <button class="ribbon-btn" onclick="openLeftPanel()" title="Sessions">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <button class="ribbon-btn" id="ribbon-share" onclick="shareCurrentSession()" title="Share invite">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-    </button>
-    <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    </button>
-    <button class="ribbon-btn" id="autoread-btn" onclick="toggleAutoRead()" title="Auto-read">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-    </button>
-    <div style="flex:1;"></div>
-    <div class="shell-dot" id="shell-dot" onclick="forceReconnect()" title="Connection"></div>
   </div>
 
-  <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
+  <!-- Partner name + auto-read chip -->
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span><span id="autoread-chip" hidden class="autoread-chip" onclick="toggleAutoRead()" title="Auto-read on — tap to toggle">&#128266; Auto-read <span class="autoread-chip-x" onclick="event.stopPropagation();toggleAutoRead()">&#x2715;</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -474,47 +467,93 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="settings-stitle">Settings</div>
   </div>
   <div class="settings-body">
+    <!-- ── Preferred Language ── -->
     <div class="settings-group">
-      <div class="settings-group-title">Source bubble (mine)</div>
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;">
-        <div><label class="field-label" style="margin:0 0 4px;">Background</label><input type="color" id="set-src-bg" value="#2E8B8B" style="width:48px;height:32px;border:none;border-radius:8px;cursor:pointer;" oninput="applySrcBg(this.value)"></div>
-      </div>
-      <label class="field-label" style="margin-top:4px;">Font size</label>
-      <div style="display:flex;align-items:center;gap:8px;"><input type="range" min="12" max="20" step="1" id="set-bbl-size" style="flex:1;accent-color:var(--teal);" oninput="applyGlobalSize(this.value)"><span id="set-bbl-size-val" style="font-size:12px;font-weight:700;color:var(--teal);">15px</span></div>
-    </div>
-    <div class="settings-group">
-      <div class="settings-group-title">Target bubble (theirs)</div>
-      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;">
-        <div><label class="field-label" style="margin:0 0 4px;">Background</label><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:48px;height:32px;border:none;border-radius:8px;cursor:pointer;" oninput="applyTgtBg(this.value)"></div>
-      </div>
-      <label class="field-label" style="margin-top:4px;">Font size</label>
-      <div style="display:flex;align-items:center;gap:8px;"><input type="range" min="12" max="20" step="1" id="set-target-size" style="flex:1;accent-color:var(--teal);" oninput="applyTargetSize(this.value)"><span id="set-target-size-val" style="font-size:12px;font-weight:700;color:var(--teal);">15px</span></div>
-    </div>
-    <div class="settings-group">
-      <div class="settings-group-title">Layout</div>
-      <label class="field-label" style="margin-top:0;">Bubble width</label>
-      <div style="display:flex;align-items:center;gap:8px;"><input type="range" min="50" max="95" step="5" id="set-bbl-width" style="flex:1;accent-color:var(--teal);" oninput="applyGlobalWidth(this.value)"><span id="set-bbl-width-val" style="font-size:12px;font-weight:700;color:var(--teal);">75%</span></div>
-      <div style="margin-top:10px;display:flex;gap:8px;">
-        <button class="sheet-btn secondary" style="flex:1;padding:8px;font-size:12px;" onclick="resetAllBubbleDefaults()">Reset defaults</button>
+      <div class="settings-group-title">Preferred Language</div>
+      <div style="padding:4px 0 8px;position:relative;" id="settings-lang-pill-wrap">
+        <button class="lang-pill" id="my-lang-pill" onclick="toggleLangPicker(event)" title="My language — tap to change">🌐 Auto</button>
+        <div class="lang-dropdown" id="lang-dropdown" hidden></div>
       </div>
     </div>
+    <!-- ── Appearance ── -->
     <div class="settings-group">
-      <div class="settings-group-title">Translation behavior</div>
-      <!-- Fix 6: Removed "Skip same language" and "Force opposite party" checkboxes. Same-language skip is always on. -->
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">My preferred output language override</div><div class="settings-row-meta">Optional; blank uses detected/default.</div></div><input id="set-my-pref-output" placeholder="e.g. en" style="width:84px;" oninput="setMyPreferredOutputLang(this.value)"></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Partner preferred output language override</div><div class="settings-row-meta">Optional; blank uses detected/default.</div></div><input id="set-partner-pref-output" placeholder="e.g. th" style="width:84px;" oninput="setPartnerPreferredOutputLang(this.value)"></div>
+      <div class="settings-group-title">Appearance</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
+        <thead>
+          <tr>
+            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;width:40%;"></td>
+            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Me</td>
+            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Partner</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Bubble Color</td>
+            <td style="text-align:center;padding:4px;"><input type="color" id="set-src-bg" value="#2E8B8B" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applySrcBg(this.value)"></td>
+            <td style="text-align:center;padding:4px;"><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applyTgtBg(this.value)"></td>
+          </tr>
+          <tr>
+            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Font Color</td>
+            <td style="text-align:center;padding:4px;"><input type="color" id="set-src-font" value="#ffffff" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applySrcFontColor(this.value)"></td>
+            <td style="text-align:center;padding:4px;"><input type="color" id="set-tgt-font" value="#1A1714" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applyTgtFontColor(this.value)"></td>
+          </tr>
+          <tr>
+            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Font Size</td>
+            <td style="text-align:center;padding:4px;">
+              <select id="set-bbl-size" style="font-size:13px;border-radius:6px;border:1px solid var(--border);padding:3px 6px;background:var(--cream);color:var(--ink);width:52px;" onchange="applyGlobalSize(this.value)">
+                <option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option>
+              </select>
+            </td>
+            <td style="text-align:center;padding:4px;">
+              <select id="set-target-size" style="font-size:13px;border-radius:6px;border:1px solid var(--border);padding:3px 6px;background:var(--cream);color:var(--ink);width:52px;" onchange="applyTargetSize(this.value)">
+                <option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option>
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Bubble Width</td>
+            <td style="padding:4px;"><input type="range" min="50" max="95" step="5" id="set-bbl-width" style="width:100%;accent-color:var(--teal);" oninput="applyGlobalWidth(this.value)"></td>
+            <td style="padding:4px;"><input type="range" min="50" max="95" step="5" id="set-tgt-width" style="width:100%;accent-color:var(--teal);" oninput="applyTgtWidth(this.value)"></td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="sheet-btn secondary" style="width:100%;padding:8px;font-size:12px;margin-top:4px;" onclick="resetAllBubbleDefaults()">Reset appearance defaults</button>
     </div>
+    <!-- ── Features ── -->
     <div class="settings-group">
-      <div class="settings-group-title">Data</div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Export sessions</div><div class="settings-row-meta">Download session history JSON</div></div><button class="settings-icon-btn" onclick="exportSessionsData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Import sessions</div><div class="settings-row-meta">Restore session history JSON</div></div><button class="settings-icon-btn" onclick="importSessionsData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Clear sessions</div><div class="settings-row-meta">Clear local sessions only</div></div><button class="settings-icon-btn danger" onclick="clearDataOnly()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Export phrasebook</div><div class="settings-row-meta">Download phrasebook JSON</div></div><button class="settings-icon-btn" onclick="exportPhrasebookData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Import phrasebook</div><div class="settings-row-meta">Restore phrasebook JSON</div></div><button class="settings-icon-btn" onclick="importPhrasebookData()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Export app settings</div><div class="settings-row-meta">Theme, swatches, bubbles, accents</div></div><button class="settings-icon-btn" onclick="exportAppSettings()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Import app settings</div><div class="settings-row-meta">Restore saved app settings JSON</div></div><button class="settings-icon-btn" onclick="importAppSettings()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Export + Clear sessions</div><div class="settings-row-meta">Backup then clear</div></div><button class="settings-icon-btn danger" onclick="exportThenClear()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button></div>
+      <div class="settings-group-title">Features</div>
+      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Phrasebook</div><div class="settings-row-meta">Quick-access saved phrases</div></div><button class="settings-icon-btn" onclick="closeSettings();openPhrasebookModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></button></div>
+      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Auto-read</div><div class="settings-row-meta">Speak incoming messages aloud</div></div><label class="toggle-switch"><input type="checkbox" id="set-autoread" onchange="setAutoReadFromSettings(this.checked)"><span class="toggle-slider"></span></label></div>
     </div>
+    <!-- ── Data Management ── -->
+    <div class="settings-group">
+      <div class="settings-group-title">Data Management</div>
+      <table class="data-mgmt-grid">
+        <thead><tr><th></th><th>Settings</th><th>Sessions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Export</td>
+            <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
+            <td><button class="settings-icon-btn" onclick="exportSessionsData()" title="Export sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
+          </tr>
+          <tr>
+            <td>Import</td>
+            <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
+            <td><button class="settings-icon-btn" onclick="importSessionsData()" title="Import sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
+          </tr>
+          <tr>
+            <td>Clear</td>
+            <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
+            <td><button class="settings-icon-btn danger" onclick="clearDataOnly()" title="Clear sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- ── Reset All Settings ── -->
+    <div style="padding:4px 16px 16px;">
+      <button onclick="resetAllSettings()" style="width:100%;background:#fee2e2;color:#dc2626;border:1.5px solid #fca5a5;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Reset All Settings</button>
+    </div>
+    <!-- ── Info ── -->
     <div class="settings-group" style="border-bottom:none;">
       <div class="settings-group-title">Info</div>
       <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">About</div><div class="settings-row-meta">App details and capabilities</div></div><button class="settings-icon-btn" onclick="openInfoModal('about')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button></div>
@@ -1325,10 +1364,10 @@ var inboundSeen     = {};
 var roomRuntimeByConv  = {};
 var transportHandlers  = [];
 
-var HEARTBEAT_MS      = 10000;
-var PING_TIMEOUT_MS   = 25000;
+var HEARTBEAT_MS      = 30000;
+var PING_TIMEOUT_MS   = 120000;
 var RECONNECT_BASE_MS = 1200;
-var RECONNECT_MAX_MS  = 20000;
+var RECONNECT_MAX_MS  = 180000;
 var RECONNECT_JITTER  = 0.3;
 var DEDUP_TTL_MS      = 12000;
 var MSG_TTL_MS        = 120000;
@@ -1459,7 +1498,8 @@ function startHeartbeatLoop(){
   hbTimer=setInterval(function(){
     if(!ws||ws.readyState!==1)return;
     var now=Date.now();
-    if(lastPongAt&&(now-lastPongAt)>PING_TIMEOUT_MS){
+    var lastAct=Math.max(lastPongAt||0,lastRxAt||0);
+    if(lastAct&&(now-lastAct)>PING_TIMEOUT_MS){
       addDiagLog('HEARTBEAT timeout — reconnecting');
       ws.close(4002,'ping-timeout');return;
     }
@@ -1510,7 +1550,7 @@ function transportConnect(convId,opts){
   ws.onopen=function(){
     if(ws!==ref)return;clearTimeout(ct);
     if(rcTimer){clearTimeout(rcTimer);rcTimer=null;}
-    rcAttempts=0;setSocketState('open');lastRxAt=lastPongAt=Date.now();
+    setSocketState('open');lastRxAt=lastPongAt=Date.now();
     var rt=getRoomRuntime(connectedConvId);
     if(rt){rt.selfPresent=true;if(rt.connectedOnce)addDiagLog('RECONNECTED (silent)');rt.connectedOnce=true;}
     startHeartbeatLoop();
@@ -1626,16 +1666,8 @@ function forceReconnect(){
   transportConnect(state.activeConvId,{preserveQueue:true});toast('Reconnecting\u2026');
 }
 
-// ── Dot indicator ─────────────────────────────────────────
-function updateDot(){
-  var cls,title;
-  if(!navigator.onLine){cls='shell-dot gray';title='Offline';}
-  else if(socketState==='open'){cls='shell-dot '+(peerIsFresh()?'green':'yellow');title=peerIsFresh()?'Connected (peer active)':'Relay connected';}
-  else if(socketState==='connecting'||socketState==='reconnecting'){cls='shell-dot yellow';title='Connecting\u2026';}
-  else{cls='shell-dot red';title='Disconnected';}
-  var dot=document.getElementById('shell-dot');if(dot){dot.className=cls;dot.title=title;}
-  updatePresenceIndicators();
-}
+// ── Dot indicator (element removed; keep function for call sites) ──────────
+function updateDot(){updatePresenceIndicators();}
 
 function onTransportEvent(h){transportHandlers.push(h);}
 
@@ -1657,6 +1689,15 @@ function saveLocalName(el){
   if(!v){el.textContent=prev;return;}
   var p=getPrefs();p.userName=v;savePrefs(p);
   el.textContent=v;
+  // Propagate to all sessions
+  getAllSessions().forEach(function(s){if(s.myName!==v){s.myName=v;putSession(s);}});
+  // Resend hello if connected so partner sees the new name immediately
+  if(connectedConvId&&ws&&ws.readyState===1){
+    var sess=getSession(connectedConvId);
+    var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
+      name:v,lang:sess&&sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
+    try{ws.send(JSON.stringify(helloMsg));}catch(_){}
+  }
   toast('Name saved');
 }
 
@@ -1672,15 +1713,19 @@ function getLangEntry(code){
 }
 function updateLangPill(){
   var pill=document.getElementById('my-lang-pill');if(!pill)return;
-  var entry=getLangEntry(getPrefs().myLang||'en');
+  var myLang=getPrefs().myLang||'';
+  if(!myLang){pill.textContent='\uD83C\uDF10 Auto';return;}
+  var entry=getLangEntry(myLang);
   pill.textContent=entry.flag+' '+entry.code.toUpperCase();
 }
 function toggleLangPicker(e){
   if(e)e.stopPropagation();
   var dd=document.getElementById('lang-dropdown');if(!dd)return;
   if(!dd.hidden){dd.hidden=true;return;}
-  var cur=getPrefs().myLang||'en';
-  dd.innerHTML=LANGS.map(function(l){
+  var cur=getPrefs().myLang||'';
+  var autoItem='<div class="lang-option'+(cur===''?' active':'')+'" onclick="setMyLang(\'\')">'+
+    '\uD83C\uDF10 Auto-detect<span class="lang-option-code">AUTO</span></div>';
+  dd.innerHTML=autoItem+LANGS.map(function(l){
     return '<div class="lang-option'+(l.code===cur?' active':'')+'" onclick="setMyLang(\''+l.code+'\')">'+
       l.flag+' '+l.label+'<span class="lang-option-code">'+l.code.toUpperCase()+'</span></div>';
   }).join('');
@@ -1694,13 +1739,15 @@ function setMyLang(code){
   updateLangPill();
   var dd=document.getElementById('lang-dropdown');if(dd)dd.hidden=true;
   // Announce new language to current session partner
+  var effectiveLang=code||detectBrowserLang()||'en';
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:sess&&sess.myName||p.userName||'yournamehere',lang:code,ts:Date.now(),seq:++msgSeq};
+      name:sess&&sess.myName||p.userName||'yournamehere',lang:effectiveLang,ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
-  toast(getLangEntry(code).flag+' Language set to '+getLangEntry(code).label);
+  if(!code){toast('\uD83C\uDF10 Language set to Auto-detect');}
+  else{toast(getLangEntry(code).flag+' Language set to '+getLangEntry(code).label);}
 }
 
 function ensureUserName(callback){
@@ -1863,12 +1910,12 @@ function renderSessionList(){
   var ICON_DIAG='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
   c.innerHTML=ss.map(function(s){
     var isActive=state.activeConvId===s.convId;
-    var isPending=false;
     var statusBadge='';
     return '<div class="sess-card'+(isActive?' active':'')+'" draggable="true" data-conv="'+s.convId+'" ondragstart="dragStart(event)" ondragover="event.preventDefault()" ondrop="dragDrop(event)" ondragend="dragEnd(event)" onclick="onSessCardClick(event,\''+s.convId+'\')">'
       +'<div class="sess-card-info"><div class="sess-card-title">'+escHtml(getSessionLabel(s))+'</div><div class="sess-card-sub">'+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
       +statusBadge
       +'<div style="display:flex;gap:2px;flex-shrink:0;">'
+      +'<button class="sess-card-act" onclick="event.stopPropagation();shareSession(\''+s.convId+'\')" title="Share">'+ICON_SHARE+'</button>'
       +'<button class="sess-card-act" onclick="event.stopPropagation();exportSessionChat(\''+s.convId+'\')" title="Export chat">⇩</button>'
       +'<button class="sess-card-act" onclick="event.stopPropagation();openDiagModal(\''+s.convId+'\')" title="Diagnostics">'+ICON_DIAG+'</button>'
       +'<button class="sess-card-act del" onclick="event.stopPropagation();softDelete(\''+s.convId+'\')" title="Delete">'+ICON_DELETE+'</button>'
@@ -2062,7 +2109,16 @@ function speak(text,lang,btn){
 }
 function setTTSBtn(btn,on){if(!btn)return;btn.classList.toggle('playing',on);}
 function toggleAutoRead(){state.autoSpeakIncoming=!state.autoSpeakIncoming;var p=getPrefs();p.autoSpeakIncoming=state.autoSpeakIncoming;savePrefs(p);updateAutoReadBtn();if(state.autoSpeakIncoming&&!canSpeak)toast('Auto-read enabled but speech unavailable');else toast('Auto-read '+(state.autoSpeakIncoming?'on':'off'));}
-function updateAutoReadBtn(){var btn=document.getElementById('autoread-btn');if(btn)btn.style.color=state.autoSpeakIncoming?'var(--teal)':'var(--ink-mid)';}
+function updateAutoReadBtn(){syncAutoReadState();}
+function syncAutoReadState(){
+  var chip=document.getElementById('autoread-chip');
+  if(chip)chip.hidden=!state.autoSpeakIncoming;
+  var cb=document.getElementById('set-autoread');
+  if(cb)cb.checked=!!state.autoSpeakIncoming;
+}
+function setAutoReadFromSettings(checked){
+  if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
+}
 
 // ════════════════════════════════════════════════════════
 // STT
@@ -2111,6 +2167,9 @@ function handleRelayEvent(d){
   if(shouldDrop(d)){addDiagLog('RX dedupe-dropped: '+d.type,'warn');return;}
 
   if(d.type==='hello'){
+    var rt=getRoomRuntime(sess.convId);
+    var wasEverSeen=rt&&rt.peerEverSeen;
+    var lastSeen=rt&&rt.peerLastSeenAt||0;
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     upsertPartnerFromEnvelope(sess,d);
     addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
@@ -2119,7 +2178,9 @@ function handleRelayEvent(d){
     if(!d._fromBackfill){
       resendUnacked();
       renderAllMessages();scrollBottom();
-      toast((d.name||'Partner')+' joined!');
+      if(!wasEverSeen||(Date.now()-lastSeen)>300000){
+        toast((d.name||'Partner')+' joined!');
+      }
     }
     return;
   }
@@ -3036,17 +3097,22 @@ var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,
 function openSettings(){
   document.getElementById('settings-overlay').classList.add('open');
   var p=getPrefs();
-  // Source bubble picker
+  // Language pill
+  updateLangPill();
+  // Bubble colors
   document.getElementById('set-src-bg').value=p.srcBgColor||'#2E8B8B';
-  document.getElementById('set-bbl-size').value=p.bubbleFontSize||15;document.getElementById('set-bbl-size-val').textContent=(p.bubbleFontSize||15)+'px';
-  // Target bubble picker
   document.getElementById('set-tgt-bg').value=p.tgtBgColor||'#F5F1EC';
-  document.getElementById('set-target-size').value=p.targetBubbleFontSize||15;document.getElementById('set-target-size-val').textContent=(p.targetBubbleFontSize||15)+'px';
-  // Layout
-  document.getElementById('set-bbl-width').value=p.bubbleWidth||75;document.getElementById('set-bbl-width-val').textContent=(p.bubbleWidth||75)+'%';
-  var mine=document.getElementById('set-my-pref-output');if(mine)mine.value=getParticipantOutputPref(PART_ID||DEVICE_ID);
-  var sess=getSession(state.activeConvId);var partnerId=(sess&&sess.inviterDeviceId)||'deviceB';
-  var partner=document.getElementById('set-partner-pref-output');if(partner)partner.value=getParticipantOutputPref(partnerId);
+  // Font colors
+  var srcFont=document.getElementById('set-src-font');if(srcFont)srcFont.value=p.srcFontColor||'#ffffff';
+  var tgtFont=document.getElementById('set-tgt-font');if(tgtFont)tgtFont.value=p.tgtFontColor||'#1A1714';
+  // Font sizes
+  document.getElementById('set-bbl-size').value=String(p.bubbleFontSize||15);
+  document.getElementById('set-target-size').value=String(p.targetBubbleFontSize||15);
+  // Bubble widths
+  document.getElementById('set-bbl-width').value=p.bubbleWidth||75;
+  var tgtW=document.getElementById('set-tgt-width');if(tgtW)tgtW.value=p.tgtBubbleWidth||p.bubbleWidth||75;
+  // Auto-read toggle
+  var arCb=document.getElementById('set-autoread');if(arCb)arCb.checked=!!state.autoSpeakIncoming;
 }
 function closeSettings(){document.getElementById('settings-overlay').classList.remove('open');}
 
@@ -3067,9 +3133,10 @@ function resetAllBubbleDefaults(){
   var p=getPrefs();
   p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';
   p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';
-  p.bubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;
+  p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;
+  p.srcFontColor='';p.tgtFontColor='';
   savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');
-  openSettings();applyBubbleTheme();toast('Reset to defaults');
+  openSettings();applyBubbleTheme();toast('Appearance reset to defaults');
 }
 
 function renderThemeGrid(){/* theme grids removed — direct color pickers used */}
@@ -3087,23 +3154,24 @@ function hexLumGlobal(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,
 function applyBubbleTheme(){
   var s=document.getElementById('bubble-theme-tag');if(!s){s=document.createElement('style');s.id='bubble-theme-tag';document.head.appendChild(s);}
   var p=getPrefs();
-  var width=p.bubbleWidth||BUBBLE_DEFAULTS.bubbleWidth;
+  var srcWidth=p.bubbleWidth||BUBBLE_DEFAULTS.bubbleWidth;
+  var tgtWidth=p.tgtBubbleWidth||srcWidth;
   var srcSize=p.bubbleFontSize||BUBBLE_DEFAULTS.bubbleFontSize;
   var tgtSize=p.targetBubbleFontSize||BUBBLE_DEFAULTS.targetBubbleFontSize;
   function hexLum(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4,6),16)/255;return 0.2126*r+0.7152*g+0.0722*b;}
-  // Source (mine) bubble — text ALWAYS computed from background
+  // Source (mine) bubble — text auto-computed; font color overridable
   var mineBg=p.srcBgColor||'#2E8B8B';
   var mineLum=hexLum(mineBg);
-  var mineText=mineLum>0.45?'#1A1714':'#ffffff';
+  var mineText=p.srcFontColor||( mineLum>0.45?'#1A1714':'#ffffff');
   var mineTextDim=mineLum>0.45?'rgba(0,0,0,.55)':'rgba(255,255,255,.75)';
   var mineTextFaint=mineLum>0.45?'rgba(0,0,0,.4)':'rgba(255,255,255,.5)';
   var mineBorder=mineLum>0.45?'rgba(0,0,0,.12)':'rgba(255,255,255,.2)';
   var mineHover=mineLum>0.45?'rgba(0,0,0,.08)':'rgba(255,255,255,.14)';
   var mineUseBg=mineLum>0.45?'rgba(0,0,0,.1)':'rgba(255,255,255,.22)';
-  // Target (theirs) bubble — text ALWAYS computed from background
+  // Target (theirs) bubble — text auto-computed; font color overridable
   var theirsBg=p.tgtBgColor||'#F5F1EC';
   var theirsLum=hexLum(theirsBg);
-  var theirsText=theirsLum>0.45?'#1A1714':'#ffffff';
+  var theirsText=p.tgtFontColor||(theirsLum>0.45?'#1A1714':'#ffffff');
   var theirsTextDim=theirsLum>0.45?'rgba(0,0,0,.55)':'rgba(255,255,255,.75)';
   var theirsTextFaint=theirsLum>0.45?'rgba(0,0,0,.4)':'rgba(255,255,255,.5)';
   var theirsBorder=theirsLum>0.45?'rgba(0,0,0,.10)':'rgba(255,255,255,.18)';
@@ -3112,7 +3180,8 @@ function applyBubbleTheme(){
   s.textContent=
     '.msg-row.mine .bubble-card{background:'+mineBg+';border-color:'+mineBg+';}'
     +'.msg-row.theirs .bubble-card{background:'+theirsBg+';border-color:'+theirsBg+';}'
-    +'.msg-row{max-width:96%;width:'+width+'%;}'
+    +'.msg-row.mine{max-width:96%;width:'+srcWidth+'%;}'
+    +'.msg-row.theirs{max-width:96%;width:'+tgtWidth+'%;}'
     +'.bbl-side:first-child .bbl-txt{font-size:'+srcSize+'px;}'
     +'.bbl-side:last-child .bbl-txt{font-size:'+tgtSize+'px;}'
     // Mine text + icons
@@ -3173,10 +3242,15 @@ function applyBubbleTheme(){
     +'.msg-row.theirs .bbl-back-text{color:'+theirsTextDim+';}'
     +'.msg-row.theirs .retranslate-btn{background:'+theirsUseBg+';color:'+theirsText+';}';
 }
-function applyGlobalWidth(v){var p=getPrefs();p.bubbleWidth=parseInt(v);savePrefs(p);document.getElementById('set-bbl-width-val').textContent=v+'%';applyBubbleTheme();}
-function applyGlobalSize(v){var p=getPrefs();p.bubbleFontSize=parseInt(v);savePrefs(p);document.getElementById('set-bbl-size-val').textContent=v+'px';applyBubbleTheme();}
+function applyGlobalWidth(v){var p=getPrefs();p.bubbleWidth=parseInt(v);savePrefs(p);applyBubbleTheme();}
+function applyGlobalSize(v){var p=getPrefs();p.bubbleFontSize=parseInt(v);savePrefs(p);applyBubbleTheme();}
 function applyAccent(v){var p=getPrefs();p.accentColor=v;savePrefs(p);document.documentElement.style.setProperty('--teal',v);}
-function applyTargetSize(v){var p=getPrefs();p.targetBubbleFontSize=parseInt(v);savePrefs(p);document.getElementById('set-target-size-val').textContent=v+'px';applyBubbleTheme();}
+function applyTargetSize(v){var p=getPrefs();p.targetBubbleFontSize=parseInt(v);savePrefs(p);applyBubbleTheme();}
+function applyTgtWidth(v){var p=getPrefs();p.tgtBubbleWidth=parseInt(v);savePrefs(p);applyBubbleTheme();}
+function applySrcFontColor(v){var p=getPrefs();p.srcFontColor=v;savePrefs(p);applyBubbleTheme();}
+function applyTgtFontColor(v){var p=getPrefs();p.tgtFontColor=v;savePrefs(p);applyBubbleTheme();}
+function clearAppSettings(){if(!confirm('Clear all app settings (appearance, language, preferences)?'))return;var PREFS_KEY='joyPrefs';localStorage.removeItem(PREFS_KEY);toast('App settings cleared');openSettings();applyBubbleTheme();}
+function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
 function applyTargetAccent(v){var p=getPrefs();p.targetAccentColor=v;savePrefs(p);applyBubbleTheme();}
 function toggleNoOpOnSameLanguage(on){var p=getPrefs();p.noOpOnSameLanguage=!!on;savePrefs(p);}
 function toggleForceOppositePartyLanguage(on){var p=getPrefs();p.forceOppositePartyLanguage=!!on;savePrefs(p);}

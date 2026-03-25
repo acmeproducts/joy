@@ -2204,8 +2204,9 @@ function speak(text,lang,btn){
     utt.onend=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
     utt.onerror=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
     try{
+      synth.cancel(); // Chrome desktop: clear any stuck synth state before speaking
       synth.speak(utt);
-      // Chrome Android workaround: pause/resume keeps utterance alive past 15s
+      // Chrome workaround: pause/resume keeps utterance alive past 15s (Android + desktop)
       utt._keepAlive=setInterval(function(){if(!synth.speaking){clearInterval(utt._keepAlive);return;}synth.pause();synth.resume();},10000);
     }catch(e){setTTSBtn(btn,false);ttsActive=null;}
   });

@@ -1337,7 +1337,12 @@ function noteRuntimeJoin(convId,key,text,ts){
   if(key==='localJoin'){if(rt.localJoinNoted)return;rt.localJoinNoted=true;}
   else if(key==='peerJoin'){if(rt.peerJoinNoted)return;rt.peerJoinNoted=true;rt.peerLeftNoted=false;}
   else if(key==='peerLeft'){if(rt.peerLeftNoted)return;rt.peerLeftNoted=true;}
-  addSystemNote(convId,text,ts||Date.now());
+  var now=ts||Date.now();
+  // Suppress duplicate presence notes within 2 minutes to prevent reload/reconnect spam in chat
+  var cutoff=now-120000;
+  var msgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
+  if(msgs.some(function(m){return m.from==='system'&&m.text===text&&m.timestamp>cutoff;}))return;
+  addSystemNote(convId,text,now);
 }
 function markPeerSeen(convId,ts,opts){
   var rt=getRoomRuntime(convId);opts=opts||{};
@@ -1479,7 +1484,7 @@ function transportConnect(convId,opts){
   if(rcTimer){clearTimeout(rcTimer);rcTimer=null;}
   stopHeartbeatLoop();
   if(!opts.preserveQueue){outQ=[];pendingAcks={};}
-  connectedConvId=convId;intentionalClose=false;rcAttempts=0;
+  if(connectedConvId!==convId)lastRelaySeq=0;connectedConvId=convId;intentionalClose=false;rcAttempts=0;
   var url=RELAY_WS_URL
     +'?app='+encodeURIComponent(RELAY_APP)
     +'&session='+encodeURIComponent(convId)
@@ -1494,7 +1499,7 @@ function transportConnect(convId,opts){
     if(rcTimer){clearTimeout(rcTimer);rcTimer=null;}
     rcAttempts=0;setSocketState('open');lastRxAt=lastPongAt=Date.now();
     var rt=getRoomRuntime(connectedConvId);
-    if(rt){rt.selfPresent=true;if(rt.connectedOnce&&state.activeConvId===connectedConvId)addSystemNote(connectedConvId,'Reconnected',Date.now());rt.connectedOnce=true;}
+    if(rt){rt.selfPresent=true;if(rt.connectedOnce)addDiagLog('RECONNECTED (silent)');rt.connectedOnce=true;}
     startHeartbeatLoop();
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,

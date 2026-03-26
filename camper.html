@@ -43,6 +43,7 @@
         #custom-message-container a,
         #peer-chat-history a { color: #2563eb; text-decoration: underline; }
         #peer-chat-window.dragging { user-select: none; }
+        #peer-chat-window-resize { touch-action: none; }
         #settings-trigger { touch-action: none; cursor: grab; }
         #settings-trigger.dragging { cursor: grabbing; }
         .settings-row { display:flex; align-items:center; gap:0.75rem; }
@@ -141,7 +142,7 @@
         </div>
     </div>
 
-    <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] bg-white/90 backdrop-blur-2xl shadow-2xl rounded-2xl border border-white/70 z-50 hidden">
+    <div id="peer-chat-window" class="fixed top-4 left-1/2 -translate-x-1/2 w-[min(420px,92vw)] relative flex flex-col overflow-hidden max-h-[calc(100vh-1rem)] min-h-[360px] min-w-[320px] max-w-[calc(100vw-1rem)] bg-white/90 backdrop-blur-2xl shadow-2xl rounded-2xl border border-white/70 z-50 hidden">
         <div id="peer-chat-window-handle" class="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 cursor-move touch-none">
             <div class="min-w-0 flex-1"></div>
             <div class="flex items-center gap-1 shrink-0">
@@ -181,7 +182,9 @@
                 <p class="text-[10px] text-gray-400">Only the latest chatlette stays active for the room.</p>
             </div>
         </div>
-        <div class="px-4 py-3 space-y-3">
+        <div class="flex-1 min-h-0 flex flex-col">
+
+            <div class="px-4 py-3 space-y-3 flex-1 min-h-0 overflow-y-auto" id="peer-chat-scroll">
             <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
             <div class="flex items-center justify-between" id="peer-chat-translate-row">
                 <label class="text-[10px] uppercase tracking-wider text-gray-400">Translate</label>
@@ -202,6 +205,10 @@
                     <option value="dual">Dual</option>
                 </select>
             </div>
+
+            </div>
+
+            <div class="px-4 py-3 border-t border-gray-100 bg-white/95 space-y-3">
             <div class="flex items-center gap-2">
                 <button id="peer-chat-attach" type="button" class="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-100 transition" title="Attach files">
                     <span class="material-symbols-outlined text-base">attach_file</span>
@@ -219,8 +226,18 @@
                 <div id="peer-chat-attachments-alert" class="hidden text-rose-500"></div>
                 <div id="peer-chat-attachments-preview" class="flex flex-wrap gap-2"></div>
             </div>
+
+            </div>
+
         </div>
-    </div>
+
+        <div id="peer-chat-window-resize" class="absolute bottom-1 right-1 w-5 h-5 cursor-se-resize opacity-60">
+
+            <span class="material-symbols-outlined text-base text-gray-400">open_in_full</span>
+
+        </div>
+
+        </div>
 
     <aside class="fixed top-0 right-0 w-[min(26rem,96vw)] h-full bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 translate-x-full z-50 flex flex-col no-scrollbar overflow-y-auto" id="settings-panel">
         <div class="p-4 flex justify-between items-center border-b border-gray-100">
@@ -2188,13 +2205,34 @@
             return !hasNonAscii;
         }
 
+        function getPeerChatWindowBounds() {
+            const margin = 8;
+            return {
+                margin,
+                minWidth: 320,
+                minHeight: 360,
+                maxWidth: Math.max(320, window.innerWidth - margin * 2),
+                maxHeight: Math.max(360, window.innerHeight - margin * 2)
+            };
+        }
+
+        function setPeerChatWindowSize(width, height) {
+            if (!peerChatWindow) return;
+            const bounds = getPeerChatWindowBounds();
+            const clampedWidth = Math.min(Math.max(width, bounds.minWidth), bounds.maxWidth);
+            const clampedHeight = Math.min(Math.max(height, bounds.minHeight), bounds.maxHeight);
+            peerChatWindow.style.width = `${clampedWidth}px`;
+            peerChatWindow.style.height = `${clampedHeight}px`;
+            peerChatWindow.dataset.sized = 'true';
+        }
+
         function setPeerChatWindowPosition(left, top) {
             if (!peerChatWindow) return;
-            const margin = 16;
-            const maxLeft = Math.max(margin, window.innerWidth - peerChatWindow.offsetWidth - margin);
-            const maxTop = Math.max(margin, window.innerHeight - peerChatWindow.offsetHeight - margin);
-            const clampedLeft = Math.min(Math.max(left, margin), maxLeft);
-            const clampedTop = Math.min(Math.max(top, margin), maxTop);
+            const bounds = getPeerChatWindowBounds();
+            const maxLeft = Math.max(bounds.margin, window.innerWidth - peerChatWindow.offsetWidth - bounds.margin);
+            const maxTop = Math.max(bounds.margin, window.innerHeight - peerChatWindow.offsetHeight - bounds.margin);
+            const clampedLeft = Math.min(Math.max(left, bounds.margin), maxLeft);
+            const clampedTop = Math.min(Math.max(top, bounds.margin), maxTop);
             peerChatWindow.style.left = `${clampedLeft}px`;
             peerChatWindow.style.top = `${clampedTop}px`;
             peerChatWindow.style.right = 'auto';
@@ -2205,14 +2243,22 @@
         function initializePeerChatWindowPosition(force = false) {
             if (!peerChatWindow) return;
             if (!force && peerChatWindow.dataset.positioned === 'true') return;
-            const top = 16;
-            const left = Math.max(16, (window.innerWidth - peerChatWindow.offsetWidth) / 2);
-            setPeerChatWindowPosition(left, top);
+            setPeerChatWindowPosition(8, 8);
+        }
+
+        function initializePeerChatWindowSize(force = false) {
+            if (!peerChatWindow) return;
+            if (!force && peerChatWindow.dataset.sized === 'true') return;
+            const bounds = getPeerChatWindowBounds();
+            const width = Math.min(420, bounds.maxWidth);
+            const height = Math.min(680, bounds.maxHeight);
+            setPeerChatWindowSize(width, height);
         }
 
         function showPeerChatWindow() {
             if (!peerChatWindow) return;
             peerChatWindow.classList.remove('hidden');
+            initializePeerChatWindowSize();
             initializePeerChatWindowPosition();
         }
 
@@ -2228,6 +2274,7 @@
 
             handle.addEventListener('pointerdown', (event) => {
                 if (event.target.closest('button, input, select, textarea, a')) return;
+                initializePeerChatWindowSize();
                 initializePeerChatWindowPosition();
                 const rect = peerChatWindow.getBoundingClientRect();
                 dragState = {
@@ -2256,13 +2303,57 @@
 
             handle.addEventListener('pointerup', stopDragging);
             handle.addEventListener('pointercancel', stopDragging);
-            window.addEventListener('resize', () => {
-                if (peerChatWindow.classList.contains('hidden')) return;
-                initializePeerChatWindowPosition(peerChatWindow.dataset.positioned !== 'true');
+        }
+
+        function bindPeerChatWindowResize() {
+            if (!peerChatWindow) return;
+            const handle = document.getElementById('peer-chat-window-resize');
+            if (!handle) return;
+            let resizeState = null;
+
+            handle.addEventListener('pointerdown', (event) => {
+                initializePeerChatWindowSize();
+                initializePeerChatWindowPosition();
+                const rect = peerChatWindow.getBoundingClientRect();
+                resizeState = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startY: event.clientY,
+                    width: rect.width,
+                    height: rect.height
+                };
+                handle.setPointerCapture(event.pointerId);
+                event.preventDefault();
+            });
+
+            handle.addEventListener('pointermove', (event) => {
+                if (!resizeState || event.pointerId !== resizeState.pointerId) return;
+                const nextWidth = resizeState.width + (event.clientX - resizeState.startX);
+                const nextHeight = resizeState.height + (event.clientY - resizeState.startY);
+                setPeerChatWindowSize(nextWidth, nextHeight);
                 const rect = peerChatWindow.getBoundingClientRect();
                 setPeerChatWindowPosition(rect.left, rect.top);
             });
+
+            const stopResizing = (event) => {
+                if (!resizeState || (event && event.pointerId !== resizeState.pointerId)) return;
+                try {
+                    handle.releasePointerCapture(resizeState.pointerId);
+                } catch (_) {}
+                resizeState = null;
+            };
+
+            handle.addEventListener('pointerup', stopResizing);
+            handle.addEventListener('pointercancel', stopResizing);
         }
+
+        window.addEventListener('resize', () => {
+            if (!peerChatWindow || peerChatWindow.classList.contains('hidden')) return;
+            const rect = peerChatWindow.getBoundingClientRect();
+            setPeerChatWindowSize(rect.width, rect.height);
+            const nextRect = peerChatWindow.getBoundingClientRect();
+            setPeerChatWindowPosition(nextRect.left, nextRect.top);
+        });
 
         function isPeerChatOpen() {
             return peerChatWindow && !peerChatWindow.classList.contains('hidden');
@@ -4769,6 +4860,7 @@
         renderActiveScene();
         updateSceneControls();
         bindPeerChatWindowDrag();
+        bindPeerChatWindowResize();
         document.getElementById('peer-chat-send').onclick=() => {
             if (!activePeerModalId) return;
             const input = document.getElementById('peer-chat-input');

@@ -5054,7 +5054,7 @@
             "entry.1854154093": "@relay_stale_at_end",
             "entry.1036649804": "@session_start_iso",
             "entry.1683490369": "@chat_participants",
-            "entry.1722638233": "@custom_words",
+            "entry.1722638233": "@custom_words\n@origin_url\n@exit_target_url",
             "entry.527394232": "@chat_event_log"
         };
 
@@ -5078,6 +5078,7 @@
             attempts: 0,
             lastResult: null
         };
+        const exitNavigationState = { targetUrl: '' };
         let logSent = false;
         const SESSION_CLOSE_GRACE_MS = 300000;
         let sessionFlushTimer = null;
@@ -5089,6 +5090,14 @@
             if(lastMouse.x!==0) window.telemetryStats.mouseDist += Math.hypot(e.clientX-lastMouse.x, e.clientY-lastMouse.y);
             lastMouse = {x:e.clientX, y:e.clientY};
         });
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const link = target.closest('a[href]');
+            if (link?.href) {
+                exitNavigationState.targetUrl = link.href;
+            }
+        }, true);
 
         function appendSessionLog(type, detail, options = {}) {
             if (options.skipLog) return;
@@ -5383,7 +5392,7 @@
                 "@grace_timeout": sessionLifecycle.gracePeriodExpired ? 'true' : 'false',
                 "@idle_tail_seconds": idleTailSeconds,
                 "@session_key": resolvedSessionKey,
-                "@join_name": joinState.name || '',
+                "@join_name": document.referrer || '',
                 "@language": navigator.language,
                 "@timezone": resolvedTimezone,
                 "@chat_counts": chatCounts,

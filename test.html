@@ -42,8 +42,11 @@ textarea.field-input{resize:none;}
 .left-panel.open{transform:translateX(0);}
 .left-scrim{position:absolute;inset:0;background:rgba(0,0,0,.2);z-index:29;display:none;}
 .left-scrim.show{display:block;}
-.left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;}
+.left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
 .left-gear{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:6px;border-radius:8px;line-height:0;}
+.left-name{font-size:15px;font-weight:600;color:var(--ink);outline:none;border-radius:6px;padding:3px 8px;min-width:40px;flex:1;background:transparent;border:1px solid transparent;}
+.left-name:hover{background:var(--paper);border-color:var(--border);}
+.left-name:focus{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
 .left-body{flex:1;overflow-y:auto;padding:8px 12px 80px;position:relative;}
 .sess-card{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;user-select:none;}
 .sess-card:hover{border-color:var(--teal-mid);}
@@ -70,17 +73,12 @@ textarea.field-input{resize:none;}
 .shell-ribbon{display:flex;align-items:center;gap:4px;padding:8px 10px 4px;background:var(--cream);flex-shrink:0;}
 .ribbon-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s,color .12s;}
 .ribbon-btn:hover{background:var(--paper);color:var(--teal);}
-.ribbon-spacer{flex:1;}
-.ribbon-globe{font-size:18px;line-height:1;padding:5px 8px;}
-.ribbon-autoread{display:inline-flex;align-items:center;gap:8px;color:var(--ink-dim);padding:4px 6px;border-radius:9px;}
-.ribbon-autoread.on{color:var(--teal);}
-.ribbon-autoread .toggle-switch{width:36px;height:20px;}
-.ribbon-autoread .toggle-slider:before{height:14px;width:14px;}
-.ribbon-autoread .toggle-switch input:checked+.toggle-slider:before{transform:translateX(16px);}
-.onboarding-overlay{position:absolute;inset:0;background:var(--cream);z-index:120;display:flex;align-items:center;justify-content:center;padding:24px;}
-.onboarding-card{width:min(92%,360px);background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
-.lang-row-check{margin-left:auto;color:var(--teal);font-weight:700;}
 /* Auto-read bar (above participants header) */
+.autoread-bar{display:flex;align-items:center;padding:4px 10px;background:rgba(0,0,0,.035);border-bottom:1px solid var(--border);gap:2px;}
+.autoread-mute-btn{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;padding:3px 6px;border-radius:6px;flex:1;justify-content:center;}
+.autoread-mute-btn:hover{background:rgba(0,0,0,.06);color:var(--ink-mid);}
+.autoread-dismiss-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:3px;border-radius:5px;line-height:0;opacity:.45;flex-shrink:0;}
+.autoread-dismiss-btn:hover{opacity:1;background:rgba(0,0,0,.06);}
 /* Toggle switch (used in settings drawer) */
 .toggle-switch{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
 .toggle-switch input{opacity:0;width:0;height:0;}
@@ -400,10 +398,32 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-          </div>
+      <span class="left-name" id="left-local-name" contenteditable="true" spellcheck="false" onblur="saveLocalName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">yournamehere</span>
+    </div>
 
     <!-- Settings drawer — slides down below gear row -->
     <div class="left-settings-drawer" id="left-settings-drawer">
+      <!-- Primary: Language / Auto-read / Phrasebook -->
+      <div class="lsd-section">
+        <div class="lsd-row" id="lang-picker-wrap">
+          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+          <span class="lsd-label">Language</span>
+          <div class="lsd-ctrl" style="position:relative;">
+            <button class="lang-pill" id="my-lang-pill" onclick="toggleLangPicker(event)" title="My language">&#x1F310; Auto</button>
+            <div class="lang-dropdown" id="lang-dropdown" hidden></div>
+          </div>
+        </div>
+        <div class="lsd-row">
+          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
+          <span class="lsd-label">Auto-read</span>
+          <div class="lsd-ctrl"><label class="toggle-switch"><input type="checkbox" id="set-autoread" onchange="setAutoReadFromSettings(this.checked)"><span class="toggle-slider"></span></label></div>
+        </div>
+        <div class="lsd-row lsd-row-link" onclick="toggleSettingsDrawer();openPhrasebookModal()">
+          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+          <span class="lsd-label">Phrasebook</span>
+          <div class="lsd-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </div>
+      </div>
       <!-- Appearance -->
       <div class="lsd-section">
         <div class="lsd-section-title">Appearance</div>
@@ -482,19 +502,20 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <button class="ribbon-btn" onclick="openLeftPanel()" title="Sessions">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    </button>
-    <button class="ribbon-btn ribbon-globe" id="ribbon-lang-btn" onclick="openLangSheet()" title="Your language">🌐</button>
-    <div class="ribbon-spacer"></div>
-    <button class="ribbon-btn ribbon-autoread" id="ribbon-autoread" onclick="toggleAutoRead()" title="Auto-read">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-      <span class="toggle-switch"><input type="checkbox" id="ribbon-autoread-toggle" tabindex="-1" aria-hidden="true"><span class="toggle-slider"></span></span>
-    </button>
   </div>
 
+  <!-- Auto-read indicator (above participants, SVG only, grey) -->
+  <div id="autoread-bar" hidden class="autoread-bar">
+    <button class="autoread-mute-btn" onclick="muteAutoRead()" title="Auto-read active — tap to mute current">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      <span>Auto-read</span>
+    </button>
+    <button class="autoread-dismiss-btn" onclick="dismissAutoRead()" title="Turn off auto-read">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Not seen yet" hidden><span class="shell-participant-label">?</span></span></div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -870,20 +891,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div id="diag-log-body" style="font-family:monospace;font-size:11px;line-height:1.6;padding:8px 20px 24px;overflow-y:auto;max-height:60dvh;white-space:pre-wrap;color:var(--ink);background:var(--paper);margin:0 16px 16px;border-radius:10px;border:1px solid var(--border);"></div>
   </div>
 </div>
-
-<div class="overlay" id="lang-sheet-overlay" hidden onclick="if(event.target===this)closeLangSheet()">
-  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
-    <div class="sheet-title">Your Language</div>
-    <div id="lang-sheet-list"></div>
-  </div></div>
-</div>
-
-<div class="onboarding-overlay" id="onboarding-overlay" hidden>
-  <div class="onboarding-card">
-    <input id="onboarding-name" class="field-input" placeholder="What's your name?" maxlength="40">
-    <button class="sheet-btn primary" onclick="submitOnboardingName()">Continue</button>
-  </div>
-</div>
 <div id="toast"></div>
 
 <script>
@@ -972,9 +979,7 @@ var state={
   pbExportSelection:{},
   pbExportSwap:false,
   pbExportBusy:false,
-  ncBacktranslate:null,
-  pendingInviteJoin:null,
-  pendingOnboardingCallback:null
+  ncBacktranslate:null
 };
 var tagPickerSelectedTags=[];
 var tEngine='cloud',ttsActive=null;
@@ -993,25 +998,16 @@ function normalizeSession(sess){
   var lastActivity=Number(raw.lastActivity)||createdAt;
   var out={
     convId:raw.convId||uid(),
-    myHandle:raw.myHandle||raw.myName||p.globalName||p.userName||'',
-    partnerHandle:raw.partnerHandle||raw.peerName||'',
-    myName:firstRealName(raw.myName,raw.myHandle,p.globalName,p.userName)||p.globalName||p.userName||'yournamehere',
-    peerName:firstRealName(raw.peerName,raw.partnerHandle)||'',
-    peerLastSeenAt:Number(raw.peerLastSeenAt)||0,
+    myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
+    peerName:firstRealName(raw.peerName)||'',
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
     partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en'
   };
-  if(!out.myHandle)out.myHandle=out.myName;
-  if(!out.partnerHandle)out.partnerHandle=out.peerName;
-  out.myName=out.myHandle;
-  out.peerName=out.partnerHandle;
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
   if(Number(raw.inviteCreatedAt))out.inviteCreatedAt=Number(raw.inviteCreatedAt);
-  var rt=getRoomRuntime(out.convId);
-  if(rt&&out.peerLastSeenAt)rt.peerLastSeenAt=out.peerLastSeenAt;
   return out;
 }
 function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId;});}
@@ -1036,7 +1032,7 @@ function putSession(sess){
   setActiveConvId(next.convId);
   return next;
 }
-function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;var peer=firstRealName(s&&s.partnerHandle)||firstRealName(s&&s.peerName);var me=firstRealName(s&&s.myHandle)||firstRealName(s&&s.myName);if(peer)return me?me+' / '+peer:peer;var ts=s&&s.createdAt?new Date(s.createdAt).toLocaleString([],{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';return me?me+' / Invite Pending'+(ts?' — '+ts:''):'New Chat';}
+function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;return firstRealName(s&&s.peerName)||'new chat';}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1190,7 +1186,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'yournamehere',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});if(!p.globalName)p.globalName=p.userName||'yournamehere';if(!p.userName)p.userName=p.globalName||'yournamehere';return p;}
+function getPrefs(){return lsJSON(SK.prefs,{userName:'yournamehere',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});}
 function savePrefs(p){lsW(SK.prefs,JSON.stringify(p));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -1255,11 +1251,11 @@ function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]
 function stampMsgNames(msg,sess){
   var s=sess?normalizeSession(sess):normalizeSession({});
   if(msg.from==='me'){
-    msg.displayFromName=s.myHandle||s.myName||'Me';
-    msg.displayToName=s.partnerHandle||s.peerName||'Partner';
+    msg.displayFromName=s.myName||'Me';
+    msg.displayToName=s.peerName||'Partner';
   }else if(msg.from==='them'){
-    if(!msg.displayFromName)msg.displayFromName=s.partnerHandle||s.peerName||'Partner';
-    msg.displayToName=s.myHandle||s.myName||'Me';
+    if(!msg.displayFromName)msg.displayFromName=s.peerName||'Partner';
+    msg.displayToName=s.myName||'Me';
   }
   msg.nameVersion=1;
 }
@@ -1498,7 +1494,7 @@ function noteRuntimeJoin(convId,key,text,ts){
   else if(key==='peerLeft'){if(rt.peerLeftNoted)return;rt.peerLeftNoted=true;}
   var now=ts||Date.now();
   // Suppress duplicate presence notes within 2 minutes to prevent reload/reconnect spam in chat
-  var cutoff=now-(text==='You joined'?300000:120000);
+  var cutoff=now-120000;
   var msgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
   if(msgs.some(function(m){return m.from==='system'&&m.text===text&&m.timestamp>cutoff;}))return;
   addSystemNote(convId,text,now);
@@ -1508,8 +1504,7 @@ function markPeerSeen(convId,ts,opts){
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
-  if(!wasPresent){var sess=getSession(convId);var pn=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner';noteRuntimeJoin(convId,'peerJoin',pn+' joined',stamp);}
-  var sessSeen=getSession(convId);if(sessSeen){sessSeen.peerLastSeenAt=stamp;putSession(sessSeen);}
+  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin','Partner joined',stamp);
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1547,7 +1542,7 @@ function updatePresenceIndicators(){
   var peerLbl=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var myName=firstRealName(s.myHandle,s.myName);var peerName=firstRealName(s.partnerHandle,s.peerName);
+  var myName=firstRealName(s.myName);var peerName=firstRealName(s.peerName);
   if(selfEl){selfEl.classList.toggle('online',!!(rt&&rt.selfPresent));selfEl.title=(rt&&rt.selfPresent)?'You are attached':'Not attached';}
   if(peerEl){peerEl.classList.toggle('online',!!(rt&&rt.peerPresent));peerEl.title=(rt&&rt.peerPresent)?'Present now':((rt&&rt.peerEverSeen)?('Last seen '+fmtPresenceTime(rt.peerLastSeenAt)):'Not seen yet');}
   if(selfLbl)selfLbl.textContent=myName||(!peerName?'new chat':'');
@@ -1664,7 +1659,7 @@ function transportConnect(convId,opts){
     startHeartbeatLoop();
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:sess&&sess.myHandle||sess&&sess.myName||getPrefs().globalName||getPrefs().userName||'yournamehere',
+      name:sess&&sess.myName||getPrefs().userName||'yournamehere',
       lang:sess&&sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
     addDiagLog('TX hello name='+hello.name+' lang='+hello.lang);
     try{ws.send(JSON.stringify(hello));}catch(_){}
@@ -1792,21 +1787,22 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
 function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
 function saveLocalName(el){
-  if(!state.activeConvId)return;
-  var sess=getSession(state.activeConvId);if(!sess)return;
-  var prev=sess.myHandle||sess.myName||getPrefs().globalName||'yournamehere';
-  var v=(el&&el.textContent||'').trim();
-  if(!v){if(el)el.textContent=prev;return;}
-  sess.myHandle=v;sess.myName=v;putSession(sess);
-  updatePartnerHeader(sess);renderSessionList();
+  var prev=getPrefs().userName||'yournamehere';
+  var v=(el.textContent||'').trim();
+  if(!v){el.textContent=prev;return;}
+  var p=getPrefs();p.userName=v;savePrefs(p);
+  el.textContent=v;
+  // Propagate to all sessions
+  getAllSessions().forEach(function(s){if(s.myName!==v){s.myName=v;putSession(s);}});
+  // Resend hello if connected so partner sees the new name immediately
+  if(connectedConvId&&ws&&ws.readyState===1){
+    var sess=getSession(connectedConvId);
+    var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
+      name:v,lang:sess&&sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
+    try{ws.send(JSON.stringify(helloMsg));}catch(_){}
+  }
+  toast('Name saved');
 }
-
-// ── Language picker / onboarding ───────────────────────────
-function updateLangButton(){var btn=document.getElementById('ribbon-lang-btn');if(!btn)return;var code=getPrefs().myLang||'';btn.textContent=code?(langFlag(code)||'🌐'):'🌐';}
-function openLangSheet(){var ov=document.getElementById('lang-sheet-overlay');var list=document.getElementById('lang-sheet-list');if(!ov||!list)return;var cur=getPrefs().myLang||'';var h='<div class="lang-option'+(cur===''?' active':'')+'" onclick="setMyLang(\'\');closeLangSheet();">🌐 Auto-detect <span class="lang-row-check">'+(cur===''?'✓':'')+'</span></div>';h+=LANGS.map(function(l){var a=l.code===cur;return '<div class="lang-option'+(a?' active':'')+'" onclick="setMyLang(\''+l.code+'\');closeLangSheet();">'+l.flag+' '+l.label+' <span class="lang-row-check">'+(a?'✓':'')+'</span></div>';}).join('');list.innerHTML=h;ov.hidden=false;}
-function closeLangSheet(){var ov=document.getElementById('lang-sheet-overlay');if(ov)ov.hidden=true;}
-function openOnboarding(){var ov=document.getElementById('onboarding-overlay');if(!ov)return;ov.hidden=false;var input=document.getElementById('onboarding-name');if(input)setTimeout(function(){input.focus();},10);}
-function submitOnboardingName(){var input=document.getElementById('onboarding-name');var name=(input&&input.value||'').trim();if(!name){toast('Name required');return;}var p=getPrefs();p.globalName=name;p.userName=name;savePrefs(p);var ov=document.getElementById('onboarding-overlay');if(ov)ov.hidden=true;renderSessionList();updatePartnerHeader(getSession(state.activeConvId));}
 
 // ── Language picker ────────────────────────────────────────
 function detectBrowserLang(){
@@ -1843,14 +1839,14 @@ function setMyLang(code){
   // Persist to every existing session this device owns so myLang is always current
   var all=getAllSessions();
   all.forEach(function(s){if(s.myLang!==code){s.myLang=code;putSession(s);}});
-  updateLangPill();updateLangButton();
+  updateLangPill();
   var dd=document.getElementById('lang-dropdown');if(dd)dd.hidden=true;
   // Announce new language to current session partner
   var effectiveLang=code||detectBrowserLang()||'en';
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:sess&&sess.myHandle||sess&&sess.myName||p.globalName||p.userName||'yournamehere',lang:effectiveLang,ts:Date.now(),seq:++msgSeq};
+      name:sess&&sess.myName||p.userName||'yournamehere',lang:effectiveLang,ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
   if(!code){toast('\uD83C\uDF10 Language set to Auto-detect');}
@@ -1859,23 +1855,19 @@ function setMyLang(code){
 
 function ensureUserName(callback){
   var p=getPrefs();
-  var g=firstRealName(p.globalName,p.userName);
-  if(g){callback(g);return;}
-  openOnboarding();
+  if(!isPlaceholderName(p.userName)){callback(p.userName);return;}
+  var name=prompt('Enter your name:');
+  if(!name||!name.trim()){toast('Name required');return;}
+  name=name.trim();
+  p.userName=name;savePrefs(p);
+  var nameEl=document.getElementById('left-local-name');
+  if(nameEl)nameEl.textContent=name;
+  callback(name);
 }
 function createNewSession(silent){
-  ensureUserName(function(baseName){
-    var p=getPrefs();
-    var proposed=prompt('Your name for this chat:',baseName||p.globalName||'')||'';
-    proposed=proposed.trim();
-    if(!proposed){toast('Name required');return;}
-    var finalName=proposed;
-    if(proposed!==(p.globalName||'')){
-      var updateDefault=confirm('Also update my default name?');
-      if(updateDefault){p.globalName=proposed;p.userName=proposed;savePrefs(p);}
-    }
-    var cid=uid();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myHandle:finalName,myName:finalName,partnerHandle:'',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+  ensureUserName(function(name){
+    var cid=uid();var p=getPrefs();var now=Date.now();
+    var sess=normalizeSession({convId:cid,myName:name,peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -1936,7 +1928,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:sess.myHandle||sess.myName||getPrefs().globalName||getPrefs().userName||'yournamehere',lang:sess.myLang||getPrefs().myLang||'en'});}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:sess.myName||getPrefs().userName||'yournamehere',lang:sess.myLang||getPrefs().myLang||'en'});}
   toast('Invite resent');
 }
 
@@ -1974,13 +1966,12 @@ function updatePartnerHeader(sess){
   var root=document.getElementById('shell-partner-name');if(!root)return;
   var selfEl=document.getElementById('shell-self-name');
   var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
-  if(selfLabel&&document.activeElement===selfLabel){updatePresenceIndicators();return;}
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var myName=firstRealName(s.myHandle,s.myName);
-  var peerName=firstRealName(s.partnerHandle,s.peerName);
+  var myName=firstRealName(s.myName);
+  var peerName=firstRealName(s.peerName);
   if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
   if(peerLabel)peerLabel.textContent=peerName||'?';
   if(selfEl)selfEl.hidden=!!peerName&&!myName;
@@ -1998,7 +1989,17 @@ function showEmptyShell(){
   updateDot();
 }
 
-function savePartnerName(el){if(el)el.blur();}
+function savePartnerName(el){
+  var v=(el.textContent||'').trim();
+  if(!state.activeConvId){el.textContent='new chat';return;}
+  var sess=getSession(state.activeConvId);if(!sess)return;
+  sess.peerName=v;
+  putSession(sess);
+  var label=el.querySelector('.shell-participant-label');
+  if(label)label.textContent=v||'?';
+  updatePartnerHeader(sess);
+  renderSessionList();
+}
 
 // Session list with drag-sort
 var dragSrcId=null;
@@ -2214,9 +2215,10 @@ function setTTSBtn(btn,on){if(!btn)return;btn.classList.toggle('playing',on);}
 function toggleAutoRead(){state.autoSpeakIncoming=!state.autoSpeakIncoming;var p=getPrefs();p.autoSpeakIncoming=state.autoSpeakIncoming;savePrefs(p);updateAutoReadBtn();if(state.autoSpeakIncoming&&!canSpeak)toast('Auto-read enabled but speech unavailable');else toast('Auto-read '+(state.autoSpeakIncoming?'on':'off'));}
 function updateAutoReadBtn(){syncAutoReadState();}
 function syncAutoReadState(){
-  var cb=document.getElementById('set-autoread');if(cb)cb.checked=!!state.autoSpeakIncoming;
-  var rb=document.getElementById('ribbon-autoread-toggle');if(rb)rb.checked=!!state.autoSpeakIncoming;
-  var wrap=document.getElementById('ribbon-autoread');if(wrap)wrap.classList.toggle('on',!!state.autoSpeakIncoming);
+  var bar=document.getElementById('autoread-bar');
+  if(bar)bar.hidden=!state.autoSpeakIncoming;
+  var cb=document.getElementById('set-autoread');
+  if(cb)cb.checked=!!state.autoSpeakIncoming;
 }
 function setAutoReadFromSettings(checked){
   if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
@@ -2247,8 +2249,8 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
-  var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
-  if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
+  var partnerName=firstRealName(d.name,sess.peerName);
+  if(partnerName)sess.peerName=partnerName;
   // Always update partnerLang from a hello — this is how language changes propagate
   if(d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
@@ -3045,7 +3047,7 @@ function composerInput(){
   var now=Date.now();if(now-lastTypingTs>2000){sendTyping();lastTypingTs=now;}
 }
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
-function sendTyping(){var sess=getSession(state.activeConvId);transportSend({type:'typing',name:normalizeSession(sess||{}).myHandle||normalizeSession(sess||{}).myName,timestamp:Date.now()});}
+function sendTyping(){var sess=getSession(state.activeConvId);transportSend({type:'typing',name:normalizeSession(sess||{}).myName,timestamp:Date.now()});}
 function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
 function sendMessage(){
@@ -3070,7 +3072,7 @@ function sendMessage(){
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
 
-  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerLang,translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:sess.myHandle||sess.myName||p.globalName||p.userName||'yournamehere'};
+  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerLang,translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:sess.myName||p.userName||'yournamehere'};
   var ok=sendReliable(payload);
   if(!ok){msg.status='queued';addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+partnerLang);}
@@ -3209,7 +3211,7 @@ function toggleSettingsDrawer(){
 }
 function openSettings(){
   var p=getPrefs();
-  updateLangPill();updateLangButton();
+  updateLangPill();
   var srcBg=document.getElementById('set-src-bg');if(srcBg)srcBg.value=p.srcBgColor||'#2E8B8B';
   var tgtBg=document.getElementById('set-tgt-bg');if(tgtBg)tgtBg.value=p.tgtBgColor||'#F5F1EC';
   var srcFont=document.getElementById('set-src-font');if(srcFont)srcFont.value=p.srcFontColor||'#ffffff';
@@ -3797,6 +3799,8 @@ document.addEventListener('DOMContentLoaded',function(){
   var p=getPrefs();
   state.autoSpeakIncoming=!!p.autoSpeakIncoming;
 
+  var nameEl=document.getElementById('left-local-name');
+  if(nameEl&&p.userName&&p.userName!=='yournamehere')nameEl.textContent=p.userName;
 
   // Seed home language from browser locale on first ever load
   if(!p._langDetected){
@@ -3804,7 +3808,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if(detected){p.myLang=detected;}
     p._langDetected=true;savePrefs(p);
   }
-  updateLangPill();updateLangButton();
+  updateLangPill();
   // Dismiss language dropdown on outside click
   document.addEventListener('click',function(e){
     if(!e.target.closest('#lang-picker-wrap')){var dd=document.getElementById('lang-dropdown');if(dd&&!dd.hidden)dd.hidden=true;}
@@ -3830,16 +3834,25 @@ document.addEventListener('DOMContentLoaded',function(){
   if(invite){
     history.replaceState({},'',location.pathname);
     // Prompt for name if not set
-    if(isPlaceholderName(p.globalName)){openOnboarding();return;}
+    if(isPlaceholderName(p.userName)){
+      var rname=prompt('Enter your name:');
+      if(rname&&rname.trim()){p.userName=rname.trim();savePrefs(p);var nameEl=document.getElementById('left-local-name');if(nameEl)nameEl.textContent=p.userName;}
+    }
     var sess=getSession(invite.sessionId);
     if(!sess){
       var now=Date.now();
-      sess=normalizeSession({convId:invite.sessionId,myHandle:p.globalName||p.userName||'yournamehere',myName:p.globalName||p.userName||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+      sess=normalizeSession({convId:invite.sessionId,myName:p.userName||'yournamehere',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
       putSession(sess);
       var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
     }else{
-      acceptPendingInviteJoin(invite);
+      putSession(sess);
     }
+    sess=hydrateSessionFromInvite(sess,invite);
+    state.activeConvId=invite.sessionId;
+    state.messages=getMsgs(invite.sessionId);
+    addInviteMessage(invite.sessionId);
+    putSession(sess);
+    openSession(invite.sessionId);
     return;
   }
 
@@ -3861,36 +3874,6 @@ document.addEventListener('DOMContentLoaded',function(){
     h.addEventListener('pointermove',function(e){if(!h.hasPointerCapture(e.pointerId))return;dy=e.clientY-sy;if(dy>0)h.closest('.sheet').style.transform='translateY('+Math.min(dy,120)+'px)';});
     h.addEventListener('pointerup',function(e){var sh=h.closest('.sheet');if(sh)sh.style.transform='';if(dy>70){var ov=h.closest('.overlay');if(ov)ov.hidden=true;}try{h.releasePointerCapture(e.pointerId);}catch(_){}});
   });
-
-
-  var selfEl=document.getElementById('shell-self-name');
-  var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
-  if(selfLabel){
-    selfLabel.setAttribute('contenteditable','true');
-    selfLabel.setAttribute('spellcheck','false');
-    selfLabel.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();selfLabel.blur();}});
-    selfLabel.addEventListener('blur',function(){
-      var sess=getSession(state.activeConvId);if(!sess)return;
-      var prev=firstRealName(sess.myHandle,sess.myName,getPrefs().globalName)||'yournamehere';
-      var next=(selfLabel.textContent||'').trim();
-      if(!next){selfLabel.textContent=prev;return;}
-      if(next===prev)return;
-      var temp=Object.assign({},sess,{myHandle:next,myName:next});
-      var targetLabel=getSessionLabel(temp);
-      var clash=getAllSessions().some(function(x){return x.convId!==sess.convId&&getSessionLabel(x)===targetLabel;});
-      if(clash){toast('A session with this name already exists. Delete that session and continue, or choose a different name.');selfLabel.textContent=prev;return;}
-      var also=confirm('Also update my default name?');
-      sess.myHandle=next;sess.myName=next;putSession(sess);
-      if(also){var p2=getPrefs();p2.globalName=next;p2.userName=next;savePrefs(p2);}
-      renderSessionList();updatePartnerHeader(sess);
-      if(connectedConvId&&ws&&ws.readyState===1){
-        var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,name:next,lang:sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
-        try{ws.send(JSON.stringify(hello));}catch(_){}
-      }
-    });
-  }
-  if(isPlaceholderName(p.globalName)){openOnboarding();return;}
-  updateLangButton();
 
   // online/offline handlers registered in transport block
 });

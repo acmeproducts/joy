@@ -1928,7 +1928,7 @@ function showNewSessionNameSheet(defaultName,onConfirm){
     ov.innerHTML='<div class="sheet" style="padding:24px 20px 28px;">'
       +'<div class="sheet-handle"></div>'
       +'<div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:14px;">Your name in this chat</div>'
-      +'<input id="nsns-input" type="text" maxlength="40" style="font-size:15px;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;width:100%;box-sizing:border-box;outline:none;background:var(--paper);color:var(--ink);font-family:'DM Sans',sans-serif;margin-bottom:10px;">'
+      +'<input id="nsns-input" type="text" maxlength="40" style="font-size:15px;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;width:100%;box-sizing:border-box;outline:none;background:var(--paper);color:var(--ink);font-family:\'DM Sans\',sans-serif;margin-bottom:10px;">'
       +'<div id="nsns-update-row" hidden style="margin-bottom:14px;"><label style="font-size:13px;color:var(--ink-dim);display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="nsns-update-default"> Also update my default name</label></div>'
       +'<div style="display:flex;gap:10px;">'
       +'<button id="nsns-cancel" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:none;font-size:14px;cursor:pointer;color:var(--ink-dim);">Cancel</button>'
@@ -1962,15 +1962,13 @@ function showNewSessionNameSheet(defaultName,onConfirm){
 function openLangModal(){
   var cur=getPrefs().myLang||'';
   var host=document.getElementById('lang-modal-list');if(!host)return;
-  var rows=[{code:'',flag:'🌐',label:'Auto-detect'}].concat(LANGS);
+  var rows=[{code:'',flag:'\uD83C\uDF10',label:'Auto-detect'}].concat(LANGS);
   host.innerHTML=rows.map(function(l){
     var active=l.code===cur;
-    return '<div class="lang-option'+(active?' active':'')+'" '
-      +'onclick="setMyLangAndClose(''+l.code+'')" '
-      +'style="display:flex;align-items:center;gap:10px;padding:10px 4px;cursor:pointer;border-bottom:1px solid var(--border);">'
+    return '<div class="lang-option'+(active?' active':'')+'" onclick="setMyLangAndClose(\''+l.code+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 4px;cursor:pointer;border-bottom:1px solid var(--border);">'
       +'<span style="font-size:20px;">'+l.flag+'</span>'
       +'<span style="flex:1;">'+l.label+'</span>'
-      +(active?'<span style="color:var(--teal);font-weight:700;">✓</span>':'')
+      +(active?'<span style="color:var(--teal);font-weight:700;">\u2713</span>':'')
       +'</div>';
   }).join('');
   document.getElementById('lang-modal-overlay').hidden=false;
@@ -4019,7 +4017,7 @@ document.addEventListener('DOMContentLoaded',function(){
     // Prompt for name if not set
     if(isPlaceholderName(p.userName)){
       var rname=prompt('Enter your name:');
-      if(rname&&rname.trim()){p.userName=rname.trim();savePrefs(p);// left-local-name removed in v3.4}
+      if(rname&&rname.trim()){p.userName=rname.trim();savePrefs(p);}// left-local-name removed in v3.4
     }
     var sess=getSession(invite.sessionId);
     if(!sess){

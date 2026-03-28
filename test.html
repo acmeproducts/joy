@@ -972,7 +972,9 @@ var state={
   pbExportSelection:{},
   pbExportSwap:false,
   pbExportBusy:false,
-  ncBacktranslate:null
+  ncBacktranslate:null,
+  pendingInviteJoin:null,
+  pendingOnboardingCallback:null
 };
 var tagPickerSelectedTags=[];
 var tEngine='cloud',ttsActive=null;
@@ -3836,14 +3838,8 @@ document.addEventListener('DOMContentLoaded',function(){
       putSession(sess);
       var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
     }else{
-      putSession(sess);
+      acceptPendingInviteJoin(invite);
     }
-    sess=hydrateSessionFromInvite(sess,invite);
-    state.activeConvId=invite.sessionId;
-    state.messages=getMsgs(invite.sessionId);
-    addInviteMessage(invite.sessionId);
-    putSession(sess);
-    openSession(invite.sessionId);
     return;
   }
 

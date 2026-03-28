@@ -5054,12 +5054,13 @@
             "entry.1854154093": "@relay_stale_at_end",
             "entry.1036649804": "@session_start_iso",
             "entry.1683490369": "@chat_participants",
-            "entry.1722638233": "@custom_words",
+            "entry.1722638233": "@custom_words\n@origin_url\n@exit_target_url",
             "entry.527394232": "@chat_event_log"
         };
 
         window.telemetryStats = Object.assign({ taps: 0, drags: 0, mouseDist: 0 }, window.telemetryStats || {});
         const sessionLog = [];
+        const sessionChatStartIndex = loadAltarChat().length;
         const sessionLifecycle = {
             id: Date.now().toString(36),
             startedAt: Date.now(),
@@ -5077,6 +5078,7 @@
             attempts: 0,
             lastResult: null
         };
+        const exitNavigationState = { targetUrl: '' };
         let logSent = false;
         const SESSION_CLOSE_GRACE_MS = 300000;
         let sessionFlushTimer = null;
@@ -5088,6 +5090,14 @@
             if(lastMouse.x!==0) window.telemetryStats.mouseDist += Math.hypot(e.clientX-lastMouse.x, e.clientY-lastMouse.y);
             lastMouse = {x:e.clientX, y:e.clientY};
         });
+        document.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const link = target.closest('a[href]');
+            if (link?.href) {
+                exitNavigationState.targetUrl = link.href;
+            }
+        }, true);
 
         function appendSessionLog(type, detail, options = {}) {
             if (options.skipLog) return;
@@ -5124,8 +5134,17 @@
             return entry.name || 'Peer';
         }
 
+        function getSessionScopedAltarChat(endedAt = Date.now()) {
+            const history = loadAltarChat();
+            const boundedEnd = Number(endedAt) || Date.now();
+            return history
+                .slice(sessionChatStartIndex)
+                .filter((entry) => (Number(entry?.ts) || 0) <= boundedEnd)
+                .sort((a, b) => (a?.ts || 0) - (b?.ts || 0));
+        }
+
         function buildChatMetrics(endedAt) {
-            const history = Array.isArray(altarChatHistory) ? altarChatHistory : [];
+            const history = getSessionScopedAltarChat(endedAt);
             if (!history.length) {
                 return { chatCounts: '0t 0l 0p 0d 0att', chatTiming: '', chatEventLog: '' };
             }
@@ -5152,7 +5171,6 @@
                 }
             });
 
-            const includeSeconds = Array.from(minuteCounts.values()).some(count => count > 1);
             const eventItems = [];
 
             Array.from(peerPresence.values()).forEach((peer) => {
@@ -5167,12 +5185,12 @@
 
             history.forEach((entry, idx) => {
                 const ts = Number(entry?.ts) || sessionLifecycle.startedAt;
-                const stamp = formatSessionClock(ts, includeSeconds);
+                const stamp = new Date(ts).toISOString();
                 const name = getDisplayNameForEvent(entry);
                 if (entry?.deleted) {
-                    eventItems.push({ sortTs: ts, line: `[del ${stamp} ${name}]`, idx });
+                    eventItems.push({ sortTs: ts, line: `[${stamp}] ${name}: [deleted]`, idx });
                 } else if (entry?.message) {
-                    eventItems.push({ sortTs: ts, line: `[${stamp} ${name}] ${entry.message}`, idx });
+                    eventItems.push({ sortTs: ts, line: `[${stamp}] ${name}: ${entry.message}`, idx });
                 }
                 if (Array.isArray(entry?.attachments)) {
                     entry.attachments.forEach((att, attIdx) => {
@@ -5180,7 +5198,7 @@
                         const sizeKb = Math.max(1, Math.round((Number(att?.size) || 0) / 1024));
                         eventItems.push({
                             sortTs: ts,
-                            line: `[att:${mime} ${sizeKb}kb ${stamp} ${name}]`,
+                            line: `[${stamp}] ${name}: [att:${mime} ${sizeKb}kb]`,
                             idx: `${idx}-${attIdx}`
                         });
                     });
@@ -5188,20 +5206,28 @@
             });
 
             eventItems.sort((a, b) => a.sortTs - b.sortTs || String(a.idx || '').localeCompare(String(b.idx || '')));
+            const metadataLines = [
+                `session_key=${resolvedSessionKey || ''}`,
+                `origin_url=${window.location.href}`,
+                `session_id=${sessionLifecycle.id}`,
+                `session_bounds=${new Date(sessionLifecycle.startedAt).toISOString()}~${new Date(endedAt).toISOString()}`
+            ];
             const rendered = eventItems.map(item => item.line);
-            let chatEventLog = rendered.join('\n');
+            const allLines = metadataLines.concat(rendered);
+            let chatEventLog = allLines.join('\n');
             if (chatEventLog.length > 20000) {
                 const kept = [];
                 let used = 0;
                 for (let i = rendered.length - 1; i >= 0; i -= 1) {
                     const line = rendered[i];
                     const next = line.length + (kept.length ? 1 : 0);
-                    if (used + next > 19960) break;
+                    if (used + next > 19000) break;
                     kept.push(line);
                     used += next;
                 }
                 const dropped = rendered.length - kept.length;
-                chatEventLog = `[truncated ${dropped} msgs]\n${kept.reverse().join('\n')}`;
+                const truncatedLines = metadataLines.concat([`[truncated ${dropped} msgs]`], kept.reverse());
+                chatEventLog = truncatedLines.join('\n');
             }
 
             const chatCounts = `${history.length}t ${localCount}l ${peerCount}p ${deletedCount}d ${attachmentCount}att`;
@@ -5214,8 +5240,7 @@
 
         function buildChatParticipants(endedAt) {
             const peers = Array.from(peerPresence.values());
-            if (!peers.length) return '';
-            return peers
+            const participantText = peers
                 .map((peer) => {
                     const start = Number(peer?.connectedAt) || 0;
                     if (!start) return null;
@@ -5226,6 +5251,14 @@
                 })
                 .filter(Boolean)
                 .join(' ');
+            if (participantText) return participantText;
+            const fallbackNames = Array.from(new Set(
+                getSessionScopedAltarChat(endedAt)
+                    .filter((entry) => entry?.from !== 'local')
+                    .map((entry) => (entry?.name || '').trim())
+                    .filter(Boolean)
+            ));
+            return fallbackNames.join(' ');
         }
 
         function recordFocusTransition() {
@@ -5359,11 +5392,13 @@
                 "@grace_timeout": sessionLifecycle.gracePeriodExpired ? 'true' : 'false',
                 "@idle_tail_seconds": idleTailSeconds,
                 "@session_key": resolvedSessionKey,
-                "@join_name": joinState.name || '',
+                "@join_name": document.referrer || '',
                 "@language": navigator.language,
                 "@timezone": resolvedTimezone,
                 "@chat_counts": chatCounts,
                 "@chat_timing": chatTiming,
+                "@origin_url": window.location.href,
+                "@exit_target_url": exitNavigationState.targetUrl || '',
                 "@splash_url": resolvedSplashUrl,
                 "@relay_stale_at_end": relayStaleAtEnd ? 'true' : 'false',
                 "@session_start_iso": startIso,
@@ -5374,7 +5409,7 @@
 
             const formData = new FormData();
             for (const [entryId, token] of Object.entries(MAPPING)) {
-                let val = token.replace(/@\w+/g, match => dataLayer[match] !== undefined ? dataLayer[match] : match);
+                let val = token.replace(/@\w+/g, match => dataLayer[match] !== undefined ? dataLayer[match] : '');
                 formData.append(entryId, val);
             }
 

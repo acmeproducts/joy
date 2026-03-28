@@ -515,7 +515,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </button>
   </div>
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name for this chat" onblur="saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Not seen yet" hidden><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -996,18 +996,25 @@ function normalizeSession(sess){
   var now=Date.now();
   var createdAt=Number(raw.createdAt)||now;
   var lastActivity=Number(raw.lastActivity)||createdAt;
+  var myHandle=firstRealName(raw.myHandle,raw.myName,p.globalName,p.userName)||p.userName||'yournamehere';
+  var partnerHandle=firstRealName(raw.partnerHandle,raw.peerName)||'';
   var out={
     convId:raw.convId||uid(),
-    myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
-    peerName:firstRealName(raw.peerName)||'',
+    myHandle:myHandle,
+    partnerHandle:partnerHandle,
+    myName:myHandle,
+    peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
-    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en'
+    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en',
+    peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
   if(Number(raw.inviteCreatedAt))out.inviteCreatedAt=Number(raw.inviteCreatedAt);
+  var rt=getRoomRuntime(out.convId);
+  if(rt&&out.peerLastSeenAt)rt.peerLastSeenAt=out.peerLastSeenAt;
   return out;
 }
 function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId;});}
@@ -1032,7 +1039,15 @@ function putSession(sess){
   setActiveConvId(next.convId);
   return next;
 }
-function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;return firstRealName(s&&s.peerName)||'new chat';}
+function getSessionLabel(sess){
+  var s=sess?normalizeSession(sess):null;
+  var me=firstRealName(s&&s.myHandle,s&&s.myName);
+  var peer=firstRealName(s&&s.partnerHandle,s&&s.peerName);
+  if(peer)return me?(me+' / '+peer):peer;
+  var ts=s&&s.createdAt?new Date(s.createdAt).toLocaleString([],{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  if(me)return me+' / Invite Pending'+(ts?(' — '+ts):'');
+  return 'new chat';
+}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1483,7 +1498,7 @@ function getRoomRuntime(convId) {
   if (!roomRuntimeByConv[convId]) roomRuntimeByConv[convId] = {
     selfPresent:false,peerPresent:false,peerEverSeen:false,
     peerLastSeenAt:0,localJoinNoted:false,peerJoinNoted:false,
-    peerLeftNoted:false,connectedOnce:false
+    peerLeftNoted:false,connectedOnce:false,lastHistorySyncSentAt:0
   };
   return roomRuntimeByConv[convId];
 }
@@ -1504,7 +1519,15 @@ function markPeerSeen(convId,ts,opts){
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
-  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin','Partner joined',stamp);
+  var sess=getSession(convId);
+  if(sess){
+    sess.peerLastSeenAt=stamp;
+    putSession(sess);
+  }
+  if(!wasPresent){
+    var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner';
+    noteRuntimeJoin(convId,'peerJoin',partnerName+' joined',stamp);
+  }
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1966,12 +1989,13 @@ function updatePartnerHeader(sess){
   var root=document.getElementById('shell-partner-name');if(!root)return;
   var selfEl=document.getElementById('shell-self-name');
   var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
+  if(selfLabel&&document.activeElement===selfEl){updatePresenceIndicators();return;}
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var myName=firstRealName(s.myName);
-  var peerName=firstRealName(s.peerName);
+  var myName=firstRealName(s.myHandle,s.myName);
+  var peerName=firstRealName(s.partnerHandle,s.peerName);
   if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
   if(peerLabel)peerLabel.textContent=peerName||'?';
   if(selfEl)selfEl.hidden=!!peerName&&!myName;
@@ -1987,6 +2011,75 @@ function showEmptyShell(){
   document.getElementById('composer').style.display='none';
   updatePartnerHeader(null);
   updateDot();
+}
+
+function saveOwnerName(el){
+  if(!state.activeConvId)return;
+  var sess=getSession(state.activeConvId);if(!sess)return;
+  var oldName=firstRealName(sess.myHandle,sess.myName,getPrefs().userName)||'yournamehere';
+  var v=(el.textContent||'').trim();
+  if(!v){el.textContent=oldName;return;}
+  if(v===oldName){updatePartnerHeader(sess);return;}
+  sess.myHandle=v;sess.myName=v;putSession(sess);
+  updatePartnerHeader(sess);
+  renderSessionList();
+  transportSend({type:'hello',transient:true,name:v,lang:sess.myLang||getPrefs().myLang||'en',timestamp:Date.now()});
+}
+
+var HISTORY_SYNC_MAX=1500;
+var HISTORY_SYNC_CHUNK=80;
+
+function sanitizeHistoryMsgForWire(m){
+  if(!m||typeof m!=='object')return null;
+  return {
+    id:m.id||uid(),
+    from:m.from||'system',
+    sourceText:m.sourceText||m.orig||m.text||'',
+    sourceLang:m.sourceLang||m.lang||'',
+    targetText:m.targetText||m.translated||'',
+    targetLang:m.targetLang||'',
+    text:m.text||'',
+    orig:m.orig||m.sourceText||m.text||'',
+    lang:m.lang||m.sourceLang||'',
+    status:m.status||'received',
+    timestamp:m.timestamp||Date.now(),
+    displayFromName:m.displayFromName||'',
+    displayToName:m.displayToName||'',
+    clarify:m.clarify||{status:'none',text:'',thread:[]},
+    backtranslate:m.backtranslate||null,
+    translations:(m.translations&&typeof m.translations==='object')?m.translations:{}
+  };
+}
+
+function sendHistorySync(convId){
+  if(!convId||!ws||ws.readyState!==1)return;
+  var rt=getRoomRuntime(convId);var now=Date.now();
+  if(rt&&rt.lastHistorySyncSentAt&&(now-rt.lastHistorySyncSentAt)<10000)return;
+  var msgs=(getMsgs(convId)||[]).slice(-HISTORY_SYNC_MAX).map(sanitizeHistoryMsgForWire).filter(Boolean);
+  if(!msgs.length)return;
+  for(var i=0;i<msgs.length;i+=HISTORY_SYNC_CHUNK){
+    transportSend({type:'history-sync',transient:true,chunk:msgs.slice(i,i+HISTORY_SYNC_CHUNK),done:(i+HISTORY_SYNC_CHUNK)>=msgs.length,timestamp:Date.now()});
+  }
+  if(rt)rt.lastHistorySyncSentAt=now;
+  addDiagLog('TX history-sync count='+msgs.length);
+}
+
+function mergeHistorySyncChunk(sess,d){
+  if(!sess||!d||!Array.isArray(d.chunk)||!d.chunk.length)return;
+  var existing=getMsgs(sess.convId)||[];
+  var byId={};existing.forEach(function(m){if(m&&m.id)byId[m.id]=m;});
+  var changed=false;
+  d.chunk.forEach(function(raw){
+    var msg=normalizeMsgSchema(raw,{sourceLang:raw.sourceLang||raw.lang||'en',targetLang:raw.targetLang||''});
+    if(byId[msg.id])return;
+    stampMsgNames(msg,sess);
+    existing.push(msg);byId[msg.id]=msg;changed=true;
+  });
+  if(!changed)return;
+  existing.sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);});
+  saveMsgs(sess.convId,existing);
+  if(sess.convId===state.activeConvId){state.messages=existing;renderAllMessages();scrollBottom();}
+  addDiagLog('RX history-sync merged='+d.chunk.length+(d.done?' done':''));
 }
 
 function savePartnerName(el){
@@ -2249,8 +2342,8 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
-  var partnerName=firstRealName(d.name,sess.peerName);
-  if(partnerName)sess.peerName=partnerName;
+  var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
+  if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
   // Always update partnerLang from a hello — this is how language changes propagate
   if(d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
@@ -2276,18 +2369,25 @@ function handleRelayEvent(d){
     var rt=getRoomRuntime(sess.convId);
     var wasEverSeen=rt&&rt.peerEverSeen;
     var lastSeen=rt&&rt.peerLastSeenAt||0;
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     upsertPartnerFromEnvelope(sess,d);
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
     updatePartnerHeader(sess);
     renderSessionList();
     if(!d._fromBackfill){
       resendUnacked();
+      sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
       if(!wasEverSeen||(Date.now()-lastSeen)>300000){
         toast((d.name||'Partner')+' joined!');
       }
     }
+    return;
+  }
+
+  if(d.type==='history-sync'){
+    mergeHistorySyncChunk(sess,d);
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     return;
   }
 

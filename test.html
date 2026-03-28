@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Talk + Say · v3.4 · Build 2026-03-23 -->
+<!-- Test Version for Joy · Build 2026-03-17T13:00:00Z -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -73,12 +73,8 @@ textarea.field-input{resize:none;}
 .shell-ribbon{display:flex;align-items:center;gap:4px;padding:8px 10px 4px;background:var(--cream);flex-shrink:0;}
 .ribbon-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s,color .12s;}
 .ribbon-btn:hover{background:var(--paper);color:var(--teal);}
-.ribbon-autoread{display:flex;align-items:center;padding:7px 8px;cursor:pointer;border-radius:9px;transition:background .12s;}
-.ribbon-autoread:hover{background:var(--paper);}
-#ribbon-autoread-icon{stroke:var(--ink-dim);transition:stroke .15s;}
-#ribbon-autoread-icon.active{stroke:var(--teal);}
-/* Auto-read bar (above participants header — kept for legacy CSS refs) */
-.autoread-bar{display:none;}
+/* Auto-read bar (above participants header) */
+.autoread-bar{display:flex;align-items:center;padding:4px 10px;background:rgba(0,0,0,.035);border-bottom:1px solid var(--border);gap:2px;}
 .autoread-mute-btn{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;padding:3px 6px;border-radius:6px;flex:1;justify-content:center;}
 .autoread-mute-btn:hover{background:rgba(0,0,0,.06);color:var(--ink-mid);}
 .autoread-dismiss-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:3px;border-radius:5px;line-height:0;opacity:.45;flex-shrink:0;}
@@ -402,6 +398,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
+      <span class="left-name" id="left-local-name" contenteditable="true" spellcheck="false" onblur="saveLocalName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">yournamehere</span>
     </div>
 
     <!-- Settings drawer — slides down below gear row -->
@@ -505,21 +502,20 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <button class="ribbon-btn" onclick="openLeftPanel()" title="Sessions">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    </button>
-    <button class="ribbon-btn" id="ribbon-globe-btn" onclick="openLangModal()" title="Language">
-      <span id="ribbon-lang-flag" style="font-size:18px;">&#x1F310;</span>
-    </button>
-    <div style="flex:1;"></div>
-    <label class="ribbon-autoread" title="Auto-read">
-      <svg id="ribbon-autoread-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-      <input type="checkbox" id="ribbon-autoread-toggle" style="display:none;" onchange="setAutoReadFromSettings(this.checked)">
-    </label>
   </div>
 
+  <!-- Auto-read indicator (above participants, SVG only, grey) -->
+  <div id="autoread-bar" hidden class="autoread-bar">
+    <button class="autoread-mute-btn" onclick="muteAutoRead()" title="Auto-read active — tap to mute current">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      <span>Auto-read</span>
+    </button>
+    <button class="autoread-dismiss-btn" onclick="dismissAutoRead()" title="Turn off auto-read">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label" contenteditable="true" spellcheck="false" onblur="saveSessionHandle(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Not seen yet" hidden><span class="shell-participant-label">?</span></span></div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -682,27 +678,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <input id="settings-import-file" type="file" accept=".json,.csv,application/json,text/csv" style="display:none" onchange="handleImportFile(event)">
 
-<!-- ══ ONBOARDING ══ -->
-<div id="onboarding-overlay" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.72);display:flex;align-items:center;justify-content:center;" hidden>
-  <div style="background:var(--bg);border-radius:16px;padding:28px 24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
-    <div style="font-size:17px;font-weight:700;margin-bottom:8px;color:var(--ink);">Welcome to Talk + Say</div>
-    <div style="font-size:13px;color:var(--ink-dim);margin-bottom:18px;">Enter your name so your partner knows who you are.</div>
-    <input id="onboarding-name-input" type="text" placeholder="Your name" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:15px;background:var(--bg);color:var(--ink);margin-bottom:14px;" onkeydown="if(event.key==='Enter')finishOnboarding()">
-    <button onclick="finishOnboarding()" style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Continue</button>
-  </div>
-</div>
-
-<!-- Name sheet — shown when creating a new session -->
-<div id="name-sheet-overlay" class="overlay" hidden onclick="if(event.target===this)this.hidden=true">
-  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body" style="padding:18px 18px 28px;">
-    <div style="font-size:15px;font-weight:600;margin-bottom:6px;color:var(--ink);">Your name for this chat</div>
-    <div style="font-size:12px;color:var(--ink-dim);margin-bottom:14px;">Shown to your partner. You can change it later.</div>
-    <input id="name-sheet-input" type="text" placeholder="Your name" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font-size:15px;background:var(--bg);color:var(--ink);margin-bottom:12px;" onkeydown="if(event.key==='Enter')confirmNameSheet()">
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-dim);margin-bottom:16px;cursor:pointer;"><input type="checkbox" id="name-sheet-save-global" style="width:16px;height:16px;">Save as my default name</label>
-    <button onclick="confirmNameSheet()" style="width:100%;background:var(--teal);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Start Chat</button>
-  </div></div>
-</div>
-
 <!-- ══ OVERLAYS ══ -->
 
 <div class="overlay" id="new-card-overlay" hidden onclick="if(event.target===this)this.hidden=true">
@@ -812,13 +787,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <button class="sheet-btn secondary" onclick="this.closest('.overlay').hidden=true">Cancel</button>
       <button class="sheet-btn primary" id="ncat-save-btn" onclick="saveNewCatalog()" disabled>Create</button>
     </div>
-  </div></div>
-</div>
-
-<div class="overlay" id="lang-modal-overlay" hidden onclick="if(event.target===this)closeLangModal()">
-  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body" style="padding:14px 0 28px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 10px;"><div class="sheet-title" style="margin:0;">My Language</div><button onclick="closeLangModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--ink-dim);">&times;</button></div>
-    <div id="lang-modal-list" style="overflow-y:auto;max-height:60dvh;"></div>
   </div></div>
 </div>
 
@@ -1032,9 +1000,6 @@ function normalizeSession(sess){
     convId:raw.convId||uid(),
     myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
     peerName:firstRealName(raw.peerName)||'',
-    myHandle:raw.myHandle||raw.myName||p.globalName||p.userName||'',
-    partnerHandle:raw.partnerHandle||raw.peerName||'',
-    peerLastSeenAt:Number(raw.peerLastSeenAt)||0,
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
@@ -1067,14 +1032,7 @@ function putSession(sess){
   setActiveConvId(next.convId);
   return next;
 }
-function getSessionLabel(sess){
-  var s=sess?normalizeSession(sess):null;if(!s)return 'new chat';
-  var me=firstRealName(s.myHandle,s.myName)||'Me';
-  var partner=firstRealName(s.partnerHandle,s.peerName);
-  if(partner)return me+' / '+partner;
-  var created=s.createdAt?(' — '+fmtDateTime(s.createdAt)):'';
-  return me+' / Invite Pending'+created;
-}
+function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;return firstRealName(s&&s.peerName)||'new chat';}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1228,7 +1186,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){return lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});}
+function getPrefs(){return lsJSON(SK.prefs,{userName:'yournamehere',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});}
 function savePrefs(p){lsW(SK.prefs,JSON.stringify(p));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -1293,11 +1251,11 @@ function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]
 function stampMsgNames(msg,sess){
   var s=sess?normalizeSession(sess):normalizeSession({});
   if(msg.from==='me'){
-    msg.displayFromName=(s.myHandle||s.myName)||'Me';
-    msg.displayToName=(s.partnerHandle||s.peerName)||'Partner';
+    msg.displayFromName=s.myName||'Me';
+    msg.displayToName=s.peerName||'Partner';
   }else if(msg.from==='them'){
-    if(!msg.displayFromName)msg.displayFromName=(s.partnerHandle||s.peerName)||'Partner';
-    msg.displayToName=(s.myHandle||s.myName)||'Me';
+    if(!msg.displayFromName)msg.displayFromName=s.peerName||'Partner';
+    msg.displayToName=s.myName||'Me';
   }
   msg.nameVersion=1;
 }
@@ -1536,7 +1494,7 @@ function noteRuntimeJoin(convId,key,text,ts){
   else if(key==='peerLeft'){if(rt.peerLeftNoted)return;rt.peerLeftNoted=true;}
   var now=ts||Date.now();
   // Suppress duplicate presence notes within 2 minutes to prevent reload/reconnect spam in chat
-  var cutoff=now-300000;
+  var cutoff=now-120000;
   var msgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
   if(msgs.some(function(m){return m.from==='system'&&m.text===text&&m.timestamp>cutoff;}))return;
   addSystemNote(convId,text,now);
@@ -1546,10 +1504,7 @@ function markPeerSeen(convId,ts,opts){
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
-  var seenSess=getSession(convId);if(seenSess){seenSess.peerLastSeenAt=stamp;putSession(seenSess);}
-  var pSess=seenSess||getSession(convId);
-  var pName=firstRealName(pSess&&pSess.partnerHandle,pSess&&pSess.peerName)||'Partner';
-  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin',pName+' joined',stamp);
+  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin','Partner joined',stamp);
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1831,55 +1786,22 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 // ════════════════════════════════════════════════════════
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
 function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
-function saveLocalName(el){/* stub — name editing moved to saveSessionHandle() and onboarding overlay */}
-function saveSessionHandle(el){
-  var sess=getSession(state.activeConvId);
-  var fallback=firstRealName(sess&&sess.myHandle,sess&&sess.myName)||'Me';
+function saveLocalName(el){
+  var prev=getPrefs().userName||'yournamehere';
   var v=(el.textContent||'').trim();
-  if(!v||isPlaceholderName(v)){el.textContent=fallback;return;}
-  if(sess){
-    sess.myHandle=v;
-    if(!sess.myName||isPlaceholderName(sess.myName))sess.myName=v;
-    putSession(sess);
-  }
-  var p=getPrefs();
-  if(!p.globalName||isPlaceholderName(p.globalName)){p.globalName=v;p.userName=v;savePrefs(p);}
-  if(connectedConvId&&sess&&connectedConvId===sess.convId&&ws&&ws.readyState===1){
-    var helloMsg={type:'hello',transient:true,session:sess.convId,from:DEVICE_ID,participant:PART_ID,
-      name:v,lang:sess.myLang||p.myLang||'en',ts:Date.now(),seq:++msgSeq};
+  if(!v){el.textContent=prev;return;}
+  var p=getPrefs();p.userName=v;savePrefs(p);
+  el.textContent=v;
+  // Propagate to all sessions
+  getAllSessions().forEach(function(s){if(s.myName!==v){s.myName=v;putSession(s);}});
+  // Resend hello if connected so partner sees the new name immediately
+  if(connectedConvId&&ws&&ws.readyState===1){
+    var sess=getSession(connectedConvId);
+    var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
+      name:v,lang:sess&&sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(helloMsg));}catch(_){}
   }
-  el.textContent=v;
-}
-function finishOnboarding(){
-  var inp=document.getElementById('onboarding-name-input');
-  var v=(inp&&inp.value||'').trim();
-  if(!v||isPlaceholderName(v)){if(inp)inp.focus();return;}
-  var p=getPrefs();p.globalName=v;p.userName=v;savePrefs(p);
-  getAllSessions().forEach(function(s){
-    if(!s.myHandle||isPlaceholderName(s.myHandle)){s.myHandle=v;s.myName=v;putSession(s);}
-  });
-  var ov=document.getElementById('onboarding-overlay');if(ov)ov.hidden=true;
-}
-var _pendingNameSheetCb=null;
-function showNameSheet(defaultName,cb){
-  var inp=document.getElementById('name-sheet-input');
-  var chk=document.getElementById('name-sheet-save-global');
-  if(inp)inp.value=defaultName||'';
-  if(chk)chk.checked=false;
-  _pendingNameSheetCb=cb;
-  var ov=document.getElementById('name-sheet-overlay');if(ov)ov.hidden=false;
-  setTimeout(function(){if(inp)inp.focus();},80);
-}
-function confirmNameSheet(){
-  var inp=document.getElementById('name-sheet-input');
-  var chk=document.getElementById('name-sheet-save-global');
-  var v=(inp&&inp.value||'').trim();
-  if(!v||isPlaceholderName(v)){if(inp)inp.focus();return;}
-  var saveGlobal=chk&&chk.checked;
-  if(saveGlobal){var p=getPrefs();p.globalName=v;p.userName=v;savePrefs(p);}
-  var ov=document.getElementById('name-sheet-overlay');if(ov)ov.hidden=true;
-  if(_pendingNameSheetCb){_pendingNameSheetCb(v);_pendingNameSheetCb=null;}
+  toast('Name saved');
 }
 
 // ── Language picker ────────────────────────────────────────
@@ -1893,31 +1815,12 @@ function getLangEntry(code){
   return LANGS.find(function(l){return l.code===code;})||LANGS[0];
 }
 function updateLangPill(){
+  var pill=document.getElementById('my-lang-pill');if(!pill)return;
   var myLang=getPrefs().myLang||'';
-  var flagEl=document.getElementById('ribbon-lang-flag');
-  var pill=document.getElementById('my-lang-pill');
-  if(!myLang){
-    if(flagEl)flagEl.textContent='\uD83C\uDF10';
-    if(pill)pill.textContent='\uD83C\uDF10 Auto';
-    return;
-  }
+  if(!myLang){pill.textContent='\uD83C\uDF10 Auto';return;}
   var entry=getLangEntry(myLang);
-  if(flagEl)flagEl.textContent=entry.flag||'\u25A0';
-  if(pill)pill.textContent=entry.flag+' '+entry.code.toUpperCase();
+  pill.textContent=entry.flag+' '+entry.code.toUpperCase();
 }
-function openLangModal(){
-  var ov=document.getElementById('lang-modal-overlay');if(!ov)return;
-  var list=document.getElementById('lang-modal-list');if(!list)return;
-  var cur=getPrefs().myLang||'';
-  var autoItem='<div class="lang-option'+(cur===''?' active':'')+'" onclick="setMyLang(\'\');closeLangModal()" style="padding:12px 18px;">'+
-    '\uD83C\uDF10 Auto-detect<span class="lang-option-code">AUTO</span></div>';
-  list.innerHTML=autoItem+LANGS.map(function(l){
-    return '<div class="lang-option'+(l.code===cur?' active':'')+'" onclick="setMyLang(\''+l.code+'\');closeLangModal()" style="padding:12px 18px;">'+
-      l.flag+' '+l.label+'<span class="lang-option-code">'+l.code.toUpperCase()+'</span></div>';
-  }).join('');
-  ov.hidden=false;
-}
-function closeLangModal(){var ov=document.getElementById('lang-modal-overlay');if(ov)ov.hidden=true;}
 function toggleLangPicker(e){
   if(e)e.stopPropagation();
   var dd=document.getElementById('lang-dropdown');if(!dd)return;
@@ -1962,11 +1865,9 @@ function ensureUserName(callback){
   callback(name);
 }
 function createNewSession(silent){
-  var p=getPrefs();
-  var defaultName=firstRealName(p.globalName,p.userName)||'';
-  showNameSheet(defaultName,function(chosenName){
-    var cid=uid();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myName:chosenName,myHandle:chosenName,peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+  ensureUserName(function(name){
+    var cid=uid();var p=getPrefs();var now=Date.now();
+    var sess=normalizeSession({convId:cid,myName:name,peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -2063,17 +1964,15 @@ function openSession(cid){
 
 function updatePartnerHeader(sess){
   var root=document.getElementById('shell-partner-name');if(!root)return;
-  var ownerLabelEl=document.querySelector('#shell-self-name .shell-participant-label');
-  if(ownerLabelEl&&document.activeElement===ownerLabelEl){updatePresenceIndicators();return;}
   var selfEl=document.getElementById('shell-self-name');
   var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var myName=firstRealName(s.myHandle,s.myName);
-  var peerName=firstRealName(s.partnerHandle,s.peerName);
-  if(selfLabel&&document.activeElement!==selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
+  var myName=firstRealName(s.myName);
+  var peerName=firstRealName(s.peerName);
+  if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
   if(peerLabel)peerLabel.textContent=peerName||'?';
   if(selfEl)selfEl.hidden=!!peerName&&!myName;
   if(peerEl)peerEl.hidden=!myName&&!peerName;
@@ -2090,7 +1989,17 @@ function showEmptyShell(){
   updateDot();
 }
 
-function savePartnerName(el){/* stub — partner name is read-only, set from hello frames */}
+function savePartnerName(el){
+  var v=(el.textContent||'').trim();
+  if(!state.activeConvId){el.textContent='new chat';return;}
+  var sess=getSession(state.activeConvId);if(!sess)return;
+  sess.peerName=v;
+  putSession(sess);
+  var label=el.querySelector('.shell-participant-label');
+  if(label)label.textContent=v||'?';
+  updatePartnerHeader(sess);
+  renderSessionList();
+}
 
 // Session list with drag-sort
 var dragSrcId=null;
@@ -2109,7 +2018,7 @@ function renderSessionList(){
       +'<div class="sess-card-info"><div class="sess-card-title">'+escHtml(getSessionLabel(s))+'</div><div class="sess-card-sub">'+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
       +statusBadge
       +'<div style="display:flex;gap:2px;flex-shrink:0;">'
-      +'<button class="sess-card-act" onclick="event.stopPropagation();shareDeviceJoin(\''+s.convId+'\')" title="Share">'+ICON_SHARE+'</button>'
+      +'<button class="sess-card-act" onclick="event.stopPropagation();shareSession(\''+s.convId+'\')" title="Share">'+ICON_SHARE+'</button>'
       +'<button class="sess-card-act" onclick="event.stopPropagation();exportSessionChat(\''+s.convId+'\')" title="Export chat">⇩</button>'
       +'<button class="sess-card-act" onclick="event.stopPropagation();openDiagModal(\''+s.convId+'\')" title="Diagnostics">'+ICON_DIAG+'</button>'
       +'<button class="sess-card-act del" onclick="event.stopPropagation();softDelete(\''+s.convId+'\')" title="Delete">'+ICON_DELETE+'</button>'
@@ -2158,34 +2067,6 @@ function buildInviteUrl(sess,prefs){
   var encoded=encodeInvitePayload(payload);
   if(encoded)return location.href.split('?')[0]+'?invite='+encodeURIComponent(encoded);
   return location.href.split('?')[0]+'?j='+encodeURIComponent(sess.convId);
-}
-
-// ── Multi-device join ─────────────────────────────────────
-var DEVICE_JOIN_SCHEMA=1;
-function buildDeviceJoinToken(sessionId,partId,createdAt){
-  var str=sessionId+'|'+partId+'|'+createdAt;
-  var h=5381;for(var i=0;i<str.length;i++){h=((h<<5)+h)^str.charCodeAt(i);h=h>>>0;}
-  return (h>>>0).toString(36);
-}
-function verifyDeviceJoinToken(payload){
-  if(!payload||typeof payload!=='object')return false;
-  if(payload.v!==DEVICE_JOIN_SCHEMA)return false;
-  if(!payload.sessionId||!payload.partId||!payload.createdAt)return false;
-  var expected=buildDeviceJoinToken(payload.sessionId,payload.partId,payload.createdAt);
-  return payload.token===expected;
-}
-function shareDeviceJoin(convId){
-  var sess=getSession(convId);if(!sess)return;
-  var createdAt=sess.createdAt||Date.now();
-  var token=buildDeviceJoinToken(convId,PART_ID,createdAt);
-  var payload={v:DEVICE_JOIN_SCHEMA,sessionId:convId,partId:PART_ID,createdAt:createdAt,token:token};
-  var encoded=encodeInvitePayload(payload);
-  var url=location.href.split('?')[0]+'?devicejoin='+encodeURIComponent(encoded);
-  var shareLink=document.getElementById('share-link-text');
-  if(shareLink){shareLink.textContent=url;shareLink.href=url;}
-  var shareOv=document.getElementById('share-overlay');
-  if(shareOv)shareOv.hidden=false;
-  if(navigator.share){try{navigator.share({url:url});}catch(_){}}
 }
 
 function hydrateSessionFromInvite(sess,invite){
@@ -2334,13 +2215,10 @@ function setTTSBtn(btn,on){if(!btn)return;btn.classList.toggle('playing',on);}
 function toggleAutoRead(){state.autoSpeakIncoming=!state.autoSpeakIncoming;var p=getPrefs();p.autoSpeakIncoming=state.autoSpeakIncoming;savePrefs(p);updateAutoReadBtn();if(state.autoSpeakIncoming&&!canSpeak)toast('Auto-read enabled but speech unavailable');else toast('Auto-read '+(state.autoSpeakIncoming?'on':'off'));}
 function updateAutoReadBtn(){syncAutoReadState();}
 function syncAutoReadState(){
-  var on=!!state.autoSpeakIncoming;
-  var icon=document.getElementById('ribbon-autoread-icon');
-  if(icon)icon.classList.toggle('active',on);
-  var toggle=document.getElementById('ribbon-autoread-toggle');
-  if(toggle)toggle.checked=on;
+  var bar=document.getElementById('autoread-bar');
+  if(bar)bar.hidden=!state.autoSpeakIncoming;
   var cb=document.getElementById('set-autoread');
-  if(cb)cb.checked=on;
+  if(cb)cb.checked=!!state.autoSpeakIncoming;
 }
 function setAutoReadFromSettings(checked){
   if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
@@ -2372,7 +2250,7 @@ function toggleSTT(){
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
   var partnerName=firstRealName(d.name,sess.peerName);
-  if(partnerName){sess.peerName=partnerName;sess.partnerHandle=partnerName;}
+  if(partnerName)sess.peerName=partnerName;
   // Always update partnerLang from a hello — this is how language changes propagate
   if(d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
@@ -2492,8 +2370,6 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     if(d.ackType==='msg'){
       clearAck(d.id);
-      var dAt=Date.now();var dMsgs=(state.activeConvId===sess.convId)?state.messages:getMsgs(state.activeConvId);
-      for(var _di=0;_di<dMsgs.length;_di++){if(dMsgs[_di]&&dMsgs[_di].id===d.id){dMsgs[_di].deliveredAt=dAt;break;}}
       markMessageDeliveryState(state.activeConvId,d.id,'delivered');
     }
     else if(d.ackType==='tr'){clearAck(d.id);}
@@ -2565,7 +2441,7 @@ function buildBubbleCard(cfg){
     var st=cfg.status||'sent';
     if(st==='queued')statusDot='<span class="msg-status sent" title="Queued">\u25CB</span>';
     else if(st==='sent')statusDot='<span class="msg-status sent" title="Sent">\u2022</span>';
-    else if(st==='delivered')statusDot='<span class="msg-status delivered" title="Delivered'+(cfg.deliveredAt?' '+fmtTime(cfg.deliveredAt):'')+'">\u2022\u2022</span>';
+    else if(st==='delivered')statusDot='<span class="msg-status delivered" title="Delivered">\u2022\u2022</span>';
     else if(st==='translated')statusDot='<span class="msg-status read" title="Read">\u2022\u2022</span>';
     else if(st==='failed')statusDot='<span class="msg-status failed" title="Not delivered">!</span>';
   }
@@ -2645,7 +2521,7 @@ function getSides(msg){
   var myLang=sess.myLang||getPrefs().myLang||'en';
   var partnerLang=sess.partnerLang||getPrefs().partnerLang||'en';
 
-  if(msg.from==='me'||msg.from===DEVICE_ID||msg.participant===PART_ID){
+  if(msg.from==='me'){
     // Left: what I typed (my lang). Right: translation into partner's lang.
     var srcTxt=msg.sourceText||'';
     var srcLang=msg.sourceLang||myLang;
@@ -2685,7 +2561,7 @@ function getBacktranslateContextFromMsg(msg){
 function renderMsg(msg){
   if(msg.from==='system'){addSysMsg(msg.text||'');return;}
   if(msg.from==='invite'){renderInviteCard(msg);return;}
-  var isMine=msg.from==='me'||msg.from===DEVICE_ID||msg.participant===PART_ID;
+  var isMine=msg.from==='me';
   var sides=getSides(msg);
   var sess=getSession(state.activeConvId);
   var name=msg.displayFromName||(isMine?((sess&&sess.myName)||'Me'):((sess&&sess.peerName)||'Partner'));
@@ -2700,7 +2576,6 @@ function renderMsg(msg){
     time:fmtTime(msg.timestamp||Date.now()),
     prov:tEngine==='on-device'?'\u2699':'\u2601',
     status:msg.status||'sent',
-    deliveredAt:msg.deliveredAt||0,
     isMine:isMine,
     ctx:'chat',
     thread:thread,
@@ -3173,7 +3048,7 @@ function composerInput(){
 }
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
 function sendTyping(){var sess=getSession(state.activeConvId);transportSend({type:'typing',name:normalizeSession(sess||{}).myName,timestamp:Date.now()});}
-function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},1500);}
+function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
 function sendMessage(){
   var ta=document.getElementById('msg-input');var text=ta.value.trim();if(!text)return;
@@ -3924,12 +3799,8 @@ document.addEventListener('DOMContentLoaded',function(){
   var p=getPrefs();
   state.autoSpeakIncoming=!!p.autoSpeakIncoming;
 
-  // Show onboarding if globalName not yet set
-  if(!p.globalName||isPlaceholderName(p.globalName)){
-    var ob=document.getElementById('onboarding-overlay');if(ob)ob.hidden=false;
-    var obInp=document.getElementById('onboarding-name-input');
-    if(obInp&&p.userName&&!isPlaceholderName(p.userName))obInp.value=p.userName;
-  }
+  var nameEl=document.getElementById('left-local-name');
+  if(nameEl&&p.userName&&p.userName!=='yournamehere')nameEl.textContent=p.userName;
 
   // Seed home language from browser locale on first ever load
   if(!p._langDetected){
@@ -3957,22 +3828,8 @@ document.addEventListener('DOMContentLoaded',function(){
   initTagPickerInput();
   updateDot();
 
-  // Deep link — ?devicejoin= (same participant on another device)
-  var up=new URLSearchParams(location.search);
-  var djRaw=up.get('devicejoin');
-  if(djRaw){
-    history.replaceState({},'',location.pathname);
-    var djPayload=decodeInvitePayload(djRaw);
-    if(verifyDeviceJoinToken(djPayload)){
-      // Adopt the PART_ID from the joining link so messages appear as "mine"
-      lsW(SK.partId,djPayload.partId);
-      // Reload so PART_ID constant is re-read
-      location.reload();
-      return;
-    }
-  }
-
   // Deep link — short ?j= format (responder joining)
+  var up=new URLSearchParams(location.search);
   var invite=parseInviteFromSearch(up);
   if(invite){
     history.replaceState({},'',location.pathname);
@@ -4002,10 +3859,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var aid=getActiveConvId();
   if(aid&&getSession(aid)){
     var savedSess=getSession(aid);
-    if(savedSess){
-      openSession(aid);
-      if(savedSess.peerLastSeenAt){var aidRt=getRoomRuntime(aid);if(aidRt)aidRt.peerLastSeenAt=savedSess.peerLastSeenAt;}
-    }
+    if(savedSess){openSession(aid);}
     else{showEmptyShell();}
   }else{
     var allSessions=getAllSessions();
@@ -4024,5 +3878,5 @@ document.addEventListener('DOMContentLoaded',function(){
   // online/offline handlers registered in transport block
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say · v3.4</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Test Version for Joy</div></body>
 </html>

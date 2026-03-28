@@ -1806,49 +1806,7 @@ function updateLangButton(){var btn=document.getElementById('ribbon-lang-btn');i
 function openLangSheet(){var ov=document.getElementById('lang-sheet-overlay');var list=document.getElementById('lang-sheet-list');if(!ov||!list)return;var cur=getPrefs().myLang||'';var h='<div class="lang-option'+(cur===''?' active':'')+'" onclick="setMyLang(\'\');closeLangSheet();">🌐 Auto-detect <span class="lang-row-check">'+(cur===''?'✓':'')+'</span></div>';h+=LANGS.map(function(l){var a=l.code===cur;return '<div class="lang-option'+(a?' active':'')+'" onclick="setMyLang(\''+l.code+'\');closeLangSheet();">'+l.flag+' '+l.label+' <span class="lang-row-check">'+(a?'✓':'')+'</span></div>';}).join('');list.innerHTML=h;ov.hidden=false;}
 function closeLangSheet(){var ov=document.getElementById('lang-sheet-overlay');if(ov)ov.hidden=true;}
 function openOnboarding(){var ov=document.getElementById('onboarding-overlay');if(!ov)return;ov.hidden=false;var input=document.getElementById('onboarding-name');if(input)setTimeout(function(){input.focus();},10);}
-function submitOnboardingName(){
-  var input=document.getElementById('onboarding-name');
-  var name=(input&&input.value||'').trim();
-  if(!name){toast('Name required');return;}
-  var p=getPrefs();
-  p.globalName=name;
-  p.userName=name;
-  savePrefs(p);
-  var ov=document.getElementById('onboarding-overlay');
-  if(ov)ov.hidden=true;
-  if(input)input.value='';
-  renderSessionList();
-  updatePartnerHeader(getSession(state.activeConvId));
-  if(state.pendingInviteJoin){
-    var pending=state.pendingInviteJoin;
-    state.pendingInviteJoin=null;
-    acceptPendingInviteJoin(pending);
-  }
-  if(typeof state.pendingOnboardingCallback==='function'){
-    var cb=state.pendingOnboardingCallback;
-    state.pendingOnboardingCallback=null;
-    cb(name);
-  }
-}
-function acceptPendingInviteJoin(invite){
-  if(!invite||!invite.sessionId)return;
-  var p=getPrefs();
-  var sess=getSession(invite.sessionId);
-  if(!sess){
-    var now=Date.now();
-    sess=normalizeSession({convId:invite.sessionId,myHandle:p.globalName||p.userName||'yournamehere',myName:p.globalName||p.userName||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
-    putSession(sess);
-    var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
-  }else{
-    putSession(sess);
-  }
-  sess=hydrateSessionFromInvite(sess,invite);
-  state.activeConvId=invite.sessionId;
-  state.messages=getMsgs(invite.sessionId);
-  addInviteMessage(invite.sessionId);
-  putSession(sess);
-  openSession(invite.sessionId);
-}
+function submitOnboardingName(){var input=document.getElementById('onboarding-name');var name=(input&&input.value||'').trim();if(!name){toast('Name required');return;}var p=getPrefs();p.globalName=name;p.userName=name;savePrefs(p);var ov=document.getElementById('onboarding-overlay');if(ov)ov.hidden=true;renderSessionList();updatePartnerHeader(getSession(state.activeConvId));}
 
 // ── Language picker ────────────────────────────────────────
 function detectBrowserLang(){
@@ -1903,7 +1861,6 @@ function ensureUserName(callback){
   var p=getPrefs();
   var g=firstRealName(p.globalName,p.userName);
   if(g){callback(g);return;}
-  state.pendingOnboardingCallback=callback;
   openOnboarding();
 }
 function createNewSession(silent){
@@ -3872,9 +3829,14 @@ document.addEventListener('DOMContentLoaded',function(){
   var invite=parseInviteFromSearch(up);
   if(invite){
     history.replaceState({},'',location.pathname);
-    if(isPlaceholderName(p.globalName)){
-      state.pendingInviteJoin=invite;
-      openOnboarding();
+    // Prompt for name if not set
+    if(isPlaceholderName(p.globalName)){openOnboarding();return;}
+    var sess=getSession(invite.sessionId);
+    if(!sess){
+      var now=Date.now();
+      sess=normalizeSession({convId:invite.sessionId,myHandle:p.globalName||p.userName||'yournamehere',myName:p.globalName||p.userName||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+      putSession(sess);
+      var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
     }else{
       acceptPendingInviteJoin(invite);
     }
@@ -3927,7 +3889,7 @@ document.addEventListener('DOMContentLoaded',function(){
       }
     });
   }
-  if(isPlaceholderName(p.globalName)){openOnboarding();}
+  if(isPlaceholderName(p.globalName)){openOnboarding();return;}
   updateLangButton();
 
   // online/offline handlers registered in transport block

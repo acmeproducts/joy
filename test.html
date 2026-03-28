@@ -42,11 +42,8 @@ textarea.field-input{resize:none;}
 .left-panel.open{transform:translateX(0);}
 .left-scrim{position:absolute;inset:0;background:rgba(0,0,0,.2);z-index:29;display:none;}
 .left-scrim.show{display:block;}
-.left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0;}
 .left-gear{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:6px;border-radius:8px;line-height:0;}
-.left-name{font-size:15px;font-weight:600;color:var(--ink);outline:none;border-radius:6px;padding:3px 8px;min-width:40px;flex:1;background:transparent;border:1px solid transparent;}
-.left-name:hover{background:var(--paper);border-color:var(--border);}
-.left-name:focus{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
 .left-body{flex:1;overflow-y:auto;padding:8px 12px 80px;position:relative;}
 .sess-card{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;user-select:none;}
 .sess-card:hover{border-color:var(--teal-mid);}
@@ -73,6 +70,7 @@ textarea.field-input{resize:none;}
 .shell-ribbon{display:flex;align-items:center;gap:4px;padding:8px 10px 4px;background:var(--cream);flex-shrink:0;}
 .ribbon-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s,color .12s;}
 .ribbon-btn:hover{background:var(--paper);color:var(--teal);}
+.ribbon-spacer{flex:1;}
 /* Auto-read bar (above participants header) */
 .autoread-bar{display:flex;align-items:center;padding:4px 10px;background:rgba(0,0,0,.035);border-bottom:1px solid var(--border);gap:2px;}
 .autoread-mute-btn{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:500;padding:3px 6px;border-radius:6px;flex:1;justify-content:center;}
@@ -398,21 +396,12 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
-      <span class="left-name" id="left-local-name" contenteditable="true" spellcheck="false" onblur="saveLocalName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">yournamehere</span>
     </div>
 
     <!-- Settings drawer — slides down below gear row -->
     <div class="left-settings-drawer" id="left-settings-drawer">
       <!-- Primary: Language / Auto-read / Phrasebook -->
       <div class="lsd-section">
-        <div class="lsd-row" id="lang-picker-wrap">
-          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
-          <span class="lsd-label">Language</span>
-          <div class="lsd-ctrl" style="position:relative;">
-            <button class="lang-pill" id="my-lang-pill" onclick="toggleLangPicker(event)" title="My language">&#x1F310; Auto</button>
-            <div class="lang-dropdown" id="lang-dropdown" hidden></div>
-          </div>
-        </div>
         <div class="lsd-row">
           <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
           <span class="lsd-label">Auto-read</span>
@@ -502,6 +491,15 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <button class="ribbon-btn" onclick="openLeftPanel()" title="Sessions">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
+    <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+    </button>
+    <button class="ribbon-btn" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
+    <span class="ribbon-spacer"></span>
+    <label class="toggle-switch" title="Auto-read">
+      <input type="checkbox" id="ribbon-autoread" onchange="setAutoReadFromRibbon(this.checked)">
+      <span class="toggle-slider"></span>
+    </label>
   </div>
 
   <!-- Auto-read indicator (above participants, SVG only, grey) -->
@@ -515,7 +513,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </button>
   </div>
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant" id="shell-self-name" title="Not attached to this chat"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant editable" id="shell-peer-name" contenteditable="true" spellcheck="false" title="Not seen yet" onblur="savePartnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" hidden><span class="shell-participant-label">?</span></span></div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name for this chat" onblur="saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Not seen yet" hidden><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -877,6 +875,14 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   </div></div>
 </div>
 
+<div class="overlay" id="language-overlay" hidden onclick="if(event.target===this)closeLanguagePanel()">
+  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
+    <div class="sheet-title">Your Language</div>
+    <div id="language-list" style="display:grid;gap:6px;"></div>
+    <div class="sheet-btn-row"><button class="sheet-btn secondary" onclick="closeLanguagePanel()">Close</button></div>
+  </div></div>
+</div>
+
 
 <!-- ══ DIAG LOG MODAL ══ -->
 <div class="overlay" id="diag-overlay" hidden onclick="if(event.target===this)this.hidden=true">
@@ -996,18 +1002,25 @@ function normalizeSession(sess){
   var now=Date.now();
   var createdAt=Number(raw.createdAt)||now;
   var lastActivity=Number(raw.lastActivity)||createdAt;
+  var myHandle=firstRealName(raw.myHandle,raw.myName,p.globalName,p.userName)||p.userName||'yournamehere';
+  var partnerHandle=firstRealName(raw.partnerHandle,raw.peerName)||'';
   var out={
     convId:raw.convId||uid(),
-    myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
-    peerName:firstRealName(raw.peerName)||'',
+    myHandle:myHandle,
+    partnerHandle:partnerHandle,
+    myName:myHandle,
+    peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
-    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en'
+    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en',
+    peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
   if(Number(raw.inviteCreatedAt))out.inviteCreatedAt=Number(raw.inviteCreatedAt);
+  var rt=getRoomRuntime(out.convId);
+  if(rt&&out.peerLastSeenAt)rt.peerLastSeenAt=out.peerLastSeenAt;
   return out;
 }
 function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId;});}
@@ -1032,7 +1045,15 @@ function putSession(sess){
   setActiveConvId(next.convId);
   return next;
 }
-function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;return firstRealName(s&&s.peerName)||'new chat';}
+function getSessionLabel(sess){
+  var s=sess?normalizeSession(sess):null;
+  var me=firstRealName(s&&s.myHandle,s&&s.myName);
+  var peer=firstRealName(s&&s.partnerHandle,s&&s.peerName);
+  if(peer)return me?(me+' / '+peer):peer;
+  var ts=s&&s.createdAt?new Date(s.createdAt).toLocaleString([],{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  if(me)return me+' / Invite Pending'+(ts?(' — '+ts):'');
+  return 'new chat';
+}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1483,7 +1504,7 @@ function getRoomRuntime(convId) {
   if (!roomRuntimeByConv[convId]) roomRuntimeByConv[convId] = {
     selfPresent:false,peerPresent:false,peerEverSeen:false,
     peerLastSeenAt:0,localJoinNoted:false,peerJoinNoted:false,
-    peerLeftNoted:false,connectedOnce:false
+    peerLeftNoted:false,connectedOnce:false,lastHistorySyncSentAt:0
   };
   return roomRuntimeByConv[convId];
 }
@@ -1504,7 +1525,16 @@ function markPeerSeen(convId,ts,opts){
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
-  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin','Partner joined',stamp);
+  var sess=getSession(convId);
+  if(sess){
+    sess.peerLastSeenAt=stamp;
+    putSession(sess);
+  }
+  if(!wasPresent&&!opts.suppressJoinNote){
+    var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
+    if(!partnerName){updateDot();return;}
+    noteRuntimeJoin(convId,'peerJoin',partnerName+' joined',stamp);
+  }
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1672,11 +1702,11 @@ function transportConnect(convId,opts){
     try{
       var m=JSON.parse(e.data);
       if(m.type==='ping'){
-        lastPongAt=Date.now();markPeerSeen(connectedConvId,Date.now());
+        lastPongAt=Date.now();markPeerSeen(connectedConvId,Date.now(),{suppressJoinNote:true});
         try{ws.send(JSON.stringify({type:'pong',session:connectedConvId,from:DEVICE_ID,ts:Date.now(),transient:true}));}catch(_){}
         return;
       }
-      if(m.type==='pong'){lastPongAt=Date.now();markPeerSeen(connectedConvId,Date.now());return;}
+      if(m.type==='pong'){lastPongAt=Date.now();markPeerSeen(connectedConvId,Date.now(),{suppressJoinNote:true});return;}
       var seq=Number(m.seq);if(Number.isFinite(seq)&&seq>lastRelaySeq)lastRelaySeq=seq;
       transportHandlers.forEach(function(h){h(m);});
     }catch(_){}
@@ -1815,12 +1845,21 @@ function getLangEntry(code){
   return LANGS.find(function(l){return l.code===code;})||LANGS[0];
 }
 function updateLangPill(){
-  var pill=document.getElementById('my-lang-pill');if(!pill)return;
   var myLang=getPrefs().myLang||'';
-  if(!myLang){pill.textContent='\uD83C\uDF10 Auto';return;}
-  var entry=getLangEntry(myLang);
-  pill.textContent=entry.flag+' '+entry.code.toUpperCase();
+  var ribbonBtn=document.getElementById('ribbon-lang-btn');if(ribbonBtn)ribbonBtn.textContent=myLang?(getLangEntry(myLang).flag||'🌐'):'🌐';
 }
+function openLanguagePanel(){
+  var cur=getPrefs().myLang||'';
+  var list=document.getElementById('language-list');
+  if(!list)return;
+  list.innerHTML='<button class="sheet-btn '+(cur===''?'primary':'secondary')+'" onclick="setMyLang(\'\')">🌐 Auto-detect</button>'
+    +LANGS.map(function(l){
+      var active=(l.code===cur);
+      return '<button class="sheet-btn '+(active?'primary':'secondary')+'" onclick="setMyLang(\''+l.code+'\')">'+l.flag+' '+escHtml(l.label)+'</button>';
+    }).join('');
+  document.getElementById('language-overlay').hidden=false;
+}
+function closeLanguagePanel(){var ov=document.getElementById('language-overlay');if(ov)ov.hidden=true;}
 function toggleLangPicker(e){
   if(e)e.stopPropagation();
   var dd=document.getElementById('lang-dropdown');if(!dd)return;
@@ -1840,6 +1879,7 @@ function setMyLang(code){
   var all=getAllSessions();
   all.forEach(function(s){if(s.myLang!==code){s.myLang=code;putSession(s);}});
   updateLangPill();
+  closeLanguagePanel();
   var dd=document.getElementById('lang-dropdown');if(dd)dd.hidden=true;
   // Announce new language to current session partner
   var effectiveLang=code||detectBrowserLang()||'en';
@@ -1860,8 +1900,6 @@ function ensureUserName(callback){
   if(!name||!name.trim()){toast('Name required');return;}
   name=name.trim();
   p.userName=name;savePrefs(p);
-  var nameEl=document.getElementById('left-local-name');
-  if(nameEl)nameEl.textContent=name;
   callback(name);
 }
 function createNewSession(silent){
@@ -1966,12 +2004,13 @@ function updatePartnerHeader(sess){
   var root=document.getElementById('shell-partner-name');if(!root)return;
   var selfEl=document.getElementById('shell-self-name');
   var selfLabel=selfEl&&selfEl.querySelector('.shell-participant-label');
+  if(selfLabel&&document.activeElement===selfEl){updatePresenceIndicators();return;}
   var peerEl=document.getElementById('shell-peer-name');
   var peerLabel=peerEl&&peerEl.querySelector('.shell-participant-label');
   var arrowEl=document.getElementById('shell-partner-arrow');
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var myName=firstRealName(s.myName);
-  var peerName=firstRealName(s.peerName);
+  var myName=firstRealName(s.myHandle,s.myName);
+  var peerName=firstRealName(s.partnerHandle,s.peerName);
   if(selfLabel)selfLabel.textContent=myName||(!peerName?'new chat':'');
   if(peerLabel)peerLabel.textContent=peerName||'?';
   if(selfEl)selfEl.hidden=!!peerName&&!myName;
@@ -1987,6 +2026,75 @@ function showEmptyShell(){
   document.getElementById('composer').style.display='none';
   updatePartnerHeader(null);
   updateDot();
+}
+
+function saveOwnerName(el){
+  if(!state.activeConvId)return;
+  var sess=getSession(state.activeConvId);if(!sess)return;
+  var oldName=firstRealName(sess.myHandle,sess.myName,getPrefs().userName)||'yournamehere';
+  var v=(el.textContent||'').trim();
+  if(!v){el.textContent=oldName;return;}
+  if(v===oldName){updatePartnerHeader(sess);return;}
+  sess.myHandle=v;sess.myName=v;putSession(sess);
+  updatePartnerHeader(sess);
+  renderSessionList();
+  transportSend({type:'hello',transient:true,name:v,lang:sess.myLang||getPrefs().myLang||'en',timestamp:Date.now()});
+}
+
+var HISTORY_SYNC_MAX=1500;
+var HISTORY_SYNC_CHUNK=80;
+
+function sanitizeHistoryMsgForWire(m){
+  if(!m||typeof m!=='object')return null;
+  return {
+    id:m.id||uid(),
+    from:m.from||'system',
+    sourceText:m.sourceText||m.orig||m.text||'',
+    sourceLang:m.sourceLang||m.lang||'',
+    targetText:m.targetText||m.translated||'',
+    targetLang:m.targetLang||'',
+    text:m.text||'',
+    orig:m.orig||m.sourceText||m.text||'',
+    lang:m.lang||m.sourceLang||'',
+    status:m.status||'received',
+    timestamp:m.timestamp||Date.now(),
+    displayFromName:m.displayFromName||'',
+    displayToName:m.displayToName||'',
+    clarify:m.clarify||{status:'none',text:'',thread:[]},
+    backtranslate:m.backtranslate||null,
+    translations:(m.translations&&typeof m.translations==='object')?m.translations:{}
+  };
+}
+
+function sendHistorySync(convId){
+  if(!convId||!ws||ws.readyState!==1)return;
+  var rt=getRoomRuntime(convId);var now=Date.now();
+  if(rt&&rt.lastHistorySyncSentAt&&(now-rt.lastHistorySyncSentAt)<10000)return;
+  var msgs=(getMsgs(convId)||[]).slice(-HISTORY_SYNC_MAX).map(sanitizeHistoryMsgForWire).filter(Boolean);
+  if(!msgs.length)return;
+  for(var i=0;i<msgs.length;i+=HISTORY_SYNC_CHUNK){
+    transportSend({type:'history-sync',transient:true,chunk:msgs.slice(i,i+HISTORY_SYNC_CHUNK),done:(i+HISTORY_SYNC_CHUNK)>=msgs.length,timestamp:Date.now()});
+  }
+  if(rt)rt.lastHistorySyncSentAt=now;
+  addDiagLog('TX history-sync count='+msgs.length);
+}
+
+function mergeHistorySyncChunk(sess,d){
+  if(!sess||!d||!Array.isArray(d.chunk)||!d.chunk.length)return;
+  var existing=getMsgs(sess.convId)||[];
+  var byId={};existing.forEach(function(m){if(m&&m.id)byId[m.id]=m;});
+  var changed=false;
+  d.chunk.forEach(function(raw){
+    var msg=normalizeMsgSchema(raw,{sourceLang:raw.sourceLang||raw.lang||'en',targetLang:raw.targetLang||''});
+    if(byId[msg.id])return;
+    stampMsgNames(msg,sess);
+    existing.push(msg);byId[msg.id]=msg;changed=true;
+  });
+  if(!changed)return;
+  existing.sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);});
+  saveMsgs(sess.convId,existing);
+  if(sess.convId===state.activeConvId){state.messages=existing;renderAllMessages();scrollBottom();}
+  addDiagLog('RX history-sync merged='+d.chunk.length+(d.done?' done':''));
 }
 
 function savePartnerName(el){
@@ -2216,11 +2324,16 @@ function toggleAutoRead(){state.autoSpeakIncoming=!state.autoSpeakIncoming;var p
 function updateAutoReadBtn(){syncAutoReadState();}
 function syncAutoReadState(){
   var bar=document.getElementById('autoread-bar');
-  if(bar)bar.hidden=!state.autoSpeakIncoming;
+  if(bar)bar.hidden=true;
   var cb=document.getElementById('set-autoread');
   if(cb)cb.checked=!!state.autoSpeakIncoming;
+  var rib=document.getElementById('ribbon-autoread');
+  if(rib)rib.checked=!!state.autoSpeakIncoming;
 }
 function setAutoReadFromSettings(checked){
+  if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
+}
+function setAutoReadFromRibbon(checked){
   if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
 }
 function muteAutoRead(){if(canSpeak)synth.cancel();}
@@ -2249,8 +2362,8 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
-  var partnerName=firstRealName(d.name,sess.peerName);
-  if(partnerName)sess.peerName=partnerName;
+  var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
+  if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
   // Always update partnerLang from a hello — this is how language changes propagate
   if(d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
@@ -2276,18 +2389,25 @@ function handleRelayEvent(d){
     var rt=getRoomRuntime(sess.convId);
     var wasEverSeen=rt&&rt.peerEverSeen;
     var lastSeen=rt&&rt.peerLastSeenAt||0;
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     upsertPartnerFromEnvelope(sess,d);
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
     updatePartnerHeader(sess);
     renderSessionList();
     if(!d._fromBackfill){
       resendUnacked();
+      sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
       if(!wasEverSeen||(Date.now()-lastSeen)>300000){
         toast((d.name||'Partner')+' joined!');
       }
     }
+    return;
+  }
+
+  if(d.type==='history-sync'){
+    mergeHistorySyncChunk(sess,d);
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     return;
   }
 
@@ -3799,9 +3919,6 @@ document.addEventListener('DOMContentLoaded',function(){
   var p=getPrefs();
   state.autoSpeakIncoming=!!p.autoSpeakIncoming;
 
-  var nameEl=document.getElementById('left-local-name');
-  if(nameEl&&p.userName&&p.userName!=='yournamehere')nameEl.textContent=p.userName;
-
   // Seed home language from browser locale on first ever load
   if(!p._langDetected){
     var detected=detectBrowserLang();
@@ -3809,10 +3926,6 @@ document.addEventListener('DOMContentLoaded',function(){
     p._langDetected=true;savePrefs(p);
   }
   updateLangPill();
-  // Dismiss language dropdown on outside click
-  document.addEventListener('click',function(e){
-    if(!e.target.closest('#lang-picker-wrap')){var dd=document.getElementById('lang-dropdown');if(dd&&!dd.hidden)dd.hidden=true;}
-  });
 
   if(Array.isArray(p.themeLibrary)&&p.themeLibrary.length)THEMES=p.themeLibrary;
   // Purge stale text color prefs — colors are always computed from background now
@@ -3836,7 +3949,7 @@ document.addEventListener('DOMContentLoaded',function(){
     // Prompt for name if not set
     if(isPlaceholderName(p.userName)){
       var rname=prompt('Enter your name:');
-      if(rname&&rname.trim()){p.userName=rname.trim();savePrefs(p);var nameEl=document.getElementById('left-local-name');if(nameEl)nameEl.textContent=p.userName;}
+      if(rname&&rname.trim()){p.userName=rname.trim();savePrefs(p);}
     }
     var sess=getSession(invite.sessionId);
     if(!sess){

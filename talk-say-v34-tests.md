@@ -259,3 +259,25 @@ Narrative scenarios. Each step shows the action and expected outcome side-by-sid
 ---
 
 *Talk + Say v3.4 · Test Scripts: Structured & Use-Case · English / Thai · March 2026*
+
+---
+
+## Part C — Counter / Negative Test Cases (NEW)
+## ส่วน C — กรณีทดสอบเชิงลบและกรณีโต้แย้ง (ใหม่)
+
+These tests validate failure modes, incorrect inputs, and counter-behavior that must still produce correct outcomes.
+
+| ID | Negative Case (EN) | กรณีเชิงลบ (TH) | Expected |
+|---|---|---|---|
+| **N1001** | Set **my language = Spanish**. User still types/speaks English source text. Partner replies in English. | ตั้งค่าภาษาของฉัน = สเปน แต่ผู้ใช้ยังพิมพ์/พูดอังกฤษ และคู่สนทนาตอบเป็นอังกฤษ | Incoming bubble target side remains in **preferred Spanish** (`myLang=es`) — not forced to English. |
+| **N1002** | Device A and Device B are same owner (joined via device-join). Device A sends 50 messages offline/reconnect cycles. | อุปกรณ์ A/B เป็นเจ้าของเดียวกัน (device-join) และอุปกรณ์ A ส่ง 50 ข้อความระหว่าง offline/reconnect | Device B eventually converges to same message set/order after sync; no role inversion (`mine` stays mine). |
+| **N1003** | Device C (different owner) opens malformed device-join URL (1 char changed). | อุปกรณ์ C (คนละเจ้าของ) เปิดลิงก์ device-join ที่ถูกแก้ไข 1 ตัวอักษร | Join rejected with clear invalid-link message; no cross-session data leakage. |
+| **N1004** | Partner joins but no valid announced name in first envelope. | คู่สนทนาเข้าร่วมแต่ envelope แรกไม่มีชื่อที่ใช้ได้ | App must **not** emit misleading generic `"Partner joined"` note; wait for resolvable name before join note. |
+| **N1005** | Rapid ping/pong bursts without user messages. | มี ping/pong ถี่โดยไม่มีข้อความผู้ใช้ | No duplicate/jitter join notes are created from heartbeat traffic. |
+| **N1006** | Owner edits header name while incoming hello/history-sync events arrive. | เจ้าของกำลังแก้ชื่อที่ header แล้วมี hello/history-sync เข้ามา | Active edit is preserved; no clobber of in-progress text. |
+| **N1007** | User selects Auto-detect, then later explicitly selects Spanish, then switches back Auto. | ผู้ใช้เลือก Auto-detect จากนั้นเลือกสเปน แล้วสลับกลับ Auto | Globe/language UI, persisted prefs, and outgoing hello `lang` values update correctly each transition. |
+| **N1008** | Two sessions exist; rename causes label collision (`me/partner` duplicate). | มี 2 เซสชันอยู่แล้ว แล้วเปลี่ยนชื่อจน label ซ้ำกัน | Rename blocked and reverted; no accidental merge/migration of sessions. |
+
+### Required Negative Regression Bundle
+- Run **N1001–N1008** for every release candidate.
+- A release is blocked if any negative case fails, even when all success-path tests pass.

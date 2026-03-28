@@ -996,18 +996,25 @@ function normalizeSession(sess){
   var now=Date.now();
   var createdAt=Number(raw.createdAt)||now;
   var lastActivity=Number(raw.lastActivity)||createdAt;
+  var myHandle=firstRealName(raw.myHandle,raw.myName,p.globalName,p.userName)||p.globalName||p.userName||'yournamehere';
+  var partnerHandle=firstRealName(raw.partnerHandle,raw.peerName)||'';
   var out={
     convId:raw.convId||uid(),
-    myName:firstRealName(raw.myName,p.userName)||p.userName||'yournamehere',
-    peerName:firstRealName(raw.peerName)||'',
+    myHandle:myHandle,
+    partnerHandle:partnerHandle,
+    myName:myHandle,
+    peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
     myLang:raw.myLang||p.myLang||'en',
-    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en'
+    partnerLang:raw.partnerLang||raw.myLang||p.partnerLang||p.myLang||'en',
+    peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
   if(Number(raw.inviteCreatedAt))out.inviteCreatedAt=Number(raw.inviteCreatedAt);
+  var rt=getRoomRuntime(out.convId);
+  if(rt&&out.peerLastSeenAt)rt.peerLastSeenAt=out.peerLastSeenAt;
   return out;
 }
 function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId;});}
@@ -1032,7 +1039,15 @@ function putSession(sess){
   setActiveConvId(next.convId);
   return next;
 }
-function getSessionLabel(sess){var s=sess?normalizeSession(sess):null;return firstRealName(s&&s.peerName)||'new chat';}
+function getSessionLabel(sess){
+  var s=sess?normalizeSession(sess):null;
+  var me=firstRealName(s&&s.myHandle,s&&s.myName);
+  var peer=firstRealName(s&&s.partnerHandle,s&&s.peerName);
+  if(peer)return me?(me+' / '+peer):peer;
+  var ts=s&&s.createdAt?new Date(s.createdAt).toLocaleString([],{month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  if(me)return me+' / Invite Pending'+(ts?(' — '+ts):'');
+  return 'new chat';
+}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -1186,7 +1201,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){return lsJSON(SK.prefs,{userName:'yournamehere',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});}
+function getPrefs(){return lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'en',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});}
 function savePrefs(p){lsW(SK.prefs,JSON.stringify(p));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -1504,7 +1519,15 @@ function markPeerSeen(convId,ts,opts){
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
-  if(!wasPresent)noteRuntimeJoin(convId,'peerJoin','Partner joined',stamp);
+  var sess=getSession(convId);
+  if(sess){
+    sess.peerLastSeenAt=stamp;
+    putSession(sess);
+  }
+  if(!wasPresent){
+    var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner';
+    noteRuntimeJoin(convId,'peerJoin',partnerName+' joined',stamp);
+  }
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1787,13 +1810,13 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
 function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
 function saveLocalName(el){
-  var prev=getPrefs().userName||'yournamehere';
+  var prev=getPrefs().globalName||getPrefs().userName||'yournamehere';
   var v=(el.textContent||'').trim();
   if(!v){el.textContent=prev;return;}
-  var p=getPrefs();p.userName=v;savePrefs(p);
+  var p=getPrefs();p.userName=v;p.globalName=v;savePrefs(p);
   el.textContent=v;
   // Propagate to all sessions
-  getAllSessions().forEach(function(s){if(s.myName!==v){s.myName=v;putSession(s);}});
+  getAllSessions().forEach(function(s){if(s.myName!==v||s.myHandle!==v){s.myName=v;s.myHandle=v;putSession(s);}});
   // Resend hello if connected so partner sees the new name immediately
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
@@ -2249,8 +2272,8 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d){
   if(!sess||!d)return;
-  var partnerName=firstRealName(d.name,sess.peerName);
-  if(partnerName)sess.peerName=partnerName;
+  var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
+  if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
   // Always update partnerLang from a hello — this is how language changes propagate
   if(d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';

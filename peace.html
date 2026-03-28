@@ -2783,6 +2783,7 @@
 
             if (trackTelemetry) {
                 window.telemetryStats.taps++;
+                sessionLifecycle.lastInteractionAt = Date.now();
                 appendSessionLog('tap', `Tap at ${Math.round(x)}, ${Math.round(y)}${isDouble ? ' [double]' : ''}`);
             }
 
@@ -2794,6 +2795,7 @@
                 });
                 if (trackTelemetry) {
                     window.telemetryStats.drags++;
+                    sessionLifecycle.lastInteractionAt = Date.now();
                 }
             }
             return ent;
@@ -4810,42 +4812,44 @@
         const FORM_ID = "1FAIpQLSe3k3uGy3zjEIJ8QVDhjpQOG6EAjWCZ9pCFlhDKle8NeUhg9w";
         const MAPPING = {
             "entry.320935448": "@session_end_iso",
-            "entry.674244912": "@theme_code",
-            "entry.711998658": "@ip_address",
-            "entry.463387935": "@session_id",
-            "entry.856781419": "@duration_formatted",
-            "entry.799073583": "@input_taps",
-            "entry.1460702381": "@input_drags",
-            "entry.1854966723": "@mouse_pixels_moved",
-            "entry.406770144": "@user_agent",
-            "entry.339302030": "@platform",
-            "entry.1885869286": "@screen_resolution",
-            "entry.1550217446": "@window_size",
-            "entry.581200255": "@pixel_ratio",
-            "entry.720549735": "@color_depth",
-            "entry.1134789700": "@cores",
-            "entry.1076432340": "@memory",
-            "entry.854591687": "@language",
-            "entry.101770949": "@timezone",
-            "entry.2010953570": "@cookies_enabled",
-            "entry.607664253": "@local_storage",
-            "entry.1399187003": "@canvas_fingerprint",
-            "entry.1854154093": "@referrer",
-            "entry.1036649804": "@session_start_iso",
-            "entry.1683490369": "@standard_words",
-            "entry.1722638233": "@custom_words",
-            "entry.527394232": "@session_log"
+            "entry.674244912": "@client_id",
+            "entry.711998658": "@session_id",
+            "entry.463387935": "@duration_formatted",
+            "entry.856781419": "@input_taps",
+            "entry.799073583": "@input_drags",
+            "entry.1460702381": "@local_start_time",
+            "entry.1854966723": "@local_end_time",
+            "entry.406770144": "@focused_duration",
+            "entry.339302030": "@unfocused_duration",
+            "entry.1885869286": "@end_reason",
+            "entry.1550217446": "@grace_timeout",
+            "entry.581200255": "@idle_tail_seconds",
+            "entry.720549735": "@session_key",
+            "entry.1134789700": "@join_name",
+            "entry.1076432340": "@language",
+            "entry.854591687": "@timezone",
+            "entry.101770949": "@chat_counts",
+            "entry.2010953570": "@chat_timing",
+            "entry.607664253": "@splash_url",
+            "entry.1399187003": "@relay_stale_at_end",
+            "entry.1854154093": "@session_start_iso",
+            "entry.1036649804": "@chat_participants",
+            "entry.1683490369": "@custom_words",
+            "entry.1722638233": "@chat_event_log"
         };
 
-        window.telemetryStats = { taps: 0, drags: 0, secrets: 0, mouseDist: 0 };
-        let cachedIP = "pending";
+        window.telemetryStats = Object.assign({ taps: 0, drags: 0, mouseDist: 0 }, window.telemetryStats || {});
         const sessionLog = [];
-        const SESSION_LOG_CHAR_LIMIT = 1800;
         const sessionLifecycle = {
             id: Date.now().toString(36),
             startedAt: Date.now(),
             endedAt: null,
-            endReason: null
+            endReason: null,
+            focusedMs: 0,
+            unfocusedMs: 0,
+            lastTransitionAt: Date.now(),
+            gracePeriodExpired: false,
+            lastInteractionAt: Date.now()
         };
         const pipelineStatus = {
             state: 'idle',
@@ -4854,29 +4858,16 @@
             lastResult: null
         };
         let logSent = false;
-        const SESSION_CLOSE_GRACE_MS = 30000;
+        const SESSION_CLOSE_GRACE_MS = 300000;
         let sessionFlushTimer = null;
         let sessionEndHoldTimer = null;
-        let pendingSessionEndReason = null;
-
-        fetch('https://api.ipify.org?format=json')
-            .then(r => r.json()).then(d => cachedIP = d.ip).catch(e => cachedIP = "offline");
+        let currentFocusedState = !document.hidden && document.hasFocus();
 
         let lastMouse = {x:0, y:0};
         document.addEventListener('mousemove', e => {
             if(lastMouse.x!==0) window.telemetryStats.mouseDist += Math.hypot(e.clientX-lastMouse.x, e.clientY-lastMouse.y);
             lastMouse = {x:e.clientX, y:e.clientY};
         });
-
-        const getCanvasFP = () => {
-            try {
-                const c = document.createElement('canvas'); const cx = c.getContext('2d');
-                cx.textBaseline = "top"; cx.font = "14px 'Arial'"; cx.fillStyle = "#f60";
-                cx.fillRect(125,1,62,20); cx.fillStyle = "#069"; cx.fillText("Garden", 2, 15);
-                let b64 = c.toDataURL(); let hash=0; for(let i=0;i<b64.length;i++) hash=Math.imul(31,hash)+b64.charCodeAt(i)|0;
-                return Math.abs(hash).toString(16);
-            } catch(e) { return "err"; }
-        };
 
         function appendSessionLog(type, detail, options = {}) {
             if (options.skipLog) return;
@@ -4892,16 +4883,163 @@
             appendSessionLog('session-submit', `${state}${detail ? `: ${detail}` : ''}`);
         }
 
-        function buildSessionLogString() {
-            return sessionLog
-                .map(item => `[${new Date(item.ts).toISOString()}] ${item.type}: ${item.detail}`)
-                .join(' | ')
-                .slice(-SESSION_LOG_CHAR_LIMIT);
+        function formatDurationMs(ms) {
+            const totalSeconds = Math.max(0, Math.round(ms / 1000));
+            return `${Math.floor(totalSeconds/60)}m ${Math.floor(totalSeconds%60)}s`;
+        }
+
+        function formatSessionClock(ts, includeSeconds = false) {
+            const elapsedMs = Math.max(0, ts - sessionLifecycle.startedAt);
+            const totalSeconds = Math.floor(elapsedMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            if (!includeSeconds) return `${hours}:${minutes}`;
+            const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function getDisplayNameForEvent(entry) {
+            if (!entry) return 'Peer';
+            if (entry.from === 'local') return 'Me';
+            return entry.name || 'Peer';
+        }
+
+        function buildChatMetrics(endedAt) {
+            const history = loadAltarChat().filter((entry) => {
+                const ts = Number(entry?.ts) || 0;
+                return !ts || (ts >= sessionLifecycle.startedAt && ts <= endedAt);
+            });
+            if (!history.length) {
+                return { chatCounts: '0t 0l 0p 0d 0att', chatTiming: '', chatEventLog: '' };
+            }
+
+            let localCount = 0;
+            let peerCount = 0;
+            let deletedCount = 0;
+            let attachmentCount = 0;
+            let firstTs = Number.POSITIVE_INFINITY;
+            let lastTs = 0;
+            const minuteCounts = new Map();
+
+            history.forEach((entry) => {
+                if (entry?.from === 'local') localCount += 1;
+                else peerCount += 1;
+                if (entry?.deleted) deletedCount += 1;
+                if (Array.isArray(entry?.attachments) && entry.attachments.length) attachmentCount += 1;
+                const ts = Number(entry?.ts) || 0;
+                if (ts > 0) {
+                    firstTs = Math.min(firstTs, ts);
+                    lastTs = Math.max(lastTs, ts);
+                    const minuteKey = Math.floor(Math.max(0, ts - sessionLifecycle.startedAt) / 60000);
+                    minuteCounts.set(minuteKey, (minuteCounts.get(minuteKey) || 0) + 1);
+                }
+            });
+
+            const includeSeconds = Array.from(minuteCounts.values()).some(count => count > 1);
+            const eventItems = [];
+
+            Array.from(peerPresence.values()).forEach((peer) => {
+                const peerName = peer?.name || peer?.id || 'Peer';
+                if (Number(peer?.connectedAt) > 0) {
+                    eventItems.push({ sortTs: Number(peer.connectedAt), line: `+${peerName} ${formatSessionClock(Number(peer.connectedAt), false)}` });
+                }
+                if (Number(peer?.disconnectedAt) > 0) {
+                    eventItems.push({ sortTs: Number(peer.disconnectedAt), line: `-${peerName} ${formatSessionClock(Number(peer.disconnectedAt), false)}` });
+                }
+            });
+
+            history.forEach((entry, idx) => {
+                const ts = Number(entry?.ts) || sessionLifecycle.startedAt;
+                const stamp = formatSessionClock(ts, includeSeconds);
+                const name = getDisplayNameForEvent(entry);
+                if (entry?.deleted) {
+                    eventItems.push({ sortTs: ts, line: `[del ${stamp} ${name}]`, idx });
+                } else if (entry?.message) {
+                    eventItems.push({ sortTs: ts, line: `[${stamp} ${name}] ${entry.message}`, idx });
+                }
+                if (Array.isArray(entry?.attachments)) {
+                    entry.attachments.forEach((att, attIdx) => {
+                        const mime = att?.type || 'file';
+                        const sizeKb = Math.max(1, Math.round((Number(att?.size) || 0) / 1024));
+                        eventItems.push({
+                            sortTs: ts,
+                            line: `[att:${mime} ${sizeKb}kb ${stamp} ${name}]`,
+                            idx: `${idx}-${attIdx}`
+                        });
+                    });
+                }
+            });
+
+            eventItems.sort((a, b) => a.sortTs - b.sortTs || String(a.idx || '').localeCompare(String(b.idx || '')));
+            const rendered = eventItems.map(item => item.line);
+            let chatEventLog = rendered.join('\n');
+            if (chatEventLog.length > 20000) {
+                const kept = [];
+                let used = 0;
+                for (let i = rendered.length - 1; i >= 0; i -= 1) {
+                    const line = rendered[i];
+                    const next = line.length + (kept.length ? 1 : 0);
+                    if (used + next > 19960) break;
+                    kept.push(line);
+                    used += next;
+                }
+                const dropped = rendered.length - kept.length;
+                chatEventLog = `[truncated ${dropped} msgs]\n${kept.reverse().join('\n')}`;
+            }
+
+            const chatCounts = `${history.length}t ${localCount}l ${peerCount}p ${deletedCount}d ${attachmentCount}att`;
+            const chatTiming = firstTs < Number.POSITIVE_INFINITY
+                ? `${new Date(firstTs).toISOString()}~${new Date(lastTs || endedAt).toISOString()} unread:${unreadChatCount || 0}`
+                : '';
+
+            return { chatCounts, chatTiming, chatEventLog };
+        }
+
+        function buildChatParticipants(endedAt) {
+            const peers = Array.from(peerPresence.values());
+            const participants = [];
+
+            peers.forEach((peer) => {
+                const start = Number(peer?.connectedAt) || Number(peer?.lastSeen) || 0;
+                if (!start) return;
+                const stop = Number(peer?.disconnectedAt) || endedAt;
+                const minutes = Math.max(0, Math.round((stop - start) / 60000));
+                const name = peer?.name || peer?.id || 'Peer';
+                participants.push(`${name}(${minutes}m)`);
+            });
+
+            if (!participants.length) {
+                const historyParticipants = new Set(
+                    loadAltarChat()
+                        .filter(entry => entry?.from === 'peer')
+                        .map(entry => entry?.name || 'Peer')
+                        .filter(Boolean)
+                );
+                return Array.from(historyParticipants).map(name => `${name}(0m)`).join(' ');
+            }
+
+            return participants.join(' ');
+        }
+
+        function recordFocusTransition() {
+            const now = Date.now();
+            const elapsed = Math.max(0, now - sessionLifecycle.lastTransitionAt);
+            if (currentFocusedState) sessionLifecycle.focusedMs += elapsed;
+            else sessionLifecycle.unfocusedMs += elapsed;
+            sessionLifecycle.lastTransitionAt = now;
+            currentFocusedState = !document.hidden && document.hasFocus();
+        }
+
+        function finalizeFocusDurations() {
+            recordFocusTransition();
         }
 
         function scheduleSessionFlush(reason) {
             clearTimeout(sessionFlushTimer);
-            sessionFlushTimer = setTimeout(() => completeSession(reason), SESSION_CLOSE_GRACE_MS);
+            sessionFlushTimer = setTimeout(() => {
+                sessionLifecycle.gracePeriodExpired = true;
+                completeSession(reason);
+            }, SESSION_CLOSE_GRACE_MS);
             appendSessionLog('session-lifecycle', `Pending end (${reason}) in ${Math.round(SESSION_CLOSE_GRACE_MS/1000)}s.`);
         }
 
@@ -4927,7 +5065,6 @@
                 clearInterval(sessionEndHoldTimer);
                 sessionEndHoldTimer = null;
             }
-            pendingSessionEndReason = null;
             appendSessionLog('session-lifecycle', `End cancelled (${reason}).`);
         }
 
@@ -4957,6 +5094,7 @@
                     const params = new URLSearchParams();
                     formData.forEach((v,k)=>params.append(k,v));
                     if (navigator.sendBeacon(url, params)) {
+                        // Beacon success exits early, so fetch fallback will not send a duplicate submission.
                         updatePipelineStatus('sent', 'Beacon queued');
                         appendSessionLog('pipeline', 'Session log submitted.');
                         return true;
@@ -4986,45 +5124,45 @@
 
             if (!sessionLifecycle.endedAt) sessionLifecycle.endedAt = Date.now();
             if (!sessionLifecycle.endReason) sessionLifecycle.endReason = reason;
+            finalizeFocusDurations();
 
-            const duration = (sessionLifecycle.endedAt - sessionLifecycle.startedAt) / 1000;
             const startIso = new Date(sessionLifecycle.startedAt).toISOString();
             const endIso = new Date(sessionLifecycle.endedAt).toISOString();
-            const c19_session_start_la = new Date(sessionLifecycle.startedAt).toLocaleString('sv', { timeZone: 'America/Los_Angeles' }).replace(' ', 'T');
-            const standardWordsString = config.defaultWords.join(', ');
-            const customWordsRaw = (config.customWords && config.customWords.length)
-                ? config.customWords
-                : (typeof cBox !== 'undefined' ? cBox.value.split(',').map(s=>s.trim()).filter(Boolean) : []);
-            const customWordsString = customWordsRaw.filter(Boolean).join(', ');
+            const resolvedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const localStartTime = new Date(sessionLifecycle.startedAt).toLocaleString('sv-SE', { timeZone: resolvedTimezone }).replace(' ', 'T');
+            const localEndTime = new Date(sessionLifecycle.endedAt).toLocaleString('sv-SE', { timeZone: resolvedTimezone }).replace(' ', 'T');
+            const customWordsString = typeof cBox !== 'undefined' ? (cBox.value || '') : '';
+            const idleTailSeconds = Math.max(0, Math.round((sessionLifecycle.endedAt - (sessionLifecycle.lastInteractionAt || sessionLifecycle.startedAt)) / 1000));
+            const relayStaleAtEnd = (sessionLifecycle.endedAt - lastRelayReceiveAt) > 45000;
+            const { chatCounts, chatTiming, chatEventLog } = buildChatMetrics(sessionLifecycle.endedAt);
+            const chatParticipants = buildChatParticipants(sessionLifecycle.endedAt);
+            const resolvedSplashUrl = (!splashSheetSource || splashSheetSource === DEFAULT_SHEET_CSV_URL) ? 'default' : splashSheetSource;
             const dataLayer = {
-                "@session_start_iso": startIso,
-                "@start_time_la": c19_session_start_la,
                 "@session_end_iso": endIso,
-                "@duration_formatted": `${Math.floor(duration/60)}m ${Math.floor(duration%60)}s`,
-                "@ip_address": cachedIP,
+                "@client_id": RELAY_CLIENT_ID,
                 "@session_id": sessionLifecycle.id,
-                "@theme_code": "DEFAULT",
-                "@user_agent": navigator.userAgent,
-                "@screen_resolution": `${window.screen.width}x${window.screen.height}`,
-                "@window_size": `${window.innerWidth}x${window.innerHeight}`,
-                "@pixel_ratio": window.devicePixelRatio || 1,
-                "@color_depth": window.screen.colorDepth,
-                "@cores": navigator.hardwareConcurrency || "ukn",
-                "@memory": navigator.deviceMemory || "ukn",
-                "@platform": navigator.platform,
-                "@language": navigator.language,
-                "@timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
-                "@cookies_enabled": navigator.cookieEnabled,
-                "@local_storage": (typeof localStorage !== 'undefined') ? 'available' : 'blocked',
-                "@canvas_fingerprint": getCanvasFP(),
-                "@referrer": document.referrer || "direct",
+                "@duration_formatted": formatDurationMs(sessionLifecycle.endedAt - sessionLifecycle.startedAt),
                 "@input_taps": window.telemetryStats.taps,
                 "@input_drags": window.telemetryStats.drags,
-                "@mouse_pixels_moved": Math.round(window.telemetryStats.mouseDist),
-                "@secrets_found_count": window.telemetryStats.secrets,
-                "@standard_words": standardWordsString,
+                "@local_start_time": localStartTime,
+                "@local_end_time": localEndTime,
+                "@focused_duration": formatDurationMs(sessionLifecycle.focusedMs),
+                "@unfocused_duration": formatDurationMs(sessionLifecycle.unfocusedMs),
+                "@end_reason": sessionLifecycle.endReason,
+                "@grace_timeout": sessionLifecycle.gracePeriodExpired ? 'true' : 'false',
+                "@idle_tail_seconds": idleTailSeconds,
+                "@session_key": resolvedSessionKey,
+                "@join_name": joinState.name || '',
+                "@language": navigator.language,
+                "@timezone": resolvedTimezone,
+                "@chat_counts": chatCounts,
+                "@chat_timing": chatTiming,
+                "@splash_url": resolvedSplashUrl,
+                "@relay_stale_at_end": relayStaleAtEnd ? 'true' : 'false',
+                "@session_start_iso": startIso,
+                "@chat_participants": chatParticipants,
                 "@custom_words": customWordsString,
-                "@session_log": buildSessionLogString()
+                "@chat_event_log": chatEventLog
             };
 
             const formData = new FormData();
@@ -5038,10 +5176,14 @@
 
         appendSessionLog('session-start', `Experience loaded. Session ID ${sessionLifecycle.id}`);
 
+        window.addEventListener('focus', recordFocusTransition);
+        window.addEventListener('blur', recordFocusTransition);
         window.addEventListener('pagehide', () => {
+            recordFocusTransition();
             requestSessionEnd('pagehide', true);
         });
         document.addEventListener('visibilitychange', () => {
+            recordFocusTransition();
             if (document.hidden) {
                 requestSessionEnd('visibility', false);
             } else {
@@ -5049,6 +5191,7 @@
             }
         });
         window.addEventListener('beforeunload', () => {
+            recordFocusTransition();
             flushSnapshot('beforeunload');
             sendRelayMessage({ type: 'leave', reason: 'beforeunload', transient: true });
             requestSessionEnd('beforeunload', true);

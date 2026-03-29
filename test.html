@@ -42,10 +42,6 @@ textarea.field-input{resize:none;}
 .left-panel.open{transform:translateX(0);}
 .left-scrim{position:absolute;inset:0;background:rgba(0,0,0,.2);z-index:29;display:none;}
 .left-scrim.show{display:block;}
-.control-panel{position:absolute;inset:0 0 0 auto;width:min(86vw,320px);background:var(--cream);border-left:1px solid var(--border);box-shadow:var(--shadow);transform:translateX(105%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:30;display:flex;flex-direction:column;}
-.control-panel.open{transform:translateX(0);}
-.control-scrim{position:absolute;inset:0;background:rgba(0,0,0,.2);z-index:29;display:none;}
-.control-scrim.show{display:block;}
 .left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0;}
 .left-gear{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:6px;border-radius:8px;line-height:0;}
 .left-body{flex:1;overflow-y:auto;padding:8px 12px 80px;position:relative;}
@@ -382,38 +378,18 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 <!-- ══ MAIN CHAT SHELL ══ -->
 <div id="chat-screen" class="screen active" style="display:flex;flex-direction:column;opacity:1;pointer-events:auto;">
   <div class="left-scrim" id="left-scrim" onclick="closeLeftPanel()"></div>
-  <div class="control-scrim" id="control-scrim" onclick="closeControlPanel()"></div>
   <aside class="left-panel" id="left-panel">
-    <div class="left-top"></div>
-
-    <div class="left-body" id="left-body">
-      <div id="session-list"></div>
-      <div id="recycle-bin"></div>
-      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
-    </div>
-  </aside>
-
-  <aside class="control-panel" id="control-panel">
     <div class="left-top">
-      <button class="left-gear" id="control-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
+      <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
 
-    <!-- Settings drawer — in dedicated control panel -->
-    <div class="left-settings-drawer open" id="left-settings-drawer">
-      <!-- Primary: Language / Auto-read / Phrasebook -->
+    <!-- Settings drawer — slides down below gear row -->
+    <div class="left-settings-drawer" id="left-settings-drawer">
+      <!-- Primary -->
       <div class="lsd-section">
-        <div class="lsd-row">
-          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
-          <span class="lsd-label">Auto-read</span>
-          <div class="lsd-ctrl"><label class="toggle-switch"><input type="checkbox" id="set-autoread" onchange="setAutoReadFromSettings(this.checked)"><span class="toggle-slider"></span></label></div>
-        </div>
-        <div class="lsd-row lsd-row-link" onclick="closeControlPanel();openPhrasebookModal()">
-          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
-          <span class="lsd-label">Phrasebook</span>
-          <div class="lsd-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
-        </div>
+        <div class="lsd-section-title">Settings</div>
       </div>
       <!-- Appearance -->
       <div class="lsd-section">
@@ -449,22 +425,19 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <div class="lsd-section">
         <div class="lsd-section-title">Data</div>
         <table class="data-mgmt-grid" style="margin-bottom:6px;">
-          <thead><tr><th></th><th>Settings</th><th>Sessions</th></tr></thead>
+          <thead><tr><th></th><th>Settings</th></tr></thead>
           <tbody>
             <tr>
               <td>Export</td>
               <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
-              <td><button class="settings-icon-btn" onclick="exportSessionsData()" title="Export sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
             </tr>
             <tr>
               <td>Import</td>
               <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
-              <td><button class="settings-icon-btn" onclick="importSessionsData()" title="Import sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
             </tr>
             <tr>
               <td>Clear</td>
               <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
-              <td><button class="settings-icon-btn danger" onclick="clearDataOnly()" title="Clear sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
             </tr>
           </tbody>
         </table>
@@ -481,6 +454,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       </div>
     </div>
 
+    <div class="left-body" id="left-body">
+      <div id="session-list"></div>
+      <div id="recycle-bin"></div>
+      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
+    </div>
   </aside>
 
   <!-- Ribbon -->
@@ -492,9 +470,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
     </button>
     <button class="ribbon-btn" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
-    <button class="ribbon-btn" onclick="openControlPanel()" title="Control panel">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
     <span class="ribbon-spacer"></span>
     <label class="toggle-switch" title="Auto-read">
       <input type="checkbox" id="ribbon-autoread" onchange="setAutoReadFromRibbon(this.checked)">
@@ -1834,10 +1809,10 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 // ════════════════════════════════════════════════════════
 // LEFT PANEL
 // ════════════════════════════════════════════════════════
-function openLeftPanel(){closeControlPanel();document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
+function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
 function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
-function openControlPanel(){closeLeftPanel();document.getElementById('control-panel').classList.add('open');document.getElementById('control-scrim').classList.add('show');openSettings();}
-function closeControlPanel(){document.getElementById('control-panel').classList.remove('open');document.getElementById('control-scrim').classList.remove('show');}
+function openControlPanel(){openLeftPanel();toggleSettingsDrawer();}
+function closeControlPanel(){closeSettings();}
 function saveLocalName(el){
   var prev=getPrefs().userName||'yournamehere';
   var v=(el.textContent||'').trim();
@@ -3352,7 +3327,7 @@ var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,
 
 function toggleSettingsDrawer(){
   var d=document.getElementById('left-settings-drawer');
-  var gb=document.getElementById('control-gear-btn');
+  var gb=document.getElementById('left-gear-btn');
   if(!d)return;
   var opening=!d.classList.contains('open');
   d.classList.toggle('open',opening);
@@ -3375,7 +3350,7 @@ function openSettings(){
 function closeSettings(){
   var d=document.getElementById('left-settings-drawer');
   if(d)d.classList.remove('open');
-  var gb=document.getElementById('control-gear-btn');
+  var gb=document.getElementById('left-gear-btn');
   if(gb)gb.classList.remove('active');
 }
 

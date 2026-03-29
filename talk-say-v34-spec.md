@@ -24,8 +24,8 @@ Primary runtime file: `test.html`
 
 ### 2.1 Language control (single path)
 - **Only canonical control:** ribbon language button.
-- Any legacy settings-drawer/overlay language rows are inactive or removed from active UX.
-- Language selection opens a single language selector surface.
+- Any legacy settings-drawer/overlay language rows are inactive and non-canonical.
+- Language selection opens a single selector surface.
 
 ### 2.2 Owner-name editing (single path)
 - **Only canonical owner edit path:** inline edit in session header (`shell-self-name`).
@@ -39,6 +39,7 @@ Primary runtime file: `test.html`
   - `myHandle`
   - `partnerHandle`
   - `peerLastSeenAt`
+  - `autoReplyTargetLang` (auto-mode continuity)
 - Maintain compatibility aliases:
   - `myName` mirrors `myHandle`
   - `peerName` mirrors `partnerHandle`
@@ -46,32 +47,36 @@ Primary runtime file: `test.html`
 ### 3.2 Ownership semantics
 - Local owner data remains local-owner role across all rendering and sync.
 - Remote participant data remains remote role across join/rejoin and sync merge.
-- “Mine is mine / yours is yours” must hold after reconnect/backfill/history-sync.
+- History-sync merge reconciles remote-relative roles into local-relative roles deterministically.
 
 ### 3.3 Label generation and collisions
 - Session label uses `myHandle / partnerHandle` when partner known.
 - If partner unknown: `myHandle / Invite Pending — [timestamp]`.
-- Rename that would collide with another session label is rejected with explicit conflict message.
+- Rename that would collide with another computed session label is blocked with explicit message.
 
-## 4) Presence/join-note contract
+## 4) Presence/join contract
 
 1. On `hello`, partner identity must be upserted **before** join-note decision.
-2. Join notes must never fall back to generic `Partner joined` when partner name is unresolved.
-3. Transport noise (`ping`, `pong`, `history-sync`) must not trigger join semantics.
-4. Heartbeat/backfill traffic must not emit spurious “joined” notes.
+2. Join notes must not emit unresolved generic partner fallback.
+3. Transport noise (`ping`, `pong`, `history-sync`, heartbeat/backfill-only traffic) must not trigger join semantics.
+4. Presence updates may refresh seen timestamps/online dots while join-note is suppressed.
 
-## 5) Language behavior contract
+## 5) Canonical language behavior contract
 
-1. Outgoing hello language uses effective preferred language (manual selection or auto-detected fallback).
-2. Incoming translation target is always receiver preferred language (`sess.myLang`/prefs), not inferred from latest typed input.
-3. **Preference override rule:** if user preference is Spanish and user types English, incoming responses still target Spanish.
+1. **Canonical incoming target rule:**
+   - Explicit owner language override (`myLang !== ''`) wins.
+   - Otherwise, auto mode uses `autoReplyTargetLang` (latest owner typed outgoing language).
+2. **Auto semantics:** “Auto = what I type is what I get back” unless explicit override is set.
+3. Empty-string language override (`''`, auto) is valid persisted state and must not be coerced to `'en'`.
+4. Outgoing envelope metadata (`targetLang`) must mirror runtime-computed target semantics.
+5. Payload metadata must not contradict runtime language intent (no stale/hardcoded target).
 
 ## 6) Multi-device sync merge contract
 
 1. History-sync payloads are merged in chunks.
-2. Merge must reconcile role ownership (remote-relative roles mapped to local-relative roles) to prevent inversion.
+2. Merge reconciles ownership role (`owner`/`partner`) into local `from` (`me`/`them`) deterministically.
 3. Merge preserves deterministic ordering/stability (timestamp + deterministic tie-break).
-4. Merge does not clobber existing ownership metadata or role semantics.
+4. Merge must not invert ownership roles during sync/merge.
 
 ## 7) Acceptance criteria
 
@@ -80,5 +85,5 @@ v3.4 is complete when all are true:
 2. Header-only owner editing is enforced; partner is display-only.
 3. Join-note race/noise issues are resolved per contract.
 4. Ownership-role integrity holds across same-owner multi-device sync.
-5. Preferred language targeting rule is preserved in mixed-language input behavior.
+5. Canonical auto-language rule is preserved in mixed-language behavior.
 6. Tests in `talk-say-v34-tests.md` (including negative/counter gates) are tracked with truthful pass/fail status.

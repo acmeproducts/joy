@@ -1,76 +1,57 @@
 # Talk + Say v3.4 Test Plan (Release Gate)
 
-Prepared: March 29, 2026  
+Prepared: March 29, 2026
 Target runtime: `test.html`
 
 Legend: ✅ pass / ❌ fail / ⚠️ blocked (environment)
 
-## A) Positive slice coverage
+## 1) Spanish-preference override precedence
+- **Add:** Set `myLang='es'`, send outbound English, receive partner reply.
+- **Change:** Expected result: inbound `targetLang` MUST remain Spanish (`es`) regardless of latest typed source language.
+- **Remove:** Any vague pass condition that allows auto behavior to override explicit header language.
 
-### Slice A — Identity/session model
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T-A1 | Handle compatibility read | Load legacy session with only `myName/peerName` | UI renders via `myHandle/partnerHandle` aliases without data loss |
-| T-A2 | Handle persistence write | Rename owner in header and reload | `myHandle` persists and aliases remain in sync |
-| T-A3 | Auto continuity persistence | In auto mode send mixed-language messages and reload | `autoReplyTargetLang` continuity is preserved |
+## 2) Auto-mode continuity + empty-string non-coercion
+- **Add:** Persist `myLang=''`, send Thai then English, reload and continue.
+- **Change:** Expected result: `myLang` MUST remain empty string; inbound target follows `autoReplyTargetLang` continuity.
+- **Remove:** Assertions that accept coercion of empty-string auto mode to `'en'`.
 
-### Slice B — Presence/join handling
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T-B1 | Name-first hello join | Partner joins with hello name | Join note uses resolved partner handle/name |
-| T-B2 | Rejoin dedupe sanity | Reconnect quickly | No duplicate noisy join spam |
-| T-B3 | Ping/pong stability | Simulate heartbeat traffic only | Presence updates without join-note emission |
-| T-B4 | History/ack/typing suppression | Replay history-sync/ack/typing events | Seen timestamps update while join note stays suppressed |
+## 3) Malformed invite isolation
+- **Add:** Load malformed/invalid invite payload (bad schema/version/missing sessionId).
+- **Change:** Expected result: invalid invite MUST be ignored; runtime remains isolated with no cross-session mutation.
+- **Remove:** Any acceptance condition that tolerates partial hydration from invalid invite payloads.
 
-### Slice C — Canonical language UX + runtime targeting
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T-C1 | Ribbon language entry | Use ribbon globe | Single canonical language selector opens |
-| T-C2 | Legacy language controls inactive | Open legacy settings surfaces | No active duplicate language control path |
-| T-C3 | Auto canonical rule | `myLang=''`, send Thai then English | Incoming targets follow latest typed language |
-| T-C4 | Explicit override precedence | Set `myLang='es'`, send English | Incoming target remains Spanish |
-| T-C5 | Envelope contract | Inspect outgoing `msg` payload | `targetLang` equals runtime-computed targetLang |
+## 4) Ownership-role consistency across multi-device sync
+- **Add:** Merge history-sync chunks from second device with mixed `owner`/`partner` roles.
+- **Change:** Expected result: local render mapping MUST remain consistent (`owner→me`, `partner→them`) with no inversion.
+- **Remove:** Non-deterministic ownership expectations.
 
-## B) Mandatory negative/counter tests (release blocker)
+## 5) Join-note race + transport-noise suppression
+- **Add:** Replay `hello`, `ping`, `pong`, `history-sync`, heartbeat/backfill traffic under reconnect race.
+- **Change:** Expected result: join note appears only after identity upsert and never for noise events.
+- **Remove:** Vague join-note assertions that allow noise-triggered join output.
 
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T-N1 | Auto state coercion guard | Persist `myLang=''` and reload | Auto state remains empty-string, not coerced to `'en'` |
-| T-N2 | Stale metadata mismatch guard | Send message after language flip | No stale/hardcoded `targetLang` mismatch in payload |
-| T-N3 | Join-note unresolved-name guard | Receive join traffic before name resolution | No generic fallback join-note emitted |
-| T-N4 | Transport-noise join guard | Replay ping/pong/history bursts | No user-visible join notes from noise |
-| T-N5 | Ownership-role consistency across sync | Merge history chunks from another device | No `me/them` inversion edge path |
-| T-N6 | Rename collision block | Rename owner to colliding computed label | Rename blocked with explicit collision message |
-| T-N7 | Owner-label rerender clobber guard | Edit owner label while presence rerenders | Active edit not clobbered mid-edit |
+## 6) Rename conflict race/collision block
+- **Add:** Attempt owner rename that collides with an existing computed session label.
+- **Change:** Expected result: rename MUST be blocked with explicit user-visible collision reason and no silent merge.
+- **Remove:** Acceptance of collision overwrite/merge.
 
-## C) Release checklist (fill truthfully at execution time)
+## 7) Header edit clobber-guard during presence rerender
+- **Add:** Edit owner header while presence rerender events fire (`typing`/presence tick).
+- **Change:** Expected result: active owner edit text MUST NOT be clobbered until edit commit/blur.
+- **Remove:** Any test wording that allows rerender overwrite during active edit.
 
-| ID | Status | Evidence command/output |
-|---|---|---|
-| T-A1 | ☐ | |
-| T-A2 | ☐ | |
-| T-A3 | ☐ | |
-| T-B1 | ☐ | |
-| T-B2 | ☐ | |
-| T-B3 | ☐ | |
-| T-B4 | ☐ | |
-| T-C1 | ☐ | |
-| T-C2 | ☐ | |
-| T-C3 | ☐ | |
-| T-C4 | ☐ | |
-| T-C5 | ☐ | |
-| T-N1 | ☐ | |
-| T-N2 | ☐ | |
-| T-N3 | ☐ | |
-| T-N4 | ☐ | |
-| T-N5 | ☐ | |
-| T-N6 | ☐ | |
-| T-N7 | ☐ | |
+## 8) Payload metadata consistency (`targetLang`/effective language + handle-first names)
+- **Add:** Inspect outgoing `typing`/`hello`/`msg` payloads during auto and explicit language modes.
+- **Change:** Expected result: payload name fields are handle-first and `msg.targetLang` equals runtime effective target language.
+- **Remove:** Non-deterministic payload checks that permit stale/hardcoded target metadata.
 
-## Release gate
-
-A release is blocked unless all are satisfied:
-1. Positive slices A/B/C pass.
-2. All mandatory negative/counter tests `T-N1`..`T-N7` pass.
-3. Any blocked test is explicitly marked ⚠️ with concrete blocker reason.
-4. Report only checks actually executed.
+## Release blocker mapping
+- Contract §1 ↔ Test 1, 8
+- Contract §2 ↔ Test 8
+- Contract §3 ↔ Test 7
+- Contract §4 ↔ Test 8
+- Contract §5 ↔ Test 1, 2
+- Contract §6 ↔ Test 4
+- Contract §7 ↔ Test 5
+- Contract §8 ↔ Test 4
+- Contract §9 ↔ Test 8

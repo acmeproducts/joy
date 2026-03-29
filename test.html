@@ -1260,6 +1260,7 @@ function isPlaceholderName(name){var v=(name||'').trim().toLowerCase();return !v
 function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]||'').trim();if(v&&!isPlaceholderName(v))return v;}return '';}
 function getPreferredOwnerName(){var p=getPrefs();return firstRealName(p.globalName,p.userName)||'yournamehere';}
 function effectiveLangFromSession(sess){var p=getPrefs();return (sess&&sess.myLang)||p.myLang||detectBrowserLang()||'en';}
+function getEffectiveTargetLang(sess,sourceLang){return resolveIncomingTargetLang(sess,sourceLang||'');}
 
 function stampMsgNames(msg,sess){
   var s=sess?normalizeSession(sess):normalizeSession({});
@@ -1681,7 +1682,8 @@ function transportConnect(convId,opts){
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
-      lang:effectiveLangFromSession(sess),ts:Date.now(),seq:++msgSeq};
+      myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
+      lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),ts:Date.now(),seq:++msgSeq};
     addDiagLog('TX hello name='+hello.name+' lang='+hello.lang);
     try{ws.send(JSON.stringify(hello));}catch(_){}
     fetchBackfill();
@@ -1820,7 +1822,7 @@ function saveLocalName(el){
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
     var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:v,lang:sess&&sess.myLang||getPrefs().myLang||'en',ts:Date.now(),seq:++msgSeq};
+      name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(helloMsg));}catch(_){}
   }
   toast('Name saved');
@@ -1868,7 +1870,9 @@ function setMyLang(code){
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLang,ts:Date.now(),seq:++msgSeq};
+      name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
+      myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
+      lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLang),ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
   if(!code){toast('🌐 Language set to Auto-detect');}
@@ -1949,7 +1953,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess)});}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess))});}
   toast('Invite resent');
 }
 
@@ -2030,7 +2034,7 @@ function saveOwnerName(el){
   if(updateDefault){var p=getPrefs();p.globalName=v;p.userName=v;savePrefs(p);}
   updatePartnerHeader(sess);
   renderSessionList();
-  transportSend({type:'hello',transient:true,name:v,lang:effectiveLangFromSession(sess),timestamp:Date.now()});
+  transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),timestamp:Date.now()});
 }
 
 var HISTORY_SYNC_MAX=1500;
@@ -2166,7 +2170,7 @@ function buildInviteUrl(sess,prefs){
 function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
   var inviteName=firstRealName(invite.initiatorGlobalName);
-  if(inviteName)sess.peerName=inviteName;
+  if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
   if(!sess.partnerLang&&invite.initiatorLang)sess.partnerLang=invite.initiatorLang;
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
@@ -3157,7 +3161,11 @@ function composerInput(){
   var now=Date.now();if(now-lastTypingTs>2000){sendTyping();lastTypingTs=now;}
 }
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
-function sendTyping(){var sess=getSession(state.activeConvId);var n=normalizeSession(sess||{});transportSend({type:'typing',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',timestamp:Date.now()});}
+function sendTyping(){
+  var sess=getSession(state.activeConvId);var n=normalizeSession(sess||{});
+  var sourceLang=detectBrowserLang()||'en';
+  transportSend({type:'typing',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n,sourceLang),lang:effectiveLangFromSession(n),timestamp:Date.now()});
+}
 function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
 function sendMessage(){
@@ -3180,7 +3188,7 @@ function sendMessage(){
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
 
-  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:msg.targetLang,translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
+  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess,outLang),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
   var ok=sendReliable(payload);
   if(!ok){msg.status='queued';addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}

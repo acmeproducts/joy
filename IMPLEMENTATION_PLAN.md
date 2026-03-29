@@ -1,81 +1,43 @@
 # Implementation Plan — Talk + Say v3.4 (`test.html`)
 
-Prepared: March 29, 2026  
-Scope authority: this plan, `talk-say-v34-spec.md`, `talk-say-v34-tests.md`.
+Prepared: March 29, 2026
 
-## 1) Baseline-first, scope-locked workflow
+## 1) Identity normalization & compatibility
+- **Add:** Persist canonical fields `myHandle`, `partnerHandle`, `peerLastSeenAt`, and `autoReplyTargetLang`; add helper `getPreferredOwnerName()` as owner-name source resolver.
+- **Change:** Treat `myName` and `peerName` as compatibility aliases that mirror canonical handles on read/write.
+- **Remove:** Any behavior or wording that treats legacy `myName`/`peerName` as primary write targets.
 
-### 1.1 Pre-work baseline protocol
-1. Reset to clean baseline and inspect only approved target files.
-2. Record baseline checks before edits (available local checks only).
-3. Split work into explicit slices with file-touch constraints.
+## 2) Language UX single canonical path
+- **Add:** Ribbon globe button opens a single scoped language sheet/overlay for chat language selection.
+- **Change:** Effective-language precedence is mandatory: explicit header override (`myLang !== ''`) > auto (`autoReplyTargetLang`) > fallback bootstrap.
+- **Remove:** Legacy language controls in non-ribbon surfaces as canonical/active selection paths.
 
-### 1.2 Baseline scope gate + rollback protocol (mandatory)
-- **Allowed-touch list:** `test.html`, `talk-say-v34-spec.md`, `talk-say-v34-tests.md`, `IMPLEMENTATION_PLAN.md`.
-- **Hard scope gate:** `git diff --name-only` must contain only the four files above.
-- **Rollback protocol:** if any out-of-scope hunk/file appears, revert immediately and reapply only approved hunks.
-- **No over-claim policy:** do not report lint/tests/browser automation unless actually executed in this environment.
+## 3) Header ownership editing policy
+- **Add:** Owner header inline-edit rerender guard to prevent presence rerender clobber while editing.
+- **Change:** Partner header remains display-only and must never be locally editable.
+- **Remove:** Any partner-editable header flow.
 
-## 2) Slice plan with allowed/forbidden touch lists
+## 4) Join-note ordering & noise suppression
+- **Add:** Upsert partner identity before join-note decisions.
+- **Change:** Join-note emission is name-first and only after identity resolution.
+- **Remove:** Join-note triggers for transport noise (`ping`, `pong`, `history-sync`, heartbeat/backfill-only traffic).
 
-### Slice A — Canonical language runtime contract (`test.html`)
-**Allowed touch**
-- Canonical target resolution helper for incoming target language.
-- Auto mode continuity persistence (`autoReplyTargetLang`).
-- Empty-string language override normalization/persistence.
-- Outgoing payload metadata contract (`targetLang` mirrors runtime target).
+## 5) Rename collision policy
+- **Add:** Collision detection against computed session labels with explicit user-facing block reason.
+- **Change:** Rename flow requires explicit decision between “chat-only update” and “default/global update”.
+- **Remove:** Silent overwrite/merge of colliding labels.
 
-**Forbidden touch**
-- New language control surfaces.
-- Any fallback path that silently forces auto state to `'en'` for active reply targeting.
+## 6) Deterministic history-sync merge
+- **Add:** Deterministic wire-role (`owner`/`partner`) to local-role (`me`/`them`) mapping rules.
+- **Change:** Deterministic merge ordering (`timestamp` + stable tie-breaker) and chunk reconciliation.
+- **Remove:** Ambiguous role inference that can invert ownership across devices.
 
-### Slice B — Presence/join-note ordering + suppression (`test.html`)
-**Allowed touch**
-- `hello` ordering: identity upsert before join decision.
-- Join-note suppression for heartbeat/history/backfill/transport-noise events.
-- Presence updates that still refresh timestamps/dots without emitting join notes.
+## 7) Payload/message stamping contract
+- **Add:** Handle-first message name stamping and effective-language metadata usage.
+- **Change:** `typing`/`hello`/`msg` payloads carry handle-first identity and computed effective language metadata.
+- **Remove:** Stale/hardcoded target-language metadata paths.
 
-**Forbidden touch**
-- Protocol/event-type redesign.
-- Join-note generic fallback emissions.
-
-### Slice C — Ownership + header integrity (`test.html`)
-**Allowed touch**
-- History chunk merge role reconciliation contract.
-- Deterministic local role mapping during sync merge.
-- Owner inline edit protection from rerender clobber.
-- Rename conflict detection against computed session labels.
-
-**Forbidden touch**
-- Partner-editable header paths.
-- Role inversion edge paths in merge.
-
-### Slice D — Spec/tests alignment (`talk-say-v34-spec.md`, `talk-say-v34-tests.md`)
-**Allowed touch**
-- Unambiguous statements for canonical language rule, join contract, owner/partner header policy, merge contract.
-- Explicit negative/counter release-gate checklist IDs.
-
-**Forbidden touch**
-- Ambiguous wording implying multiple active language/identity paths.
-- Claims not backed by runtime behavior.
-
-## 3) Ownership policy (explicit)
-
-1. `myHandle` is local-owner identity on this device/session.
-2. `partnerHandle` is remote participant identity on this device/session.
-3. History-sync merge must reconcile role intent into local rendering roles deterministically.
-4. Ownership semantics must remain stable through reconnect/backfill/history merge.
-
-## 4) Validation gates (truthful only)
-
-- Execute only checks actually runnable in the environment.
-- Record exact command and result status.
-- Tie validation reporting to test IDs in `talk-say-v34-tests.md`.
-- Negative/counter tests are release blockers.
-
-## 5) Commit readiness checklist
-
-- [ ] Scope gate passes (`git diff --name-only` limited to 4 target files).
-- [ ] Runtime behavior matches canonical contracts.
-- [ ] Test checklist IDs reported truthfully with pass/fail/blocked state.
-- [ ] No over-claiming in final report.
+## 8) Release gate and anti-scope-drift controls
+- **Add:** Pre-commit scope gate and rollback protocol text.
+- **Change:** Spec and test references map each contract point to test IDs.
+- **Remove:** Ambiguous acceptance wording that permits mixed canonical/non-canonical behavior.

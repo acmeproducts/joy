@@ -1,86 +1,89 @@
-# Build Plan — Talk + Say v3.4 (`test.html`)
+# Implementation Plan — Talk + Say v3.4 (`test.html`)
 
-Prepared: March 28, 2026  
-Inputs reviewed:
-- `test.html` current implementation
-- `talk-say-v34-spec.md` revised instructions
-- `talk-say-v34-tests.md` revised test guidance
+Prepared: March 29, 2026  
+Scope authority: this plan, `talk-say-v34-spec.md`, `talk-say-v34-tests.md`.
 
-## 1) Codebase review findings (current state)
+## 1) Baseline-first, scope-locked workflow
 
-1. Names are still primarily `myName/peerName`; `myHandle/partnerHandle/globalName` are not first-class yet.
-2. Left-panel editable name (`#left-local-name`, `.left-name`) still exists and calls `saveLocalName()`.
-3. Partner header label is currently editable (`#shell-peer-name` has `contenteditable` and edit handlers).
-4. Ribbon still contains legacy auto-read bar (`#autoread-bar`) and does not match final v3.4 target layout.
-5. Presence runtime tracks last seen in memory; persistence behavior requires hardening.
+### 1.1 Pre-work baseline protocol
+1. Reset to clean baseline and inspect only approved target files.
+2. Record baseline checks before edits (syntax check + targeted runtime smoke where possible).
+3. Split work into explicit slices with file touch constraints.
 
-## 2) Expert questions resolved before implementation
+### 1.2 Per-slice scope controls (must pass before commit)
+- **Allowed-touch list:** only files explicitly listed in that slice.
+- **Forbidden-touch list:** every non-target file and every out-of-scope surface in `test.html`.
+- **Pre-commit scope gate:**
+  - `git diff --name-only` must only include: `test.html`, `talk-say-v34-spec.md`, `talk-say-v34-tests.md`, `IMPLEMENTATION_PLAN.md`.
+  - `git diff` must show no unrelated UI drift (legacy settings language rows, non-header identity editing, unrelated feature regressions).
+- **Rollback protocol:** if out-of-scope diff appears, immediately revert that hunk/file and reapply only approved changes.
 
-### Q1: Should v3.4 migrate old stored sessions or support dual-read forever?
-**Decision:** Dual-read + dual-write in v3.4 (no destructive migration) to avoid user data loss risk.
+## 2) Slice plan with allowed/forbidden touch lists
 
-### Q2: Should session keying ever depend on names?
-**Decision:** No. `convId` remains sole primary key; names are display-only.
+### Slice A — Identity + ownership model in runtime (`test.html`)
+**Allowed touch**
+- Session normalization/persistence (`myHandle`, `partnerHandle`, `peerLastSeenAt`, compatibility aliases)
+- Header identity behavior (owner editable inline only, partner display-only)
+- Ownership-safe merge rules for history sync
 
-### Q3: During inline owner-name edit, can incoming hello events update presence dots?
-**Decision:** Yes. Block only owner-label rerender while editing; keep presence updates live.
+**Forbidden touch**
+- Control-panel identity edit pathways
+- Non-header identity UX surfaces
+- Unrelated translation/phrasebook logic except ownership-role invariants
 
-### Q4: Where should language selection live after redesign?
-**Decision:** Ribbon globe opens dedicated bottom-sheet modal; remove legacy settings row.
+### Slice B — Presence/join-note ordering + transport-noise suppression (`test.html`)
+**Allowed touch**
+- `hello` handling order (partner upsert before join-note decision)
+- Join-note emission guards (no generic fallback)
+- Suppression for ping/pong/history transport events
 
-### Q5: Should old bubbles update when names change?
-**Decision:** No retroactive edits; new names apply only to newly stamped bubbles.
+**Forbidden touch**
+- Relay protocol shape changes
+- New event types or storage schema outside v3.4 fields
 
-## 3) Implementation phases
+### Slice C — Canonical language UX path (`test.html`)
+**Allowed touch**
+- Ribbon-driven language selector path only
+- Disable/remove active legacy language controls in settings drawer/overlay
+- Ensure hello and translation use effective/preferred language rules
 
-### Phase 1 — Data model + normalization
-- Update `normalizeSession()` to support handles and persisted `peerLastSeenAt`.
-- Update prefs accessors to support `globalName` with `userName` fallback.
-- Ensure all session writes preserve compat aliases.
+**Forbidden touch**
+- Adding another language entry path
+- Reintroducing duplicated language controls
 
-### Phase 2 — Identity UX
-- Add onboarding gate for missing global name.
-- Update new-session creation flow with edit-detection and 2-option branching.
-- Make owner header name editable inline with save prompt options.
-- Make partner header strictly read-only.
-- Add rename conflict detection against existing computed labels.
+### Slice D — Spec/tests alignment (`talk-say-v34-spec.md`, `talk-say-v34-tests.md`)
+**Allowed touch**
+- Canonical behavior contracts and release-gate tests only
 
-### Phase 3 — Presence + labeling
-- Update `getSessionLabel()` to `my / partner` format with invite fallback.
-- Update hello ingestion (`upsertPartnerFromEnvelope`) to fill handle fields.
-- Persist `peerLastSeenAt` on every `markPeerSeen()` update.
-- Update joined-note messaging and dedup logic.
+**Forbidden touch**
+- Claims of completion not backed by concrete runtime behavior/tests
 
-### Phase 4 — Ribbon/settings refactor
-- Rebuild ribbon controls into final target order.
-- Remove legacy autoread bar and displaced controls.
-- Add language picker modal using existing overlay/sheet patterns.
-- Remove left-panel editable name UI and related CSS.
+## 3) Ownership model contract (explicit requirements)
 
-### Phase 5 — Bubble stamping and regression pass
-- Switch `stampMsgNames()` to handle-first logic.
-- Validate no regressions in translation, phrasebook, clarify, tags, import/export, TTS/STT.
+1. **Session ownership semantics**
+   - `myHandle` is always local-owner identity for a session on this device.
+   - `partnerHandle` is always remote participant identity for that session.
+   - Compatibility aliases (`myName`, `peerName`) mirror these roles.
 
-## 4) File-level change scope
+2. **Role rendering consistency across device join**
+   - Header and bubble role labels must never invert after partner join/rejoin.
+   - Incoming partner hello/message updates partner identity only.
 
-Primary file:
-- `test.html` (all runtime/UI changes)
+3. **Sync merge conflict policy**
+   - History-sync merges must reconcile sender-relative roles to local-relative roles.
+   - Never allow remote chunk merge to overwrite local ownership role semantics.
+   - Preserve stable order by timestamp with deterministic tie-break.
 
-Planning/docs (already revised):
-- `talk-say-v34-spec.md`
-- `talk-say-v34-tests.md`
+## 4) Validation gates (truthful reporting only)
 
-## 5) Validation plan
+- Execute only checks actually runnable in environment.
+- Report exact command + pass/fail status.
+- No implied lint/build/browser automation unless explicitly executed.
+- Release gate requires mandatory negative/counter tests listed in `talk-say-v34-tests.md`.
 
-Execute P0 subset first:
-- T100, T101, T200, T202, T301, T306, T400, T500, T501, T900
+## 5) Commit readiness checklist
 
-Then full matrix in `talk-say-v34-tests.md`.
-
-## 6) Delivery criteria
-
-A build is ready when:
-1. P0 matrix passes.
-2. No regression failures in feature smoke tests (F-series).
-3. Session data survives reload with old and new fields.
-4. UI matches v3.4 ribbon/header/settings placement rules.
+- [ ] Scope gate passes (`git diff --name-only` limited to 4 target files).
+- [ ] Runtime behavior matches spec canonical paths.
+- [ ] Positive + negative test cases documented and status-recorded.
+- [ ] No over-claiming in test/report output.

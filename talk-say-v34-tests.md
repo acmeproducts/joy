@@ -1,80 +1,57 @@
-# Talk + Say v3.4 Test Plan (Guidance)
+# Talk + Say v3.4 Test Plan (Release Gate)
 
-Prepared: March 28, 2026  
-Target: `test.html`
+Prepared: March 29, 2026  
+Target runtime: `test.html`
 
-## Test matrix
+Legend: ✅ pass / ❌ fail / ⚠️ blocked (environment)
 
-Legend: ✅ pass / ❌ fail / ➖ n/a
+## A) Positive slice coverage
 
-### A. Data compatibility
+### Slice A — Identity/session model
+| ID | Scenario | Steps | Expected |
+|---|---|---|---|
+| T-A1 | Handle compatibility read | Load legacy session with only `myName/peerName` | UI renders via `myHandle/partnerHandle` aliases without data loss |
+| T-A2 | Handle persistence write | Rename owner in header and reload | `myHandle` persists and aliases remain in sync |
+| T-A3 | Presence persistence | Receive presence update, reload | `peerLastSeenAt` survives and presence tooltip remains coherent |
+
+### Slice B — Presence/join handling
+| ID | Scenario | Steps | Expected |
+|---|---|---|---|
+| T-B1 | Name-first hello join | Partner joins with hello name | Join note uses partner handle/name |
+| T-B2 | Rejoin dedupe sanity | Reconnect quickly | No duplicate noisy join spam |
+| T-B3 | Ping/pong stability | Simulate heartbeat traffic only | Presence updates without join-note emission |
+
+### Slice C — Canonical language UX
+| ID | Scenario | Steps | Expected |
+|---|---|---|---|
+| T-C1 | Ribbon language entry | Use ribbon globe | Single canonical language selector opens |
+| T-C2 | Legacy language controls inactive | Open settings surfaces | No active duplicate language control path |
+| T-C3 | Effective hello language | Change language then hello emit | Hello advertises effective preferred language |
+
+## B) Mandatory negative/counter tests (release blocker)
 
 | ID | Scenario | Steps | Expected |
 |---|---|---|---|
-| T100 | Legacy session migration | Seed localStorage with session containing only `myName/peerName`; reload app | Session works; header and list show names via handle aliases |
-| T101 | New fields persistence | Create session, receive partner ping/typing, reload | `peerLastSeenAt` survives reload and presence tooltip uses real time |
-| T102 | Pref aliasing | Set only `userName`; clear `globalName`; create new session | New session defaults from `userName` fallback |
+| T-N1 | Spanish preference override with English input | Set preferred `es`, send English message, receive reply | Incoming reply target remains Spanish (not forced to English) |
+| T-N2 | Malformed device-join link isolation | Open malformed/partial `?j=` invite | No cross-session pollution or ownership corruption |
+| T-N3 | Ownership-role consistency across same-owner multi-device | Same owner joins from second device; exchange + sync history | Roles stay consistent (`mine` never rendered as `theirs`) |
+| T-N4 | Join-note race/order | Deliver hello with delayed name availability simulation | No generic `Partner joined`; note emitted only once name resolved |
+| T-N5 | Heartbeat/history noise suppression | Replay ping/pong/history bursts | No false join note from transport-only events |
+| T-N6 | Rename conflict race | Concurrent rename/edit-clobber attempt across updates | Conflict blocked; active editor text not clobbered mid-edit |
 
-### B. Onboarding + new chat naming
-
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T200 | First-run gate | Clear prefs; open app | Blocking onboarding appears with name input + continue |
-| T201 | Empty submit blocked | Submit blank name | Overlay stays; validation shown |
-| T202 | Valid submit | Enter "Alice", continue, reload | Gate dismissed and not shown again |
-| T203 | New chat unchanged name | Tap + and start without edits | No 2-option prompt |
-| T204 | New chat changed name chat-only | Tap +, edit name, choose chat-only | `session.myHandle` changes; `prefs.globalName` unchanged |
-| T205 | New chat changed name global | Tap +, edit name, choose global | `session.myHandle` + `prefs.globalName` both updated |
-
-### C. In-session rename behavior
+## C) Additional regression checks
 
 | ID | Scenario | Steps | Expected |
 |---|---|---|---|
-| T300 | Owner editable | Tap owner name in header | Inline edit activates |
-| T301 | Partner not editable | Tap partner name | No caret/editing allowed |
-| T302 | Rename prompt options | Change owner name and blur | Two-option prompt shown |
-| T303 | Rename chat-only | Choose chat-only | Session updates only; default unchanged |
-| T304 | Rename + update default | Choose global option | Session + default updated |
-| T305 | Conflict prevention | Create two sessions with distinct labels; rename to duplicate | Rename blocked + conflict message |
-| T306 | Active-edit render guard | Begin owner edit while incoming hello arrives | Text being edited is not overwritten |
-| T307 | Bubble stamp integrity | Rename, send new message | Old bubble keeps old name, new bubble uses new name |
+| T-R1 | Basic send/receive translation | Normal conversation flow | Translation pipeline still works |
+| T-R2 | Phrasebook | Save and reuse phrase | Unchanged behavior |
+| T-R3 | Clarify/back-translate/tags | Use all three on a message | Unchanged behavior |
+| T-R4 | Import/export | Export then import data | Integrity preserved |
 
-### D. Session list + presence
+## Release gate
 
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T400 | Label with partner | Connect partner and exchange hello | Card shows `Me / Partner` form |
-| T401 | Invite pending label | Create chat not yet joined | Card shows `Me / Invite Pending — [time]` |
-| T402 | Partner joined note | Partner joins | System note uses partner handle text |
-| T403 | You-joined dedup | Reopen same session several times under 5 min | At most one `You joined` note in window |
-
-### E. Ribbon/settings redesign
-
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T500 | Ribbon controls | Inspect shell ribbon | Contains hamburger, phrasebook, globe, spacer, auto-read toggle only |
-| T501 | Language modal | Tap globe | Bottom sheet opens with Auto + all LANGS full labels |
-| T502 | Globe state | Select language then auto | Icon shows language flag, then 🌐 in auto |
-| T503 | Auto-read control location | Enable/disable auto-read from ribbon | Works without legacy autoread bar |
-| T504 | Settings cleanup | Open settings drawer | No old phrasebook row, no old auto-read row, no old language picker row |
-
-### F. Regression smoke tests
-
-| ID | Scenario | Steps | Expected |
-|---|---|---|---|
-| T900 | Send/receive translation | Exchange messages across different languages | Translation still works |
-| T901 | Phrasebook add/use | Save phrase and insert into chat | Works unchanged |
-| T902 | Tag + clarify + back-translate | Use each control on a message | Works unchanged |
-| T903 | Import/export | Export and import sessions/settings/phrasebook | Works and data integrity preserved |
-| T904 | Voice flows | STT send + TTS playback | Works unchanged |
-
-## Suggested execution order
-1. A (compatibility)
-2. B + C (identity)
-3. D (labels/presence)
-4. E (UI refactor)
-5. F (regressions)
-
-## Exit criteria
-- All P0 tests pass: T100, T101, T200, T202, T301, T306, T400, T500, T501, T900.
-- No blocker regressions in F-series.
+A release is blocked unless all are satisfied:
+1. Positive slices A/B/C pass.
+2. All mandatory negative/counter tests `T-N1`..`T-N6` pass.
+3. Any blocked test is explicitly marked ⚠️ with concrete blocker reason (no silent omission).
+4. Report only checks actually executed.

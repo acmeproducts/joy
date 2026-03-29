@@ -403,7 +403,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
     <!-- Settings drawer — slides down below gear row -->
     <div class="left-settings-drawer" id="left-settings-drawer">
-      <!-- Primary: Language / Auto-read / Phrasebook -->
+      <!-- Primary: Language -->
       <div class="lsd-section">
         <div class="lsd-row" id="lang-picker-wrap">
           <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
@@ -412,16 +412,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
             <button class="lang-pill" id="my-lang-pill" onclick="toggleLangPicker(event)" title="My language">&#x1F310; Auto</button>
             <div class="lang-dropdown" id="lang-dropdown" hidden></div>
           </div>
-        </div>
-        <div class="lsd-row">
-          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
-          <span class="lsd-label">Auto-read</span>
-          <div class="lsd-ctrl"><label class="toggle-switch"><input type="checkbox" id="set-autoread" onchange="setAutoReadFromSettings(this.checked)"><span class="toggle-slider"></span></label></div>
-        </div>
-        <div class="lsd-row lsd-row-link" onclick="toggleSettingsDrawer();openPhrasebookModal()">
-          <span class="lsd-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
-          <span class="lsd-label">Phrasebook</span>
-          <div class="lsd-ctrl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
         </div>
       </div>
       <!-- Appearance -->
@@ -458,22 +448,19 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <div class="lsd-section">
         <div class="lsd-section-title">Data</div>
         <table class="data-mgmt-grid" style="margin-bottom:6px;">
-          <thead><tr><th></th><th>Settings</th><th>Sessions</th></tr></thead>
+          <thead><tr><th></th><th>Settings</th></tr></thead>
           <tbody>
             <tr>
               <td>Export</td>
               <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
-              <td><button class="settings-icon-btn" onclick="exportSessionsData()" title="Export sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
             </tr>
             <tr>
               <td>Import</td>
               <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
-              <td><button class="settings-icon-btn" onclick="importSessionsData()" title="Import sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
             </tr>
             <tr>
               <td>Clear</td>
               <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
-              <td><button class="settings-icon-btn danger" onclick="clearDataOnly()" title="Clear sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
             </tr>
           </tbody>
         </table>
@@ -622,32 +609,23 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       </table>
       <button class="sheet-btn secondary" style="width:100%;padding:8px;font-size:12px;margin-top:4px;" onclick="resetAllBubbleDefaults()">Reset appearance defaults</button>
     </div>
-    <!-- ── Features ── -->
-    <div class="settings-group">
-      <div class="settings-group-title">Features</div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Phrasebook</div><div class="settings-row-meta">Quick-access saved phrases</div></div><button class="settings-icon-btn" onclick="closeSettings();openPhrasebookModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Auto-read</div><div class="settings-row-meta">Speak incoming messages aloud</div></div><label class="toggle-switch"><input type="checkbox" id="set-autoread" onchange="setAutoReadFromSettings(this.checked)"><span class="toggle-slider"></span></label></div>
-    </div>
     <!-- ── Data Management ── -->
     <div class="settings-group">
       <div class="settings-group-title">Data Management</div>
       <table class="data-mgmt-grid">
-        <thead><tr><th></th><th>Settings</th><th>Sessions</th></tr></thead>
+        <thead><tr><th></th><th>Settings</th></tr></thead>
         <tbody>
           <tr>
             <td>Export</td>
             <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
-            <td><button class="settings-icon-btn" onclick="exportSessionsData()" title="Export sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
           </tr>
           <tr>
             <td>Import</td>
             <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
-            <td><button class="settings-icon-btn" onclick="importSessionsData()" title="Import sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
           </tr>
           <tr>
             <td>Clear</td>
             <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
-            <td><button class="settings-icon-btn danger" onclick="clearDataOnly()" title="Clear sessions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
           </tr>
         </tbody>
       </table>

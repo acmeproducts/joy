@@ -1,149 +1,84 @@
-# Talk + Say v3.4 Specification (Vetted Against `test.html`)
+# Talk + Say v3.4 Specification (Final Scope-Locked)
 
-Prepared: March 28, 2026  
-Target runtime file: `test.html` only  
-Out of scope: relay worker (`worker-talk.js`), wrangler configs, non-target HTML files.
+Prepared: March 29, 2026  
+Primary runtime file: `test.html`
 
-## 1) Scope and baseline
+## 1) Scope and constraints
 
-This spec is revised to match the current code in `test.html` (title currently `v3.3`) and defines **only** changes required for v3.4.
+### In scope
+- Session identity model hardening (`myHandle`, `partnerHandle`, `peerLastSeenAt` + compat aliases)
+- Header identity UX (owner editable inline, partner display-only)
+- Canonical language UX (single ribbon-driven path)
+- Join-note ordering/noise suppression
+- Multi-device ownership-safe history merge
 
-### Guardrails
-- Keep single-file architecture.
-- Do not remove phrasebook, clarify, back-translate, tags, import/export, STT/TTS, or translation providers.
-- Do not migrate storage keys.
-- Preserve backwards compatibility for existing sessions/prefs.
+### Out of scope
+- Worker/protocol redesign outside existing event types
+- New settings surfaces for language/identity editing
+- Non-target files beyond:
+  - `talk-say-v34-spec.md`
+  - `talk-say-v34-tests.md`
+  - `IMPLEMENTATION_PLAN.md`
 
-## 2) Data model updates (must be backward compatible)
+## 2) Canonical UX rules
 
-### Session object (`ts3_sessions`)
-Add and normalize:
-- `myHandle: string`
-- `partnerHandle: string`
-- `peerLastSeenAt: number`
+### 2.1 Language control (single path)
+- **Only canonical control:** ribbon language button.
+- Any legacy settings-drawer/overlay language rows are inactive or removed from active UX.
+- Language selection opens a single language selector surface.
 
-Compatibility aliases must remain:
-- Existing `myName` and `peerName` remain readable/writable.
-- `normalizeSession()` maps old and new fields both directions.
+### 2.2 Owner-name editing (single path)
+- **Only canonical owner edit path:** inline edit in session header (`shell-self-name`).
+- Partner header name (`shell-peer-name`) is display-only.
+- Partner name cannot be edited locally.
 
-Required normalization behavior:
-- `myHandle <- raw.myHandle || raw.myName || prefs.globalName || prefs.userName || ""`
-- `partnerHandle <- raw.partnerHandle || raw.peerName || ""`
-- `peerLastSeenAt <- Number(raw.peerLastSeenAt) || 0`
-- Also mirror `myName=myHandle` and `peerName=partnerHandle` before return.
+## 3) Identity and ownership data contract
 
-### Prefs object (`ts3_prefs`)
-Add canonical field:
-- `globalName: string`
+### 3.1 Session normalization/persistence
+- Persist and normalize:
+  - `myHandle`
+  - `partnerHandle`
+  - `peerLastSeenAt`
+- Maintain compatibility aliases:
+  - `myName` mirrors `myHandle`
+  - `peerName` mirrors `partnerHandle`
 
-Compatibility:
-- Keep `userName` as alias during v3.4.
-- Reads should prefer `globalName`, fallback to `userName`.
+### 3.2 Ownership semantics
+- Local owner data remains local-owner role across all rendering and sync.
+- Remote participant data remains remote role across join/rejoin and sync merge.
+- “Mine is mine / yours is yours” must hold after reconnect/backfill/history-sync.
 
-## 3) Identity UX
+### 3.3 Label generation and collisions
+- Session label uses `myHandle / partnerHandle` when partner known.
+- If partner unknown: `myHandle / Invite Pending — [timestamp]`.
+- Rename that would collide with another session label is rejected with explicit conflict message.
 
-### 3.1 Onboarding gate (global name required)
-- If no usable `prefs.globalName` exists (empty or `"yournamehere"`), show blocking onboarding overlay.
-- Prompt: `What's your name?`
-- Continue button remains disabled until non-empty trimmed value.
-- Save to `prefs.globalName`; do not show gate again once set.
+## 4) Presence/join-note contract
 
-### 3.2 New-session naming
-Before creating a new session from `+`:
-- Pre-fill name input with `prefs.globalName`.
-- If unchanged: create session immediately.
-- If changed: show two-choice confirmation:
-  - `Use for this chat only`
-  - `Also update my default name`
+1. On `hello`, partner identity must be upserted **before** join-note decision.
+2. Join notes must never fall back to generic `Partner joined` when partner name is unresolved.
+3. Transport noise (`ping`, `pong`, `history-sync`) must not trigger join semantics.
+4. Heartbeat/backfill traffic must not emit spurious “joined” notes.
 
-### 3.3 Header editing rules
-- Owner name (`shell-self-name`) is editable inline.
-- Partner name (`shell-peer-name`) becomes display-only (remove `contenteditable`, blur, keydown editing handlers).
-- On owner rename blur with changed text, prompt same two choices as above.
-- Any accepted owner rename sends hello update immediately.
-- Existing bubbles keep historical display names.
+## 5) Language behavior contract
 
-### 3.4 Rename conflict rule
-If resulting session label (`myHandle / partnerHandle`) equals another existing session label:
-- Abort rename.
-- Show: `A session with this name already exists. Delete that session and continue, or choose a different name.`
+1. Outgoing hello language uses effective preferred language (manual selection or auto-detected fallback).
+2. Incoming translation target is always receiver preferred language (`sess.myLang`/prefs), not inferred from latest typed input.
+3. **Preference override rule:** if user preference is Spanish and user types English, incoming responses still target Spanish.
 
-## 4) Presence and session labeling
+## 6) Multi-device sync merge contract
 
-### 4.1 Session labels
-`getSessionLabel(sess)` must display:
-- `myHandle / partnerHandle` when partner known.
-- Else `myHandle / Invite Pending — [timestamp]`.
-- Fallback `New Chat`.
+1. History-sync payloads are merged in chunks.
+2. Merge must reconcile role ownership (remote-relative roles mapped to local-relative roles) to prevent inversion.
+3. Merge preserves deterministic ordering/stability (timestamp + deterministic tie-break).
+4. Merge does not clobber existing ownership metadata or role semantics.
 
-### 4.2 Partner hello ingestion
-`upsertPartnerFromEnvelope()` must write:
-- `partnerHandle` + compatibility `peerName`.
+## 7) Acceptance criteria
 
-### 4.3 Persist last seen
-`markPeerSeen()` must persist `peerLastSeenAt` to session record via `putSession(sess)`.
-`normalizeSession()` must rehydrate runtime from stored value.
-
-### 4.4 Join system notes
-- Replace `Partner joined` with `[PartnerHandle] joined`.
-- Suppress duplicate `You joined` note if a prior one exists in same session within 5 minutes.
-
-## 5) Ribbon + settings refactor
-
-### 5.1 Ribbon composition
-Final ribbon order:
-- Hamburger
-- Phrasebook icon
-- Globe icon (language picker trigger)
-- Flexible spacer
-- Auto-read toggle (icon + switch, no text label)
-
-Remove from ribbon/settings legacy surfaces:
-- Share ribbon button
-- Legacy autoread ribbon button
-- `autoread-bar` strip
-- Phrasebook row in settings drawer
-- Auto-read row in settings drawer
-- Old language picker row in settings drawer
-
-### 5.2 Language picker modal
-Use existing `.overlay` + `.sheet` pattern.
-- Title: `Your Language`
-- First row: Auto-detect (`🌐`)
-- Then all LANGS entries with full language names + flags.
-- Selected row shows checkmark.
-- Selecting row calls `setMyLang(code)`, closes modal, updates globe icon state.
-
-## 6) Header render guard during edit
-
-`updatePartnerHeader()` must not clobber active owner inline edit.
-At top of function:
-- detect owner label element
-- if activeElement is that label, skip owner-label rewrite
-- still run presence indicator updates every call
-
-## 7) Left panel cleanup
-
-- Remove editable `left-name` element from DOM.
-- Remove `.left-name` CSS rules.
-- Keep `saveLocalName()` function; repurpose to update active session handle only (no orphan references).
-- Left top row should contain only gear icon with adjusted spacing.
-
-## 8) Bubble name stamping
-
-`stampMsgNames()` must stamp from handle-first fields:
-- mine => `myHandle || myName || "Me"`
-- theirs => `partnerHandle || peerName || "Partner"`
-
-No retroactive mutation of old bubbles.
-
-## 9) Acceptance criteria summary
-
-v3.4 is acceptable when:
-1. New and legacy sessions both render correctly after reload.
-2. Owner rename flows support chat-only vs global update.
-3. Partner name cannot be manually edited locally.
-4. Session labels use `my/partner` form with pending fallback.
-5. Last-seen survives reload.
-6. Ribbon/settings match redesigned control placement.
-7. No regressions in phrasebook, translation, clarify, tags, import/export, or voice features.
+v3.4 is complete when all are true:
+1. Canonical single-path language UX is enforced.
+2. Header-only owner editing is enforced; partner is display-only.
+3. Join-note race/noise issues are resolved per contract.
+4. Ownership-role integrity holds across same-owner multi-device sync.
+5. Preferred language targeting rule is preserved in mixed-language input behavior.
+6. Tests in `talk-say-v34-tests.md` (including negative/counter gates) are tracked with truthful pass/fail status.

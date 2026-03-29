@@ -2345,7 +2345,19 @@ function upsertPartnerFromEnvelope(sess,d,opts){
   var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
   if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
   // Only announcements (hello) should change partner preferred output language.
-  if(opts.allowLangUpdate&&d.lang)sess.partnerLang=d.lang;
+  if(opts.allowLangUpdate&&d.lang){
+    var nextLang=normalizeLangSetting(d.lang)||'';
+    var prevLang=normalizeLangSetting(sess.partnerLang)||'';
+    var partnerId=(sess.inviterDeviceId||d.from||'partner');
+    var dominantLang=normalizeLangSetting(getDominantLang(partnerId,prevLang||nextLang))||'';
+    // Ignore contradictory hello language if actual message history already
+    // established a dominant language for this participant.
+    if(!prevLang||!dominantLang||dominantLang===nextLang||dominantLang===prevLang){
+      sess.partnerLang=nextLang||sess.partnerLang;
+    }else{
+      addDiagLog('HELLO lang ignored: '+nextLang+' (dominant='+dominantLang+', current='+prevLang+')');
+    }
+  }
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
   putSession(sess);
   if(state.activeConvId===sess.convId)updatePartnerHeader(sess);

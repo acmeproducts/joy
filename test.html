@@ -988,7 +988,7 @@ function normalizeSession(sess){
     peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
-    myLang:hasOwn(raw,'myLang')?(normalizeLangSetting(raw.myLang)||''):((normalizeLangSetting(p.myLang)!==undefined)?normalizeLangSetting(p.myLang):'en'),
+    myLang:hasOwn(raw,'myLang')?(normalizeLangSetting(raw.myLang)||''):((normalizeLangSetting(p.myLang)!==undefined)?normalizeLangSetting(p.myLang):''),
     partnerLang:hasOwn(raw,'partnerLang')?(normalizeLangSetting(raw.partnerLang)||''):((normalizeLangSetting(p.partnerLang)!==undefined)?normalizeLangSetting(p.partnerLang):((normalizeLangSetting(raw.myLang)!==undefined)?normalizeLangSetting(raw.myLang):((normalizeLangSetting(p.myLang)!==undefined)?normalizeLangSetting(p.myLang):'en'))),
     autoReplyTargetLang:normalizeAutoReplyTargetLang(hasOwn(raw,'autoReplyTargetLang')?raw.autoReplyTargetLang:''),
     peerLastSeenAt:Number(raw.peerLastSeenAt)||0
@@ -1888,7 +1888,7 @@ function ensureUserName(callback){
 function createNewSession(silent){
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',myLang:p.myLang||'en',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -2344,12 +2344,13 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 // RELAY EVENT HANDLER
 // ════════════════════════════════════════════════════════
-function upsertPartnerFromEnvelope(sess,d){
+function upsertPartnerFromEnvelope(sess,d,opts){
   if(!sess||!d)return;
+  opts=opts||{};
   var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
   if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
-  // Always update partnerLang from a hello — this is how language changes propagate
-  if(d.lang)sess.partnerLang=d.lang;
+  // Only announcements (hello) should change partner preferred output language.
+  if(opts.allowLangUpdate&&d.lang)sess.partnerLang=d.lang;
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
   putSession(sess);
   if(state.activeConvId===sess.convId)updatePartnerHeader(sess);
@@ -2373,7 +2374,7 @@ function handleRelayEvent(d){
     var rt=getRoomRuntime(sess.convId);
     var wasEverSeen=rt&&rt.peerEverSeen;
     var lastSeen=rt&&rt.peerLastSeenAt||0;
-    upsertPartnerFromEnvelope(sess,d);
+    upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:true});
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
     updatePartnerHeader(sess);
@@ -2428,7 +2429,7 @@ function handleRelayEvent(d){
       return;
     }
 
-    upsertPartnerFromEnvelope(sess,d);
+    upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:false});
     updatePartnerHeader(sess);
     if(state.pendingInviteId===sess.convId){
       state.pendingInviteId=null;
@@ -2464,6 +2465,10 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     var m2=findMsg(d.id);
     if(m2){
+      if(m2.from==='me'&&d.targetLang&&sess.partnerLang!==d.targetLang){
+        sess.partnerLang=d.targetLang;
+        putSession(sess);
+      }
       normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?(sess.partnerLang||'en'):(sess.myLang||'en'))});
       applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
       m2.status='translated';updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);

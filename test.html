@@ -3906,10 +3906,9 @@ document.addEventListener('DOMContentLoaded',function(){
   var p=getPrefs();
   state.autoSpeakIncoming=!!p.autoSpeakIncoming;
 
-  // Seed home language from browser locale on first ever load
+  // Default preferred language to auto-detect on first ever load
   if(!p._langDetected){
-    var detected=detectBrowserLang();
-    if(detected){p.myLang=detected;}
+    p.myLang='';
     p._langDetected=true;savePrefs(p);
   }
   updateLangPill();

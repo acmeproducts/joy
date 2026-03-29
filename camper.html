@@ -1463,14 +1463,9 @@
         function ensureJoinName() {
             let storedName = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
             if (!storedName || !storedName.trim()) {
-                storedName = new Date().toLocaleString(undefined, {
-                    month: 'short',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                const deterministicSuffix = String(RELAY_CLIENT_ID || 'guest').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'guest';
+                storedName = `Camper-${deterministicSuffix}`;
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, storedName);
-                localStorage.setItem('relax_joined_at', new Date().toISOString());
             }
             return storedName;
         }
@@ -1498,6 +1493,8 @@
         let lastRelayReceiveAt = Date.now();
         let lastRelayActivityAt = Date.now();
         let relayReconnectAttempts = 0;
+        let relayDisconnectCause = 'startup';
+        let lastHiddenAt = 0;
         const RELAY_RECONNECT_BASE_MS = 1200;
         const RELAY_RECONNECT_MAX_MS = 20000;
         const RELAY_RECONNECT_JITTER = 0.3;
@@ -4017,11 +4014,18 @@
                 const hasPeers = hasActivePeers();
                 if (hasPeers && Date.now() - lastRelayReceiveAt > RELAY_HEARTBEAT_STALE_MS) {
                     appendDeviceLog('relay-stale', 'No relay traffic detected; reconnecting.');
+                    relayDisconnectCause = 'heartbeat-timeout';
                     ws.close(4002, 'relay-stale');
                     return;
                 }
                 sendRelayMessage({ type: 'ping', kind: hasPeers ? 'probe' : 'keepalive', transient: true });
             }, RELAY_HEARTBEAT_INTERVAL_MS);
+        }
+
+        function logReconnectIntent(reason, detail = '') {
+            const message = `Reconnecting (${reason})${detail ? `: ${detail}` : ''}`;
+            appendDeviceLog('relay-reconnect', message);
+            appendSessionLog('relay-reconnect', `reason=${reason}${detail ? ` detail=${detail}` : ''}`);
         }
 
         function scheduleRelayReconnect() {
@@ -4030,6 +4034,7 @@
             const jitter = 1 + (Math.random() * 2 - 1) * RELAY_RECONNECT_JITTER;
             const baseDelay = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * (2 ** (relayReconnectAttempts - 1)));
             const delay = Math.max(0, Math.round(baseDelay * jitter));
+            logReconnectIntent(relayDisconnectCause || 'disconnect', `attempt=${relayReconnectAttempts} delayMs=${delay}`);
             relayReconnectTimer = setTimeout(() => {
                 relayReconnectTimer = null;
                 connectRelay();
@@ -4051,7 +4056,7 @@
             const ws = relayState.ws;
             scheduleRelayConnectTimeout(ws);
             updateSyncIndicator('connecting');
-            appendDeviceLog('relay-connect', 'Opening relay connection...');
+            appendDeviceLog('relay-connect', `Opening relay connection (attempt=${Math.max(1, relayReconnectAttempts + 1)} cause=${relayDisconnectCause || 'startup'}).`);
             ws.onopen = () => {
                 if (relayState.ws !== ws) return;
                 lastRelayReceiveAt = Date.now();
@@ -4063,7 +4068,8 @@
                     relayReconnectTimer = null;
                 }
                 relayReconnectAttempts = 0;
-                appendDeviceLog('relay-open', 'Relay connection established.');
+                appendDeviceLog('relay-open', `Relay connection established; restoration complete (session=${RELAY_SESSION_ID}).`);
+                appendSessionLog('relay-restore', `session=${RELAY_SESSION_ID} cause=${relayDisconnectCause || 'startup'}`);
                 sendRelayMessage({ type: 'reattach', transient: true });
                 sendRelayMessage({ type: 'hello', reason: 'open', name: joinState.name || undefined });
                 fetchRelayBackfill('reconnect');
@@ -4086,17 +4092,22 @@
                     handleRelayMessage(JSON.parse(event.data));
                 } catch (_) {}
             };
-            ws.onclose = () => {
+            ws.onclose = (event) => {
                 if (relayState.ws !== ws) return;
                 clearTimeout(relayState.connectTimeoutTimer);
                 relayState.ws = null;
                 stopRelayHeartbeat();
                 updateSyncIndicator('connecting');
-                appendDeviceLog('relay-close', 'Relay connection closed.');
+                const closeCode = Number(event?.code) || 1000;
+                const closeReason = (event?.reason || '').trim() || 'unspecified';
+                relayDisconnectCause = closeReason;
+                appendDeviceLog('relay-close', `Relay connection closed (code=${closeCode} reason=${closeReason}).`);
+                appendSessionLog('relay-close', `code=${closeCode} reason=${closeReason}`);
                 scheduleRelayReconnect();
             };
             ws.onerror = () => {
                 if (relayState.ws !== ws) return;
+                relayDisconnectCause = 'ws-error';
                 appendDeviceLog('relay-error', 'Relay connection error.');
                 if (relayState.ws) relayState.ws.close();
             };
@@ -4456,6 +4467,8 @@
             } catch (_) {}
             if (!shouldSync) return;
             if (!relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                relayDisconnectCause = `reload-${reason}`;
+                logReconnectIntent(reason, 'socket_not_open');
                 connectRelay();
             }
             fetchSnapshot(reason);
@@ -4467,6 +4480,14 @@
             renderSessionStatus();
             updateLocalProfileUI();
             isWindowFocused = document.hasFocus ? document.hasFocus() : !document.hidden;
+            if (document.hidden) {
+                lastHiddenAt = Date.now();
+                return;
+            }
+            const hiddenForMs = lastHiddenAt ? (Date.now() - lastHiddenAt) : 0;
+            if (hiddenForMs > 20000) {
+                appendDeviceLog('relay-restore-check', `Visibility restored after ${Math.round(hiddenForMs / 1000)}s.`);
+            }
             if (!document.hidden) {
                 clearUnreadChat();
                 resetRemoteActivityNotifications();
@@ -4485,6 +4506,11 @@
             isWindowFocused = true;
             clearUnreadChat();
             resetRemoteActivityNotifications();
+            const hiddenForMs = lastHiddenAt ? (Date.now() - lastHiddenAt) : 0;
+            if (hiddenForMs > 20000 || !relayState.ws || relayState.ws.readyState !== WebSocket.OPEN) {
+                relayDisconnectCause = hiddenForMs > 20000 ? 'focus-return' : 'focus-socket-check';
+                logReconnectIntent('focus', hiddenForMs > 20000 ? `hiddenMs=${hiddenForMs}` : 'socket_not_open');
+            }
             if (shouldSkipAutoReload()) {
                 clearFilePickerActive();
                 return;
@@ -5008,6 +5034,8 @@
             requestAutoReload('pageshow');
         });
         window.addEventListener('online', () => {
+            relayDisconnectCause = 'network-online';
+            appendDeviceLog('network', 'Browser is online; verifying relay connection.');
             requestAutoReload('online');
         });
         window.addEventListener('offline', () => {
@@ -5054,15 +5082,40 @@
             "entry.1854154093": "@relay_stale_at_end",
             "entry.1036649804": "@session_start_iso",
             "entry.1683490369": "@chat_participants",
-            "entry.1722638233": "@custom_words\n@origin_url\n@exit_target_url",
+            "entry.1722638233": "@custom_words",
             "entry.527394232": "@chat_event_log"
         };
 
         window.telemetryStats = Object.assign({ taps: 0, drags: 0, mouseDist: 0 }, window.telemetryStats || {});
         const sessionLog = [];
         const sessionChatStartIndex = loadAltarChat().length;
+        const SESSION_INSTANCE_COUNTER_KEY = `relax_session_instance_counter_${RELAY_SESSION_ID}`;
+        const SESSION_ARCHIVE_META_KEY = `relax_session_archive_${RELAY_SESSION_ID}`;
+
+        function resolveSessionLifecycleIdentity() {
+            let nextCounter = 1;
+            try {
+                const raw = Number(localStorage.getItem(SESSION_INSTANCE_COUNTER_KEY));
+                if (Number.isFinite(raw) && raw > 0) nextCounter = raw + 1;
+                localStorage.setItem(SESSION_INSTANCE_COUNTER_KEY, String(nextCounter));
+            } catch (_) {}
+            return `${RELAY_CLIENT_ID || 'client'}-${nextCounter.toString(36)}`;
+        }
+
+        const priorSessionLifecycleId = (() => {
+            try {
+                return (localStorage.getItem(SESSION_ARCHIVE_META_KEY) || '').trim();
+            } catch (_) {
+                return '';
+            }
+        })();
+        const currentSessionLifecycleId = resolveSessionLifecycleIdentity();
+        try {
+            localStorage.setItem(SESSION_ARCHIVE_META_KEY, currentSessionLifecycleId);
+        } catch (_) {}
+
         const sessionLifecycle = {
-            id: Date.now().toString(36),
+            id: currentSessionLifecycleId,
             startedAt: Date.now(),
             endedAt: null,
             endReason: null,
@@ -5210,7 +5263,11 @@
                 `session_key=${resolvedSessionKey || ''}`,
                 `origin_url=${window.location.href}`,
                 `session_id=${sessionLifecycle.id}`,
-                `session_bounds=${new Date(sessionLifecycle.startedAt).toISOString()}~${new Date(endedAt).toISOString()}`
+                `session_bounds=${new Date(sessionLifecycle.startedAt).toISOString()}~${new Date(endedAt).toISOString()}`,
+                `prior_session_id=${priorSessionLifecycleId || 'none'}`,
+                `prior_session_status=${priorSessionLifecycleId ? 'defunct' : 'none'}`,
+                'continuity.properties=camp,test',
+                'continuity.effort=session_identity_reconnect_alignment_v1'
             ];
             const rendered = eventItems.map(item => item.line);
             const allLines = metadataLines.concat(rendered);
@@ -5392,7 +5449,7 @@
                 "@grace_timeout": sessionLifecycle.gracePeriodExpired ? 'true' : 'false',
                 "@idle_tail_seconds": idleTailSeconds,
                 "@session_key": resolvedSessionKey,
-                "@join_name": document.referrer || '',
+                "@join_name": joinState.name || '',
                 "@language": navigator.language,
                 "@timezone": resolvedTimezone,
                 "@chat_counts": chatCounts,

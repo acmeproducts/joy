@@ -82,6 +82,7 @@ textarea.field-input{resize:none;}
 .left-settings-drawer{overflow:hidden;max-height:0;transition:max-height .28s cubic-bezier(.4,0,.2,1);}
 .left-settings-drawer.open{max-height:72vh;overflow-y:auto;border-bottom:1px solid var(--border);}
 .left-gear.active{color:var(--teal);background:var(--teal-light);}
+.left-panel.settings-open .left-body{display:none;}
 .lsd-section{border-bottom:1px solid var(--border);}
 .lsd-section:last-child{border-bottom:none;}
 .lsd-section-title{font-size:10px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.5px;padding:7px 14px 3px;}
@@ -311,6 +312,7 @@ textarea.field-input{resize:none;}
 .settings-icon-btn{background:none;border:none;color:var(--ink-mid);cursor:pointer;padding:4px;border-radius:6px;line-height:0;}
 .settings-icon-btn:hover{background:var(--paper);}
 .settings-icon-btn.danger:hover{color:var(--red);background:var(--red-light);}
+.settings-icon-btn svg{display:block;width:16px;height:16px;}
 
 /* ════ SEARCH OVERLAY ════ */
 .search-overlay{position:fixed;inset:0;background:var(--cream);z-index:35;display:none;flex-direction:column;}
@@ -1798,7 +1800,7 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 // LEFT PANEL
 // ════════════════════════════════════════════════════════
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
-function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
+function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');closeSettings();}
 function openControlPanel(){openLeftPanel();toggleSettingsDrawer();}
 function closeControlPanel(){closeSettings();}
 function saveLocalName(el){
@@ -3316,10 +3318,12 @@ var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,
 function toggleSettingsDrawer(){
   var d=document.getElementById('left-settings-drawer');
   var gb=document.getElementById('left-gear-btn');
+  var panel=document.getElementById('left-panel');
   if(!d)return;
   var opening=!d.classList.contains('open');
   d.classList.toggle('open',opening);
   if(gb)gb.classList.toggle('active',opening);
+  if(panel)panel.classList.toggle('settings-open',opening);
   if(opening)openSettings();
 }
 function openSettings(){
@@ -3339,7 +3343,9 @@ function closeSettings(){
   var d=document.getElementById('left-settings-drawer');
   if(d)d.classList.remove('open');
   var gb=document.getElementById('left-gear-btn');
+  var panel=document.getElementById('left-panel');
   if(gb)gb.classList.remove('active');
+  if(panel)panel.classList.remove('settings-open');
 }
 
 // Direct color controls — source bubble

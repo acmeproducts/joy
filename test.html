@@ -320,7 +320,7 @@ textarea.field-input{resize:none;}
 .settings-icon-btn{background:none;border:none;color:var(--ink-mid);cursor:pointer;padding:4px;border-radius:6px;line-height:0;}
 .settings-icon-btn:hover{background:var(--paper);}
 .settings-icon-btn.danger:hover{color:var(--red);background:var(--red-light);}
-.settings-icon-btn svg{display:block;width:16px;height:16px;}
+.settings-icon-btn .data-action-icon{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
 
 /* ════ SEARCH OVERLAY ════ */
 .search-overlay{position:fixed;inset:0;background:var(--cream);z-index:35;display:none;flex-direction:column;}
@@ -445,15 +445,15 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
           <tbody>
             <tr>
               <td>Export</td>
-              <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings" aria-label="Export settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 20h16"/></svg></button></td>
+              <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings" aria-label="Export settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 20h16"/></svg></button></td>
             </tr>
             <tr>
               <td>Import</td>
-              <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings" aria-label="Import settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M8 14l4-4 4 4"/><path d="M4 4h16"/></svg></button></td>
+              <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings" aria-label="Import settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M8 14l4-4 4 4"/><path d="M4 4h16"/></svg></button></td>
             </tr>
             <tr>
               <td>Clear</td>
-              <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings" aria-label="Clear settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></td>
+              <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings" aria-label="Clear settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></td>
             </tr>
           </tbody>
         </table>

@@ -916,9 +916,14 @@ function normalizeSession(sess){
     peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
-    myLang:hasOwn(raw,'myLang')?(normalizeLangSetting(raw.myLang)||''):((normalizeLangSetting(p.myLang)!==undefined)?normalizeLangSetting(p.myLang):''),
-    partnerLang:hasOwn(raw,'partnerLang')?(normalizeLangSetting(raw.partnerLang)||''):((normalizeLangSetting(p.partnerLang)!==undefined)?normalizeLangSetting(p.partnerLang):((normalizeLangSetting(raw.myLang)!==undefined)?normalizeLangSetting(raw.myLang):((normalizeLangSetting(p.myLang)!==undefined)?normalizeLangSetting(p.myLang):'en'))),
-    autoReplyTargetLang:normalizeAutoReplyTargetLang(hasOwn(raw,'autoReplyTargetLang')?raw.autoReplyTargetLang:''),
+    ownerIdentityId:String(raw.ownerIdentityId||raw.myIdentityId||PART_ID||DEVICE_ID||uid()),
+    partnerIdentityId:String(raw.partnerIdentityId||''),
+    ownerLangMode:(raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto'),
+    ownerFixedLang:normalizeLangSetting(raw.ownerFixedLang!==undefined?raw.ownerFixedLang:p.myLang)||'',
+    ownerLastSentLang:normalizeLangSetting(raw.ownerLastSentLang)||'',
+    partnerLangMode:(raw.partnerLangMode==='fixed'||raw.partnerLangMode==='auto')?raw.partnerLangMode:'auto',
+    partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',
+    partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
     peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
@@ -1023,7 +1028,9 @@ function getMsgs(cid){
   var changed=false;
   var norm=(raw||[]).map(function(msg){
     var before=JSON.stringify(msg||{});
-    var next=normalizeMsgSchema(msg,{sourceLang:(msg&&msg.from==='me')?(sess.myLang||'en'):(msg&&msg.lang)||sess.partnerLang||'en',targetLang:(msg&&msg.from==='me')?(sess.partnerLang||'en'):(sess.myLang||'en')});
+    var ownerEff=resolveEffectiveLang(sess,'owner');
+    var partnerEff=resolveEffectiveLang(sess,'partner');
+    var next=normalizeMsgSchema(msg,{sourceLang:(msg&&msg.from==='me')?(ownerEff||'en'):(msg&&msg.lang)||partnerEff||'en',targetLang:(msg&&msg.from==='me')?(partnerEff||'en'):(ownerEff||'en')});
     if(before!==JSON.stringify(next))changed=true;
     return next;
   });
@@ -1164,22 +1171,22 @@ function normalizeAutoReplyTargetLang(v){
   var t=normalizeLangSetting(v);
   return t===undefined?'':t;
 }
-function resolveIncomingTargetLang(sess,sourceLang,currentMsgLang){
+function resolveEffectiveLang(sess,side,fallbackLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var pref=normalizeLangSetting(s.myLang);
-  if(pref)return pref; // explicit override wins
-  var autoReply=normalizeLangSetting(s.autoReplyTargetLang);
-  if(autoReply)return autoReply; // what-you-type becomes next-turn target
-  var stored=normalizeLangSetting(getPrefs().myLang);
-  if(stored)return stored;
-  return detectBrowserLang()||'en';
+  var modeKey=side==='partner'?'partnerLangMode':'ownerLangMode';
+  var fixedKey=side==='partner'?'partnerFixedLang':'ownerFixedLang';
+  var lastKey=side==='partner'?'partnerLastSentLang':'ownerLastSentLang';
+  var mode=s[modeKey]==='fixed'?'fixed':'auto';
+  var fixed=normalizeLangSetting(s[fixedKey])||'';
+  var last=normalizeLangSetting(s[lastKey])||'';
+  if(mode==='fixed'&&fixed)return fixed;
+  return last||normalizeLangSetting(fallbackLang)||detectBrowserLang()||'en';
 }
-function resolveTargetLang(opts){
-  opts=opts||{};
-  var sourceLang=normalizeLangSetting(opts.myLang||opts.detectedSource)||'en';
-  var partnerLang=normalizeLangSetting(opts.partnerLang||opts.listenerDefault)||'en';
-  if(sourceLang===partnerLang)return normalizeLangSetting(opts.myDefaultLang||opts.oppositeDefault)||partnerLang;
-  return partnerLang;
+function resolveIncomingTargetLang(sess){
+  return resolveEffectiveLang(sess,'owner');
+}
+function resolveTargetLang(sess){
+  return resolveEffectiveLang(sess,'partner');
 }
 function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&targetLang&&sourceLang===targetLang);}
 
@@ -1189,8 +1196,8 @@ function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&tar
 function isPlaceholderName(name){var v=(name||'').trim().toLowerCase();return !v||v==='new chat'||v==='partner'||v==='yournamehere';}
 function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]||'').trim();if(v&&!isPlaceholderName(v))return v;}return '';}
 function getPreferredOwnerName(){var p=getPrefs();return firstRealName(p.globalName,p.userName)||'yournamehere';}
-function effectiveLangFromSession(sess){var p=getPrefs();return (sess&&sess.myLang)||p.myLang||detectBrowserLang()||'en';}
-function getEffectiveTargetLang(sess,sourceLang){return resolveIncomingTargetLang(sess,sourceLang||'');}
+function effectiveLangFromSession(sess){return resolveEffectiveLang(sess,'owner');}
+function getEffectiveTargetLang(sess){return resolveTargetLang(sess);}
 
 function stampMsgNames(msg,sess){
   var s=sess?normalizeSession(sess):normalizeSession({});
@@ -1269,8 +1276,9 @@ function applyMsgTarget(msg,targetLang,targetText){
   var next=getMsgTranslatedText(msg,targetLang,targetText||'');
   if((msg.targetText||'')!==next){msg.targetText=next;changed=true;}
   if(targetLang===msg.sourceLang&&msg.sourceText&&!(msg.translations||{})[targetLang]){setMsgTranslation(msg,targetLang,msg.sourceText);}
-  if(msg.from==='them'&&targetLang===((getSession(state.activeConvId)||{}).myLang||'en'))msg.text=msg.targetText||msg.sourceText;
-  if(msg.from==='me'&&targetLang===((getSession(state.activeConvId)||{}).partnerLang||'en'))msg.translated=msg.targetText||'';
+  var activeSess=getSession(state.activeConvId)||{};
+  if(msg.from==='them'&&targetLang===resolveEffectiveLang(activeSess,'owner'))msg.text=msg.targetText||msg.sourceText;
+  if(msg.from==='me'&&targetLang===resolveEffectiveLang(activeSess,'partner'))msg.translated=msg.targetText||'';
   // Invalidate back-translate if target text changed
   if(changed&&msg.backtranslate){
     var newHash=btContentHash(msg.sourceText,msg.targetText);
@@ -1540,7 +1548,7 @@ function setSocketState(s){
 function shouldDrop(d){
   if(!d||!d.id)return false;
   if(['msg','tr','clarify-note'].indexOf(d.type)<0)return false;
-  var now=Date.now();var key=d.type+'::'+d.id;
+  var now=Date.now();var key=d.type+'::'+d.id+'::'+String(d.from||'')+'::'+String(d.identityId||d.participant||'');
   if(inboundSeen[key]&&inboundSeen[key]>now)return true;
   inboundSeen[key]=now+DEDUP_TTL_MS;
   if(Math.random()<0.05){Object.keys(inboundSeen).forEach(function(k){if(inboundSeen[k]<=now)delete inboundSeen[k];});}
@@ -1638,7 +1646,7 @@ function transportConnect(convId,opts){
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
-      lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),ts:Date.now(),seq:++msgSeq};
+      lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq};
     addDiagLog('TX hello name='+hello.name+' lang='+hello.lang);
     try{ws.send(JSON.stringify(hello));}catch(_){}
     fetchBackfill();
@@ -1697,14 +1705,16 @@ function transportDisconnect(opts){
 function transportSend(ev){
   if(!connectedConvId)return false;
   var isEphemeral=['ping','pong','typing','reattach','hello','ack'].indexOf(ev.type)>=0||ev.transient===true;
-  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,ts:Date.now(),seq:++msgSeq});
+  var sess=getSession(connectedConvId)||{};
+  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:(ev&&ev.side)||'owner',identityId:(ev&&ev.identityId)||sess.ownerIdentityId||PART_ID,ts:Date.now(),seq:++msgSeq});
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));return true;}catch(_){}}
   if(!isEphemeral)queueOutMsg(m);
   return false;
 }
 
 function sendReliable(ev){
-  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,ts:Date.now(),seq:++msgSeq});
+  var sess=getSession(connectedConvId)||{};
+  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:(ev&&ev.side)||'owner',identityId:(ev&&ev.identityId)||sess.ownerIdentityId||PART_ID,ts:Date.now(),seq:++msgSeq});
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true;}catch(_){}}
   queueOutMsg(m);return false;
 }
@@ -1790,8 +1800,8 @@ function saveLocalName(el){
   // Resend hello if connected so partner sees the new name immediately
   if(connectedConvId&&ws&&ws.readyState===1){
     var sess=getSession(connectedConvId);
-    var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
-      name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),ts:Date.now(),seq:++msgSeq};
+    var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:'owner',identityId:sess&&sess.ownerIdentityId,
+      name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(helloMsg));}catch(_){}
   }
   toast('Name saved');
@@ -1837,10 +1847,10 @@ function setMyLang(code){
   var actor=getPreferredOwnerName()||'User';
   var all=getAllSessions();
   all.forEach(function(s){
-    var prev=s.myLang||'';
+    var prev=resolveEffectiveLang(s,'owner');
     if(prev!==code){
-      s.myLang=code;
-      if(!code&&s.autoReplyTargetLang)s.autoReplyTargetLang=s.autoReplyTargetLang;
+      s.ownerLangMode=code?'fixed':'auto';
+      s.ownerFixedLang=code||'';
       putSession(s);
       addSystemNote(s.convId,actor+' switched from '+getLangLabel(prev)+' to '+getLangLabel(code),Date.now());
     }
@@ -1854,7 +1864,7 @@ function setMyLang(code){
     var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
-      lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLang),ts:Date.now(),seq:++msgSeq};
+      lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
   if(!code){toast('🌐 Language set to Auto-detect');}
@@ -1874,7 +1884,7 @@ function ensureUserName(callback){
 function createNewSession(silent){
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.partnerLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -1935,7 +1945,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess))});}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId});}
   toast('Invite resent');
 }
 
@@ -2014,7 +2024,7 @@ function saveOwnerName(el){
   updatePartnerHeader(sess);
   renderSessionList();
   addSystemNote(sess.convId,'You are now '+v,Date.now());
-  transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess,effectiveLangFromSession(sess)),timestamp:Date.now()});
+  transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId,timestamp:Date.now()});
 }
 
 var HISTORY_SYNC_MAX=1500;
@@ -2124,11 +2134,13 @@ var INVITE_SCHEMA_VERSION=1;
 function encodeInvitePayload(payload){try{return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));}catch(_){return '';}}
 function decodeInvitePayload(encoded){if(!encoded)return null;try{return JSON.parse(decodeURIComponent(escape(atob(encoded))));}catch(_){return null;}}
 function parseInviteFromSearch(searchParams){
-  // Short ?j= format
-  var shortJ=searchParams.get('j');
-  if(shortJ)return {sessionId:shortJ,initiatorDeviceId:'legacy',initiatorGlobalName:'',initiatorLang:'',createdAt:Date.now(),schemaVersion:INVITE_SCHEMA_VERSION,_legacyJoin:true};
+  if(searchParams.get('j'))return {rejected:true,reason:'legacy-raw-url'};
   var rawInvite=searchParams.get('invite');
-  return validateInvitePayload(decodeInvitePayload(rawInvite));
+  if(!rawInvite)return null;
+  var payload=validateInvitePayload(decodeInvitePayload(rawInvite));
+  if(!payload)return {rejected:true,reason:'invalid-payload'};
+  if(searchParams.get('join')!=='share'||payload.joinOrigin!=='share-icon')return {rejected:true,reason:'missing-share-origin'};
+  return payload;
 }
 function validateInvitePayload(payload){
   if(!payload||typeof payload!=='object')return null;
@@ -2138,28 +2150,37 @@ function validateInvitePayload(payload){
   return payload;
 }
 function buildInvitePayload(sess,prefs){
-  return {sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',initiatorLang:sess.myLang||prefs.myLang||'en',initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),schemaVersion:INVITE_SCHEMA_VERSION};
+  sess=normalizeSession(sess||{});
+  return {sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',initiatorLang:resolveEffectiveLang(sess,'owner'),initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),schemaVersion:INVITE_SCHEMA_VERSION,joinOrigin:'share-icon',side:'owner',ownerIdentityId:sess.ownerIdentityId,ownerLangMode:sess.ownerLangMode,ownerFixedLang:sess.ownerFixedLang,ownerLastSentLang:sess.ownerLastSentLang};
 }
 function buildInviteUrl(sess,prefs){
   var payload=buildInvitePayload(sess,prefs);
   var encoded=encodeInvitePayload(payload);
-  if(encoded)return location.href.split('?')[0]+'?invite='+encodeURIComponent(encoded);
-  return location.href.split('?')[0]+'?j='+encodeURIComponent(sess.convId);
+  if(encoded)return location.href.split('?')[0]+'?join=share&invite='+encodeURIComponent(encoded);
+  return '';
 }
 
 function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
   var inviteName=firstRealName(invite.initiatorGlobalName);
   if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
-  if(!sess.partnerLang&&invite.initiatorLang)sess.partnerLang=invite.initiatorLang;
+  if(invite.side==='owner'){
+    if(invite.ownerIdentityId)sess.ownerIdentityId=invite.ownerIdentityId;
+    if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
+    if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
+    if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
+  }
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
+  addDiagLog('handoff apply side='+(invite.side||'?')+' ownerIdentityId='+(sess.ownerIdentityId||'?')+' eff='+resolveEffectiveLang(sess,'owner'));
   return normalizeSession(sess);
 }
 function shareSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
   var p=getPrefs();
   var url=buildInviteUrl(sess,p);
+  if(!url){toast('Unable to generate share link');return;}
+  addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
   var el=document.getElementById('share-link-text');if(el){el.href=url;el.textContent=url;}
   document.getElementById('share-overlay').hidden=false;
   if(navigator.share){navigator.share({url:url}).catch(function(){});}
@@ -2315,7 +2336,7 @@ function toggleSTT(){
   if(sttActive){if(recognition)recognition.stop();return;}
   var sess=getSession(state.activeConvId);
   recognition=new SpeechRec();
-  recognition.lang=TTS_LOCALE[(sess&&sess.myLang)||getPrefs().myLang||'en']||'en';
+  recognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||getPrefs().myLang||'en']||'en';
   recognition.interimResults=true;recognition.continuous=false;
   var btn=document.getElementById('stt-btn');
   recognition.onstart=function(){sttActive=true;if(btn)btn.classList.add('active');};
@@ -2330,29 +2351,10 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d,opts){
   if(!sess||!d)return;
-  opts=opts||{};
   var prevName=firstRealName(sess.partnerHandle,sess.peerName);
   var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
   if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
-  // Only announcements (hello) should change partner preferred output language.
-  if(opts.allowLangUpdate&&d.lang){
-    var nextLang=normalizeLangSetting(d.lang)||'';
-    var prevLang=normalizeLangSetting(sess.partnerLang)||'';
-    var partnerId=(sess.inviterDeviceId||d.from||'partner');
-    var dominantLang=normalizeLangSetting(getDominantLang(partnerId,prevLang||nextLang))||'';
-    // Ignore contradictory hello language if actual message history already
-    // established a dominant language for this participant.
-    if(!prevLang||!dominantLang||dominantLang===nextLang||dominantLang===prevLang){
-      sess.partnerLang=nextLang||sess.partnerLang;
-    }else{
-      addDiagLog('HELLO lang ignored: '+nextLang+' (dominant='+dominantLang+', current='+prevLang+')');
-    }
-    if(nextLang&&nextLang!==prevLang){
-      var who=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
-      addSystemNote(sess.convId,who+' switched from '+getLangLabel(prevLang)+' to '+getLangLabel(nextLang),Date.now());
-    }
-  }
-  if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
+  if(d.identityId)sess.partnerIdentityId=d.identityId;
   putSession(sess);
   if(state.activeConvId===sess.convId)updatePartnerHeader(sess);
   return {prevName:prevName,nextName:partnerName};
@@ -2376,9 +2378,9 @@ function handleRelayEvent(d){
     var rt=getRoomRuntime(sess.convId);
     var wasEverSeen=rt&&rt.peerEverSeen;
     var lastSeen=rt&&rt.peerLastSeenAt||0;
-    var nameUpdate=upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:true});
+    var nameUpdate=upsertPartnerFromEnvelope(sess,d,{});
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
-    addDiagLog('HELLO from '+(d.name||'?')+' lang='+(d.lang||'?'));
+    addDiagLog('HELLO from '+(d.name||'?')+' side='+(d.side||'?')+' identity='+(d.identityId||'?'));
     updatePartnerHeader(sess);
     renderSessionList();
     if(!d._fromBackfill){
@@ -2405,24 +2407,19 @@ function handleRelayEvent(d){
   if(d.type==='msg'){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     var srcTxt=d.sourceText||d.orig||d.text||'';
-    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,sess.partnerLang||'en')||sess.partnerLang||'en';
-    // Receiver always wants translation in their own language
-    var myLang=resolveIncomingTargetLang(sess,srcLang);
+    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
+    // Receiver always wants translation in owner effective language
+    var myLang=resolveIncomingTargetLang(sess);
     var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
     var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
     // Record partner's detected language in tally (partner messages only)
-    var partnerId=(sess.inviterDeviceId||d.from||'partner');
+    var partnerId=(d.identityId||sess.partnerIdentityId||sess.inviterDeviceId||d.from||'partner');
     recordLangTally(partnerId,srcLang);
-    // partnerLang is authoritative from invite/hello handshake.
-    // Only initialise from message content as a last resort (no invite, no hello yet).
-    // Tally is kept for diagnostics but never overrides an already-declared partnerLang.
     var ps=ensureParticipantState(partnerId);
-    if(!sess.partnerLang){
-      sess.partnerLang=srcLang;putSession(sess);
-      addDiagLog('partnerLang init from first msg: '+srcLang);
-    }else{
-      addDiagLog('partnerLang tally: '+(ps?getLangTallySummary(partnerId):'n/a'));
-    }
+    sess.partnerIdentityId=sess.partnerIdentityId||partnerId;
+    sess.partnerLastSentLang=srcLang;
+    putSession(sess);
+    addDiagLog('partnerLang tally: '+(ps?getLangTallySummary(partnerId):'n/a'));
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));
 
     if(d.id&&findMsg(d.id)){
@@ -2472,11 +2469,7 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     var m2=findMsg(d.id);
     if(m2){
-      if(m2.from==='me'&&d.targetLang&&sess.partnerLang!==d.targetLang){
-        sess.partnerLang=d.targetLang;
-        putSession(sess);
-      }
-      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?(sess.partnerLang||'en'):(sess.myLang||'en'))});
+      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
       applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
       markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
       updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);
@@ -3135,6 +3128,10 @@ function renderInviteCard(msg){
   var qrWrap=document.createElement('div');
   qrWrap.style.cssText='width:140px;height:140px;background:#fff;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;';
   card.appendChild(qrWrap);
+  var qrLabel=document.createElement('div');
+  qrLabel.style.cssText='font-size:11px;color:var(--ink-dim);font-weight:600;';
+  qrLabel.textContent='Owner-side QR link';
+  card.appendChild(qrLabel);
   // Link
   var linkDiv=document.createElement('div');
   linkDiv.style.cssText='width:100%;background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 8px;word-break:break-all;font-size:10px;color:var(--teal);font-weight:600;';
@@ -3180,7 +3177,7 @@ function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();
 function sendTyping(){
   var sess=getSession(state.activeConvId);var n=normalizeSession(sess||{});
   var sourceLang=detectBrowserLang()||'en';
-  transportSend({type:'typing',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n,sourceLang),lang:effectiveLangFromSession(n),timestamp:Date.now()});
+  transportSend({type:'typing',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n),lang:effectiveLangFromSession(n),side:'owner',identityId:n.ownerIdentityId,timestamp:Date.now()});
 }
 function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
@@ -3189,29 +3186,26 @@ async function sendMessage(){
   var sess=getSession(state.activeConvId);if(!sess)return;
   var p=getPrefs();
 
-  var explicitLang=normalizeLangSetting(sess.myLang);
+  var ownerEffective=resolveEffectiveLang(sess,'owner');
+  var explicitLang=(sess.ownerLangMode==='fixed')?normalizeLangSetting(sess.ownerFixedLang||''):'';
   var detectedLang=detectLang(text,detectBrowserLang()||'en');
-  var outLang=explicitLang||detectedLang;
+  var outLang=explicitLang||ownerEffective||detectedLang||'en';
   var outboundText=text;
   if(explicitLang&&detectedLang&&detectedLang!==explicitLang){
     try{
       outboundText=(await translate(text,detectedLang,explicitLang))||text;
     }catch(_){outboundText=text;}
   }
-  var partnerLang=normalizeLangSetting(sess.partnerLang)||normalizeLangSetting(p.partnerLang)||'en';
-  var myReplyTarget=resolveIncomingTargetLang(sess,'','');
-  var partnerTargetLang=resolveTargetLang({myLang:outLang,partnerLang:partnerLang,myDefaultLang:myReplyTarget,oppositeDefault:myReplyTarget});
-  if(!explicitLang){
-    sess.autoReplyTargetLang=outLang;
-    putSession(sess);
-  }
+  var partnerTargetLang=resolveTargetLang(sess);
+  sess.ownerLastSentLang=outLang;
+  putSession(sess);
 
   var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:'owner',sourceText:outboundText,sourceLang:outLang,targetLang:partnerTargetLang,targetText:'',text:outboundText,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:partnerTargetLang});
   stampMsgNames(msg,sess);
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
 
-  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess,outLang),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
+  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',side:'owner',identityId:sess.ownerIdentityId};
   var ok=sendReliable(payload);
   if(!ok){msg.status='queued';addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}
@@ -4048,32 +4042,38 @@ document.addEventListener('DOMContentLoaded',function(){
   initTagPickerInput();
   updateDot();
 
-  // Deep link — short ?j= format (responder joining)
+  // Deep link — share-origin invite only
   var up=new URLSearchParams(location.search);
   var invite=parseInviteFromSearch(up);
   if(invite){
     history.replaceState({},'',location.pathname);
-    // Prompt for name if not set
-    if(isPlaceholderName(firstRealName(p.globalName,p.userName))){
-      var rname=prompt('Enter your name:');
-      if(rname&&rname.trim()){p.globalName=rname.trim();p.userName=rname.trim();savePrefs(p);}
-    }
-    var sess=getSession(invite.sessionId);
-    if(!sess){
-      var now=Date.now();
-      sess=normalizeSession({convId:invite.sessionId,myHandle:firstRealName(p.globalName,p.userName)||'yournamehere',myName:firstRealName(p.globalName,p.userName)||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.partnerLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
-      putSession(sess);
-      var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
+    if(invite.rejected){
+      addDiagLog('join rejected reason='+invite.reason,'warn');
+      toast('Please join using the Session Share icon link. Copying the page URL directly is not supported.');
     }else{
+      addDiagLog('join accepted reason=share-origin session='+String(invite.sessionId||'').slice(0,8));
+      // Prompt for name if not set
+      if(isPlaceholderName(firstRealName(p.globalName,p.userName))){
+        var rname=prompt('Enter your name:');
+        if(rname&&rname.trim()){p.globalName=rname.trim();p.userName=rname.trim();savePrefs(p);}
+      }
+      var sess=getSession(invite.sessionId);
+      if(!sess){
+        var now=Date.now();
+        sess=normalizeSession({convId:invite.sessionId,myHandle:firstRealName(p.globalName,p.userName)||'yournamehere',myName:firstRealName(p.globalName,p.userName)||'yournamehere',partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+        putSession(sess);
+        var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
+      }else{
+        putSession(sess);
+      }
+      sess=hydrateSessionFromInvite(sess,invite);
+      state.activeConvId=invite.sessionId;
+      state.messages=getMsgs(invite.sessionId);
+      addInviteMessage(invite.sessionId);
       putSession(sess);
+      openSession(invite.sessionId);
+      return;
     }
-    sess=hydrateSessionFromInvite(sess,invite);
-    state.activeConvId=invite.sessionId;
-    state.messages=getMsgs(invite.sessionId);
-    addInviteMessage(invite.sessionId);
-    putSession(sess);
-    openSession(invite.sessionId);
-    return;
   }
 
   var aid=getActiveConvId();

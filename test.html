@@ -2597,7 +2597,8 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,peerLifecycleId:(d.identityId||sess.partnerIdentityId||d.from||'peer')});
     applyPeerRoutingHints(sess,d);
     var srcTxt=d.sourceText||d.orig||d.text||'';
-    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
+    var partnerReplyLang=getEffectiveReplyLang(sess,'partner','en');
+    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,partnerReplyLang)||partnerReplyLang;
     var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
     var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
     var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
@@ -2671,7 +2672,7 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     var m2=findMsg(d.id);
     if(m2){
-      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
+      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?getEffectiveReplyLang(sess,'partner','en'):getEffectiveReplyLang(sess,'owner','en'))});
       applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
       markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
       updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);

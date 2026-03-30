@@ -1305,11 +1305,8 @@ function openStatusPopup(msgId,anchorEl){
   statusPopupState.anchorKey=anchorKey;
   var r=anchorEl.getBoundingClientRect();
   var pr=pop.getBoundingClientRect();
-  var left=r.right+10;
-  if((left+pr.width+8)>window.innerWidth)left=r.left-pr.width-10;
-  var top=r.top+(r.height/2)-(pr.height/2);
-  if((top+pr.height+8)>window.innerHeight)top=r.top-pr.height-10;
-  if(top<8)top=r.bottom+10;
+  var left=r.left+(r.width/2)-(pr.width/2);
+  var top=r.bottom+8;
   var maxLeft=window.innerWidth-pr.width-8;
   var maxTop=window.innerHeight-pr.height-8;
   pop.style.left=Math.max(8,Math.min(left,maxLeft))+'px';

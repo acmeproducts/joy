@@ -3391,10 +3391,12 @@ function toggleSettingsDrawer(){
 function openSettings(){
   var p=getPrefs();
   updateLangPill();
-  var srcBg=document.getElementById('set-src-bg');if(srcBg)srcBg.value=p.srcBgColor||'#2E8B8B';
-  var tgtBg=document.getElementById('set-tgt-bg');if(tgtBg)tgtBg.value=p.tgtBgColor||'#F5F1EC';
-  var srcFont=document.getElementById('set-src-font');if(srcFont)srcFont.value=p.srcFontColor||'#ffffff';
-  var tgtFont=document.getElementById('set-tgt-font');if(tgtFont)tgtFont.value=p.tgtFontColor||'#1A1714';
+  var mineBg=p.srcBgColor||'#2E8B8B';
+  var theirsBg=p.tgtBgColor||'#F5F1EC';
+  var srcBg=document.getElementById('set-src-bg');if(srcBg)srcBg.value=mineBg;
+  var tgtBg=document.getElementById('set-tgt-bg');if(tgtBg)tgtBg.value=theirsBg;
+  var srcFont=document.getElementById('set-src-font');if(srcFont)srcFont.value=effectiveBubbleTextColor(mineBg,p.srcFontColor);
+  var tgtFont=document.getElementById('set-tgt-font');if(tgtFont)tgtFont.value=effectiveBubbleTextColor(theirsBg,p.tgtFontColor);
   var preset=document.getElementById('set-bbl-preset');if(preset)preset.value=p.bubblePreset||'medium';
   var bblSz=document.getElementById('set-bbl-size');if(bblSz)bblSz.value=String(p.bubbleFontSize||15);
   var tgtSz=document.getElementById('set-target-size');if(tgtSz)tgtSz.value=String(p.targetBubbleFontSize||15);
@@ -3486,6 +3488,10 @@ function applyTheme(kind,id){var t=THEMES.find(function(x){return x.id===id;});i
 }else{p.sourceTheme=id;p.accentColor=t.mine;document.documentElement.style.setProperty('--teal',t.mine);document.documentElement.style.setProperty('--teal-mid',t.hdr);}p.themeLibrary=THEMES;savePrefs(p);renderThemeGrid('source');renderThemeGrid('target');applyBubbleTheme();}
 // Global luminance helper for accent auto-suggest
 function hexLumGlobal(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4,6),16)/255;return 0.2126*r+0.7152*g+0.0722*b;}
+function effectiveBubbleTextColor(bgColor,fontColor){
+  if(fontColor)return fontColor;
+  return hexLumGlobal(bgColor)>0.45?'#1A1714':'#ffffff';
+}
 function applyBubbleTheme(){
   var s=document.getElementById('bubble-theme-tag');if(!s){s=document.createElement('style');s.id='bubble-theme-tag';document.head.appendChild(s);}
   var p=getPrefs();
@@ -3494,11 +3500,10 @@ function applyBubbleTheme(){
   var theirsWidth=p.tgtBubbleWidth||mineWidth;
   var mineSize=p.bubbleFontSize||BUBBLE_DEFAULTS.bubbleFontSize;
   var theirsSize=p.targetBubbleFontSize||BUBBLE_DEFAULTS.targetBubbleFontSize;
-  function hexLum(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4,6),16)/255;return 0.2126*r+0.7152*g+0.0722*b;}
   // Source (mine) bubble — text auto-computed; font color overridable
   var mineBg=p.srcBgColor||'#2E8B8B';
-  var mineLum=hexLum(mineBg);
-  var mineText=p.srcFontColor||( mineLum>0.45?'#1A1714':'#ffffff');
+  var mineLum=hexLumGlobal(mineBg);
+  var mineText=effectiveBubbleTextColor(mineBg,p.srcFontColor);
   var mineTextDim=mineLum>0.45?'rgba(0,0,0,.55)':'rgba(255,255,255,.75)';
   var mineTextFaint=mineLum>0.45?'rgba(0,0,0,.4)':'rgba(255,255,255,.5)';
   var mineBorder=mineLum>0.45?'rgba(0,0,0,.12)':'rgba(255,255,255,.2)';
@@ -3506,8 +3511,8 @@ function applyBubbleTheme(){
   var mineUseBg=mineLum>0.45?'rgba(0,0,0,.1)':'rgba(255,255,255,.22)';
   // Target (theirs) bubble — text auto-computed; font color overridable
   var theirsBg=p.tgtBgColor||'#F5F1EC';
-  var theirsLum=hexLum(theirsBg);
-  var theirsText=p.tgtFontColor||(theirsLum>0.45?'#1A1714':'#ffffff');
+  var theirsLum=hexLumGlobal(theirsBg);
+  var theirsText=effectiveBubbleTextColor(theirsBg,p.tgtFontColor);
   var theirsTextDim=theirsLum>0.45?'rgba(0,0,0,.55)':'rgba(255,255,255,.75)';
   var theirsTextFaint=theirsLum>0.45?'rgba(0,0,0,.4)':'rgba(255,255,255,.5)';
   var theirsBorder=theirsLum>0.45?'rgba(0,0,0,.10)':'rgba(255,255,255,.18)';

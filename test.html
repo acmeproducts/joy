@@ -1168,11 +1168,9 @@ function resolveIncomingTargetLang(sess,sourceLang,currentMsgLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
   var pref=normalizeLangSetting(s.myLang);
   if(pref)return pref; // explicit override wins
-  var live=normalizeLangSetting(currentMsgLang);
-  if(live)return live; // Recompute per message so stale cached auto language cannot override current input.
-  var auto=normalizeAutoReplyTargetLang(s.autoReplyTargetLang);
-  if(auto)return auto; // auto follows latest typed language
-  return normalizeLangSetting(sourceLang)||detectBrowserLang()||'en';
+  var stored=normalizeLangSetting(getPrefs().myLang);
+  if(stored)return stored;
+  return detectBrowserLang()||'en';
 }
 function resolveTargetLang(opts){
   opts=opts||{};
@@ -3199,7 +3197,7 @@ async function sendMessage(){
     }catch(_){outboundText=text;}
   }
   var partnerLang=normalizeLangSetting(sess.partnerLang)||normalizeLangSetting(p.partnerLang)||'en';
-  var myReplyTarget=resolveIncomingTargetLang(sess,outLang,detectedLang);
+  var myReplyTarget=resolveIncomingTargetLang(sess,'','');
   var partnerTargetLang=resolveTargetLang({myLang:outLang,partnerLang:partnerLang,myDefaultLang:myReplyTarget,oppositeDefault:myReplyTarget});
   if(!explicitLang){
     sess.autoReplyTargetLang=outLang;

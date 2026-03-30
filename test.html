@@ -107,6 +107,7 @@ textarea.field-input{resize:none;}
 .data-mgmt-grid th,.data-mgmt-grid td{padding:4px 6px;font-size:12px;text-align:center;}
 .data-mgmt-grid th{font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.04em;padding-bottom:6px;}
 .data-mgmt-grid td:first-child{text-align:left;font-size:12px;color:var(--ink-mid);font-weight:500;padding-left:14px;}
+.preset-head-cell{background:var(--amber-light);color:var(--ink);border-radius:7px;}
 .shell-partner{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;padding:2px 16px 8px;font-family:"Lora",serif;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);flex-shrink:0;min-height:39px;color:var(--ink);}
 .shell-participant{display:inline-flex;align-items:center;gap:6px;min-width:0;}
 .shell-participant::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink-dim);flex-shrink:0;transition:background .2s ease;}
@@ -401,12 +402,15 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <div class="lsd-section">
         <div class="lsd-section-title">Appearance</div>
         <table class="lsd-table" style="padding:0 0 4px;">
-          <thead><tr><td></td><td>Me</td><td>Partner</td></tr></thead>
+          <thead>
+            <tr><td></td><td colspan="2" class="preset-head-cell">Preset</td></tr>
+            <tr><td></td><td>Me</td><td>Partner</td></tr>
+          </thead>
           <tbody>
             <tr>
-              <td>Preset</td>
+              <td></td>
               <td colspan="2">
-                <select id="set-bbl-preset" class="lsd-select" style="width:100%;" onchange="applyBubblePreset(this.value)">
+                <select id="set-bbl-preset" class="lsd-select" style="width:100%;background:var(--amber-light);color:var(--ink);" onchange="applyBubblePreset(this.value)">
                   <option value="light">Light</option>
                   <option value="medium" selected>Medium</option>
                   <option value="dark">Dark</option>
@@ -441,18 +445,18 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <div class="lsd-section">
         <div class="lsd-section-title">Data</div>
         <table class="data-mgmt-grid" style="margin-bottom:6px;">
-          <thead><tr><th></th><th>Settings</th></tr></thead>
+          <thead><tr><th>Data</th><th>Settings</th></tr></thead>
           <tbody>
             <tr>
-              <td>Export</td>
+              <td><button class="settings-icon-btn" onclick="exportSessionsData()" title="Export data" aria-label="Export data"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 20h16"/></svg></button></td>
               <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings" aria-label="Export settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 20h16"/></svg></button></td>
             </tr>
             <tr>
-              <td>Import</td>
+              <td><button class="settings-icon-btn" onclick="importSessionsData()" title="Import data" aria-label="Import data"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M8 14l4-4 4 4"/><path d="M4 4h16"/></svg></button></td>
               <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings" aria-label="Import settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M8 14l4-4 4 4"/><path d="M4 4h16"/></svg></button></td>
             </tr>
             <tr>
-              <td>Clear</td>
+              <td><button class="settings-icon-btn danger" onclick="clearDataOnly()" title="Clear data" aria-label="Clear data"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></td>
               <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings" aria-label="Clear settings"><svg class="data-action-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></td>
             </tr>
           </tbody>
@@ -1152,10 +1156,12 @@ function normalizeAutoReplyTargetLang(v){
   var t=normalizeLangSetting(v);
   return t===undefined?'':t;
 }
-function resolveIncomingTargetLang(sess,sourceLang){
+function resolveIncomingTargetLang(sess,sourceLang,currentMsgLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
   var pref=normalizeLangSetting(s.myLang);
   if(pref)return pref; // explicit override wins
+  var live=normalizeLangSetting(currentMsgLang);
+  if(live)return live; // Recompute per message so stale cached auto language cannot override current input.
   var auto=normalizeAutoReplyTargetLang(s.autoReplyTargetLang);
   if(auto)return auto; // auto follows latest typed language
   return normalizeLangSetting(sourceLang)||detectBrowserLang()||'en';
@@ -3185,7 +3191,7 @@ async function sendMessage(){
     }catch(_){outboundText=text;}
   }
   var partnerLang=normalizeLangSetting(sess.partnerLang)||normalizeLangSetting(p.partnerLang)||'en';
-  var myReplyTarget=resolveIncomingTargetLang(sess,outLang);
+  var myReplyTarget=resolveIncomingTargetLang(sess,outLang,detectedLang);
   var partnerTargetLang=resolveTargetLang({myLang:outLang,partnerLang:partnerLang,myDefaultLang:myReplyTarget,oppositeDefault:myReplyTarget});
   if(!explicitLang){
     sess.autoReplyTargetLang=outLang;

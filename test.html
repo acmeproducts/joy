@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Test Version for Joy · Build 2026-03-17T13:00:00Z -->
+<!-- Test Build · Talk + Say v3.4 · 2026-03-30T07:58:36Z -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v3.3</title>
+<title>Talk + Say · v3.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -1168,6 +1168,8 @@ function resolveIncomingTargetLang(sess,sourceLang,currentMsgLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
   var pref=normalizeLangSetting(s.myLang);
   if(pref)return pref; // explicit override wins
+  var autoReply=normalizeLangSetting(s.autoReplyTargetLang);
+  if(autoReply)return autoReply; // what-you-type becomes next-turn target
   var stored=normalizeLangSetting(getPrefs().myLang);
   if(stored)return stored;
   return detectBrowserLang()||'en';
@@ -3600,7 +3602,7 @@ function resetSourceBubbleDefaults(){var p=getPrefs();p.sourceTheme=BUBBLE_DEFAU
 function resetTargetBubbleDefaults(){var p=getPrefs();p.targetTheme=BUBBLE_DEFAULTS.targetTheme;p.targetBubbleFontSize=BUBBLE_DEFAULTS.targetBubbleFontSize;p.targetAccentColor=BUBBLE_DEFAULTS.targetAccentColor;savePrefs(p);openSettings();applyBubbleTheme();toast('Target bubble reset');}
 function applyPhrasebookAccent(v){var p=getPrefs();p.phrasebookAccentColor=v;savePrefs(p);}
 
-function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.3</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
+function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.4</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
 function openPrintPhrasebookModal(){document.getElementById('print-overlay').hidden=false;}
 function printPhrasebookSelection(){document.getElementById('print-overlay').hidden=true;renderCatalogCards();setTimeout(function(){window.print();},60);}
 
@@ -4096,5 +4098,5 @@ document.addEventListener('DOMContentLoaded',function(){
   // online/offline handlers registered in transport block
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Test Version for Joy</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.4 · Build 2026-03-30 00:58:36 PDT</div></body>
 </html>

@@ -1872,7 +1872,7 @@ function ensureUserName(callback){
 function createNewSession(silent){
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.partnerLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -4059,7 +4059,7 @@ document.addEventListener('DOMContentLoaded',function(){
     var sess=getSession(invite.sessionId);
     if(!sess){
       var now=Date.now();
-      sess=normalizeSession({convId:invite.sessionId,myHandle:firstRealName(p.globalName,p.userName)||'yournamehere',myName:firstRealName(p.globalName,p.userName)||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.myLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
+      sess=normalizeSession({convId:invite.sessionId,myHandle:firstRealName(p.globalName,p.userName)||'yournamehere',myName:firstRealName(p.globalName,p.userName)||'yournamehere',partnerHandle:'',peerName:'',myLang:p.myLang||'',partnerLang:p.partnerLang||'en',createdAt:now,lastActivity:now,lastViewedAt:now});
       putSession(sess);
       var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
     }else{

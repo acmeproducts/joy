@@ -3585,7 +3585,7 @@ function applyTargetSize(v){var p=getPrefs();p.targetBubbleFontSize=parseInt(v);
 function applyTgtWidth(v){var p=getPrefs();p.tgtBubbleWidth=parseInt(v);savePrefs(p);applyBubbleTheme();}
 function applySrcFontColor(v){var p=getPrefs();p.srcFontColor=v;savePrefs(p);applyBubbleTheme();}
 function applyTgtFontColor(v){var p=getPrefs();p.tgtFontColor=v;savePrefs(p);applyBubbleTheme();}
-function clearAppSettings(){if(!confirm('Clear all app settings (appearance, language, preferences)?'))return;var PREFS_KEY='joyPrefs';localStorage.removeItem(PREFS_KEY);toast('App settings cleared');openSettings();applyBubbleTheme();}
+function clearAppSettings(){if(!confirm('Clear all app settings (appearance, language, preferences)?'))return;var keys=[SK.prefs,'ts3_prefs','joyPrefs','ts3_appearance','ts3_theme','ts3_themeLibrary'];keys.forEach(function(k){if(k)localStorage.removeItem(k);});toast('App settings cleared');openSettings();applyBubbleTheme();}
 function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';p.bubblePreset='medium';p.bubblePresetMeChoice='pacific-blue';p.bubblePresetPartnerChoice='almond-cream';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
 function applyTargetAccent(v){var p=getPrefs();p.targetAccentColor=v;savePrefs(p);applyBubbleTheme();}
 function toggleNoOpOnSameLanguage(on){var p=getPrefs();p.noOpOnSameLanguage=!!on;savePrefs(p);}

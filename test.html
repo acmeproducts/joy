@@ -153,6 +153,16 @@ textarea.field-input{resize:none;}
 .msg-status.read{color:var(--green);}
 .msg-status.failed{color:var(--red);font-weight:700;}
 .msg-status-time{font-size:10px;opacity:.65;font-variant-numeric:tabular-nums;}
+.msg-status-dots{display:inline-flex;align-items:center;gap:3px;}
+.msg-status-dot{border:none;background:none;padding:0;cursor:pointer;font-size:12px;line-height:1;}
+.msg-status-dot.off{opacity:.35;color:var(--ink-dim);}
+.msg-status-dot.on-delivered{color:var(--teal);}
+.msg-status-dot.on-read{color:var(--green);}
+.status-popup{position:fixed;top:72px;right:14px;z-index:240;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;min-width:210px;}
+.status-popup[hidden]{display:none!important;}
+.status-popup-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--ink);}
+.status-popup-close{border:none;background:none;color:var(--ink-dim);font-size:14px;cursor:pointer;line-height:1;}
+.status-popup-row{font-size:12px;color:var(--ink-mid);margin-top:6px;}
 
 /* Bubble body — two equal columns */
 .bbl-body{display:grid;grid-template-columns:1fr 1px 1fr;}
@@ -307,8 +317,6 @@ textarea.field-input{resize:none;}
    No width or color overrides here — theme settings control both. */
 .pb-row-wrap{display:flex;justify-content:flex-start;margin-bottom:8px;}
 
-/* ════ SETTINGS OVERLAY — replaced by left-panel drawer ════ */
-.settings-overlay{display:none!important;}
 .settings-icon-btn{background:none;border:none;color:var(--ink-mid);cursor:pointer;padding:4px;border-radius:6px;line-height:0;}
 .settings-icon-btn:hover{background:var(--paper);}
 .settings-icon-btn.danger:hover{color:var(--red);background:var(--red-light);}
@@ -395,6 +403,16 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
         <table class="lsd-table" style="padding:0 0 4px;">
           <thead><tr><td></td><td>Me</td><td>Partner</td></tr></thead>
           <tbody>
+            <tr>
+              <td>Preset</td>
+              <td colspan="2">
+                <select id="set-bbl-preset" class="lsd-select" style="width:100%;" onchange="applyBubblePreset(this.value)">
+                  <option value="light">Light</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </td>
+            </tr>
             <tr>
               <td>Bubble</td>
               <td><input type="color" id="set-src-bg" value="#2E8B8B" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcBg(this.value)"></td>
@@ -525,96 +543,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <div class="filter-chip-row" id="filter-chip-row"></div>
   <div class="card-list" id="card-list"></div>
   <div id="pb-recycle-bin" style="padding:0 16px 20px;"></div>
-</div>
-
-<!-- ══ SETTINGS (legacy overlay — hidden, controls live in left-panel drawer) ══ -->
-<div class="settings-overlay" id="settings-overlay" style="display:none!important;">
-  <div class="settings-body">
-    <!-- ── Preferred Language ── -->
-    <div class="settings-group">
-      <div class="settings-group-title">Preferred Language</div>
-      <div style="padding:4px 0 8px;position:relative;" id="settings-lang-pill-wrap">
-        <button class="lang-pill" id="legacy-my-lang-pill" onclick="toggleLangPicker(event)" title="My language — tap to change">🌐 Auto</button>
-        <div class="lang-dropdown" id="legacy-lang-dropdown" hidden></div>
-      </div>
-    </div>
-    <!-- ── Appearance ── -->
-    <div class="settings-group">
-      <div class="settings-group-title">Appearance</div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:4px;">
-        <thead>
-          <tr>
-            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;width:40%;"></td>
-            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Me</td>
-            <td style="padding:0 0 8px;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em;text-align:center;">Partner</td>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Bubble Color</td>
-            <td style="text-align:center;padding:4px;"><input type="color" id="set-src-bg" value="#2E8B8B" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applySrcBg(this.value)"></td>
-            <td style="text-align:center;padding:4px;"><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applyTgtBg(this.value)"></td>
-          </tr>
-          <tr>
-            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Font Color</td>
-            <td style="text-align:center;padding:4px;"><input type="color" id="set-src-font" value="#ffffff" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applySrcFontColor(this.value)"></td>
-            <td style="text-align:center;padding:4px;"><input type="color" id="set-tgt-font" value="#1A1714" style="width:44px;height:30px;border:none;border-radius:6px;cursor:pointer;" oninput="applyTgtFontColor(this.value)"></td>
-          </tr>
-          <tr>
-            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Font Size</td>
-            <td style="text-align:center;padding:4px;">
-              <select id="set-bbl-size" style="font-size:13px;border-radius:6px;border:1px solid var(--border);padding:3px 6px;background:var(--cream);color:var(--ink);width:52px;" onchange="applyGlobalSize(this.value)">
-                <option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option>
-              </select>
-            </td>
-            <td style="text-align:center;padding:4px;">
-              <select id="set-target-size" style="font-size:13px;border-radius:6px;border:1px solid var(--border);padding:3px 6px;background:var(--cream);color:var(--ink);width:52px;" onchange="applyTargetSize(this.value)">
-                <option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option>
-              </select>
-            </td>
-          </tr>
-          <tr>
-            <td class="field-label" style="padding:5px 0;vertical-align:middle;">Bubble Width</td>
-            <td style="padding:4px;"><input type="range" min="50" max="95" step="5" id="set-bbl-width" style="width:100%;accent-color:var(--teal);" oninput="applyGlobalWidth(this.value)"></td>
-            <td style="padding:4px;"><input type="range" min="50" max="95" step="5" id="set-tgt-width" style="width:100%;accent-color:var(--teal);" oninput="applyTgtWidth(this.value)"></td>
-          </tr>
-        </tbody>
-      </table>
-      <button class="sheet-btn secondary" style="width:100%;padding:8px;font-size:12px;margin-top:4px;" onclick="resetAllBubbleDefaults()">Reset appearance defaults</button>
-    </div>
-    <!-- ── Features ── -->
-    <!-- ── Data Management ── -->
-    <div class="settings-group">
-      <div class="settings-group-title">Data Management</div>
-      <table class="data-mgmt-grid">
-        <thead><tr><th></th><th>Settings</th></tr></thead>
-        <tbody>
-          <tr>
-            <td>Export</td>
-            <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
-          </tr>
-          <tr>
-            <td>Import</td>
-            <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
-          </tr>
-          <tr>
-            <td>Clear</td>
-            <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear app settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- ── Reset All Settings ── -->
-    <div style="padding:4px 16px 16px;">
-      <button onclick="resetAllSettings()" style="width:100%;background:#fee2e2;color:#dc2626;border:1.5px solid #fca5a5;border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Reset All Settings</button>
-    </div>
-    <!-- ── Info ── -->
-    <div class="settings-group" style="border-bottom:none;">
-      <div class="settings-group-title">Info</div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">About</div><div class="settings-row-meta">App details and capabilities</div></div><button class="settings-icon-btn" onclick="openInfoModal('about')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button></div>
-      <div class="settings-row"><div class="settings-row-info"><div class="settings-row-title">Privacy</div><div class="settings-row-meta">Storage and data handling</div></div><button class="settings-icon-btn" onclick="openInfoModal('privacy')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button></div>
-    </div>
-  </div>
 </div>
 
 <!-- ══ SEARCH OVERLAY ══ -->
@@ -850,6 +778,15 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div id="language-sheet-options"></div>
     <div class="sheet-btn-row"><button class="sheet-btn secondary" onclick="document.getElementById('language-overlay').hidden=true">Close</button></div>
   </div></div>
+</div>
+
+<div id="status-popup" class="status-popup" hidden>
+  <div class="status-popup-head">
+    <span>Status</span>
+    <button class="status-popup-close" onclick="closeStatusPopup()">×</button>
+  </div>
+  <div class="status-popup-row" id="status-popup-delivered"></div>
+  <div class="status-popup-row" id="status-popup-read"></div>
 </div>
 
 <div id="toast"></div>
@@ -1163,8 +1100,8 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';return p;}
-function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';lsW(SK.prefs,JSON.stringify(next));}
+function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';return p;}
+function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';if(!next.bubblePreset)next.bubblePreset='medium';lsW(SK.prefs,JSON.stringify(next));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
   var src=(document.getElementById('nc-src-lang')||{}).value||p.phrasebookSourceLang||p.myLang||'en';
@@ -1269,7 +1206,10 @@ function addSystemNote(convId,text,timestamp){
   var msgs=(convId===state.activeConvId)?state.messages.slice():getMsgs(convId);
   msgs.push(m);
   msgs=sortMessagesChronologically(msgs);
-  if(convId===state.activeConvId){state.messages=msgs;renderAllMessages();}
+  if(convId===state.activeConvId){
+    state.messages=msgs;
+    addSysMsg(m.text||'');
+  }
   var sess=getSession(convId);if(sess){sess.lastActivity=m.timestamp;putSession(sess);}
   saveMsgs(convId,msgs);
 }
@@ -1284,6 +1224,23 @@ function renderMd(s){if(!s)return'';return escHtml(s).replace(/\*\*(.+?)\*\*/g,'
 function timeAgo(t){if(!t)return'';var d=Date.now()-t;if(d<60000)return'now';if(d<3600000)return Math.floor(d/60000)+'m';if(d<86400000)return Math.floor(d/3600000)+'h';return Math.floor(d/86400000)+'d';}
 function fmtTime(t){return new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fmtDateTime(t){if(!t)return'';return new Date(t).toLocaleString([],{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function closeStatusPopup(){var pop=document.getElementById('status-popup');if(pop)pop.hidden=true;}
+function openStatusPopup(msgId){
+  var msg=findMsg(msgId);
+  var deliveredEl=document.getElementById('status-popup-delivered');
+  var readEl=document.getElementById('status-popup-read');
+  var pop=document.getElementById('status-popup');
+  if(!msg||!deliveredEl||!readEl||!pop)return;
+  deliveredEl.textContent='Delivered: '+(msg.deliveredAt?fmtDateTime(msg.deliveredAt):'Not delivered');
+  readEl.textContent='Read: '+(msg.readAt?fmtDateTime(msg.readAt):'Not read');
+  pop.hidden=false;
+}
+document.addEventListener('click',function(e){
+  var pop=document.getElementById('status-popup');
+  if(!pop||pop.hidden)return;
+  if(e.target.closest('#status-popup')||e.target.closest('.msg-status-dot'))return;
+  pop.hidden=true;
+});
 function langLabel(c){return LANG_MAP[c]||c||'?';}
 function langFlag(c){var l=LANGS.find(function(x){return x.code===c;});return l?l.flag:'';}
 function findMsg(id){return state.messages.find(function(m){return m.id===id;});}
@@ -1752,7 +1709,11 @@ function markMessageDeliveryState(convId,msgId,status,stamp){
     }
   }
   if(!changed)return;
-  saveMsgs(convId,msgs);if(convId===state.activeConvId)renderAllMessages();
+  saveMsgs(convId,msgs);
+  if(convId===state.activeConvId){
+    var live=findMsg(msgId);
+    if(live)updateMessageStatusUI(live);
+  }
 }
 
 // ── Visibility / focus ────────────────────────────────────
@@ -1832,6 +1793,10 @@ function detectBrowserLang(){
 function getLangEntry(code){
   return LANGS.find(function(l){return l.code===code;})||LANGS[0];
 }
+function getLangLabel(code){
+  if(!code)return'Auto';
+  return getLangEntry(code).label;
+}
 function updateLangPill(){
   var myLang=getPrefs().myLang||'';
   var ribbonBtn=document.getElementById('ribbon-lang-btn');
@@ -1855,8 +1820,17 @@ function openLanguagePanel(){
 }
 function setMyLang(code){
   var p=getPrefs();p.myLang=code;p._langDetected=true;savePrefs(p);
+  var actor=getPreferredOwnerName()||'User';
   var all=getAllSessions();
-  all.forEach(function(s){if((s.myLang||'')!==code){s.myLang=code;if(!code&&s.autoReplyTargetLang)s.autoReplyTargetLang=s.autoReplyTargetLang;putSession(s);}});
+  all.forEach(function(s){
+    var prev=s.myLang||'';
+    if(prev!==code){
+      s.myLang=code;
+      if(!code&&s.autoReplyTargetLang)s.autoReplyTargetLang=s.autoReplyTargetLang;
+      putSession(s);
+      addSystemNote(s.convId,actor+' switched from '+getLangLabel(prev)+' to '+getLangLabel(code),Date.now());
+    }
+  });
   updateLangPill();
   renderLanguageSheet();
   var ov=document.getElementById('language-overlay');if(ov)ov.hidden=true;
@@ -2359,6 +2333,10 @@ function upsertPartnerFromEnvelope(sess,d,opts){
     }else{
       addDiagLog('HELLO lang ignored: '+nextLang+' (dominant='+dominantLang+', current='+prevLang+')');
     }
+    if(nextLang&&nextLang!==prevLang){
+      var who=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
+      addSystemNote(sess.convId,who+' switched from '+getLangLabel(prevLang)+' to '+getLangLabel(nextLang),Date.now());
+    }
   }
   if(!sess.partnerLang)sess.partnerLang=getPrefs().partnerLang||'en';
   putSession(sess);
@@ -2416,6 +2394,8 @@ function handleRelayEvent(d){
     var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,sess.partnerLang||'en')||sess.partnerLang||'en';
     // Receiver always wants translation in their own language
     var myLang=resolveIncomingTargetLang(sess,srcLang);
+    var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
+    var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
     // Record partner's detected language in tally (partner messages only)
     var partnerId=(sess.inviterDeviceId||d.from||'partner');
     recordLangTally(partnerId,srcLang);
@@ -2437,7 +2417,7 @@ function handleRelayEvent(d){
       var changed=mergeMsgTranslations(existing,d.translations||{});
       if(srcTxt&&existing.sourceText!==srcTxt){existing.sourceText=srcTxt;existing.orig=srcTxt;changed=true;}
       if(srcLang&&existing.sourceLang!==srcLang){existing.sourceLang=srcLang;existing.lang=srcLang;changed=true;}
-      if(d.targetText||d.text)changed=applyMsgTarget(existing,myLang,d.targetText||d.text)||changed;
+      if(incomingForcedText)changed=applyMsgTarget(existing,myLang,incomingForcedText)||changed;
       if(changed){updateTransDOM(existing);saveMsgs(state.activeConvId,state.messages);}
       return;
     }
@@ -2447,7 +2427,7 @@ function handleRelayEvent(d){
     if(state.pendingInviteId===sess.convId){
       state.pendingInviteId=null;
     }
-    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:d.targetText||'',orig:srcTxt,text:null,lang:srcLang,status:'received',timestamp:d.timestamp||Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
+    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',timestamp:d.timestamp||Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
     // Use wire name for display, not stale session name
     msg.displayFromName=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
     mergeMsgTranslations(msg,d.translations||{});
@@ -2561,20 +2541,18 @@ function buildBubbleCard(cfg){
 
   // Header row
   var statusDot='';
-  var statusTime='';
-  if(isMine&&ctx==='chat'){
-    var st=cfg.status||'sent';
-    if(st==='queued')statusDot='<span class="msg-status sent" title="Queued">\u25CB</span>';
-    else if(st==='sent')statusDot='<span class="msg-status sent" title="Sent">\u2022</span>';
-    else if(st==='delivered'){statusDot='<span class="msg-status delivered" title="Delivered">\u25CF\u25CF</span>';statusTime=cfg.deliveredAt?('<span class="msg-status-time" title="Delivered at '+escHtml(fmtDateTime(cfg.deliveredAt))+'">'+escHtml(fmtTime(cfg.deliveredAt))+'</span>'):'';}
-    else if(st==='translated'){statusDot='<span class="msg-status read" title="Read">\u25CF\u25CF</span>';statusTime=cfg.readAt?('<span class="msg-status-time" title="Read at '+escHtml(fmtDateTime(cfg.readAt))+'">'+escHtml(fmtTime(cfg.readAt))+'</span>'):'';}
-    else if(st==='failed')statusDot='<span class="msg-status failed" title="Not delivered">!</span>';
+  if(ctx==='chat'){
+    var deliveredOn=!!cfg.deliveredAt||cfg.status==='delivered'||cfg.status==='translated';
+    var readOn=!!cfg.readAt||cfg.status==='translated';
+    statusDot='<span class="msg-status-dots">'
+      +'<button class="msg-status-dot '+(deliveredOn?'on-delivered':'off')+'" type="button" onclick="openStatusPopup(\''+id+'\')">\u25CF</button>'
+      +'<button class="msg-status-dot '+(readOn?'on-read':'off')+'" type="button" onclick="openStatusPopup(\''+id+'\')">\u25CF</button>'
+      +'</span>';
   }
   var header='<div class="bbl-hdr">'
     +'<span class="bbl-sender">'+escHtml(cfg.headerLeft||'')+'</span>'
     +'<div class="bbl-hdr-right">'
     +statusDot
-    +statusTime
     +'<span class="bbl-time">'+escHtml(cfg.time||'')+'</span>'
     +'</div></div>';
 
@@ -2718,6 +2696,18 @@ function renderMsg(msg){
   // Restore open state for clarify/backtrans panels
   if(thread.length){updateBblClarify(msg,'chat');}
   if(bt&&bt.resultText){renderBubbleBacktranslateFooter(msg.id,'chat');}
+}
+
+function updateMessageStatusUI(msg){
+  if(!msg||!msg.id)return;
+  var row=document.getElementById('row-'+msg.id);
+  if(!row)return;
+  var dots=row.querySelectorAll('.msg-status-dot');
+  if(!dots||dots.length<2)return;
+  var deliveredOn=!!msg.deliveredAt||msg.status==='delivered'||msg.status==='translated';
+  var readOn=!!msg.readAt||msg.status==='translated';
+  dots[0].className='msg-status-dot '+(deliveredOn?'on-delivered':'off');
+  dots[1].className='msg-status-dot '+(readOn?'on-read':'off');
 }
 
 function renderAllMessages(){
@@ -3180,13 +3170,20 @@ function sendTyping(){
 }
 function showTyping(n){var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);if(el)el.textContent=(firstRealName(n,sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner')+' is typing…';clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3000);}
 
-function sendMessage(){
+async function sendMessage(){
   var ta=document.getElementById('msg-input');var text=ta.value.trim();if(!text)return;
   var sess=getSession(state.activeConvId);if(!sess)return;
   var p=getPrefs();
 
   var explicitLang=normalizeLangSetting(sess.myLang);
-  var outLang=detectLang(text,explicitLang||detectBrowserLang()||'en');
+  var detectedLang=detectLang(text,detectBrowserLang()||'en');
+  var outLang=explicitLang||detectedLang;
+  var outboundText=text;
+  if(explicitLang&&detectedLang&&detectedLang!==explicitLang){
+    try{
+      outboundText=(await translate(text,detectedLang,explicitLang))||text;
+    }catch(_){outboundText=text;}
+  }
   var partnerLang=normalizeLangSetting(sess.partnerLang)||normalizeLangSetting(p.partnerLang)||'en';
   var myReplyTarget=resolveIncomingTargetLang(sess,outLang);
   var partnerTargetLang=resolveTargetLang({myLang:outLang,partnerLang:partnerLang,myDefaultLang:myReplyTarget,oppositeDefault:myReplyTarget});
@@ -3195,7 +3192,7 @@ function sendMessage(){
     putSession(sess);
   }
 
-  var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:'owner',sourceText:text,sourceLang:outLang,targetLang:partnerTargetLang,targetText:'',text:text,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:partnerTargetLang});
+  var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:'owner',sourceText:outboundText,sourceLang:outLang,targetLang:partnerTargetLang,targetText:'',text:outboundText,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:partnerTargetLang});
   stampMsgNames(msg,sess);
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
@@ -3205,7 +3202,7 @@ function sendMessage(){
   if(!ok){msg.status='queued';addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}
   saveMsgs(sess.convId,state.messages);
-  renderAllMessages();
+  updateMessageStatusUI(msg);
 
   // Translate locally so sender sees target column filled in their own bubble
   if(outLang===msg.targetLang){
@@ -3345,6 +3342,7 @@ function openSettings(){
   var tgtBg=document.getElementById('set-tgt-bg');if(tgtBg)tgtBg.value=p.tgtBgColor||'#F5F1EC';
   var srcFont=document.getElementById('set-src-font');if(srcFont)srcFont.value=p.srcFontColor||'#ffffff';
   var tgtFont=document.getElementById('set-tgt-font');if(tgtFont)tgtFont.value=p.tgtFontColor||'#1A1714';
+  var preset=document.getElementById('set-bbl-preset');if(preset)preset.value=p.bubblePreset||'medium';
   var bblSz=document.getElementById('set-bbl-size');if(bblSz)bblSz.value=String(p.bubbleFontSize||15);
   var tgtSz=document.getElementById('set-target-size');if(tgtSz)tgtSz.value=String(p.targetBubbleFontSize||15);
   var bblW=document.getElementById('set-bbl-width');if(bblW)bblW.value=p.bubbleWidth||75;
@@ -3368,6 +3366,23 @@ function applySrcBg(val){
   applyBubbleTheme();
 }
 function applySrcText(){}
+function applyBubblePreset(v){
+  var map={
+    light:{srcBg:'#59B2B2',srcFont:'#ffffff',tgtBg:'#F5F1EC',tgtFont:'#1A1714'},
+    medium:{srcBg:'#2E8B8B',srcFont:'#ffffff',tgtBg:'#F5F1EC',tgtFont:'#1A1714'},
+    dark:{srcBg:'#1E5C5C',srcFont:'#ffffff',tgtBg:'#D7D0C8',tgtFont:'#1A1714'}
+  };
+  var next=map[v]||map.medium;
+  var p=getPrefs();
+  p.bubblePreset=v||'medium';
+  p.srcBgColor=next.srcBg;p.srcFontColor=next.srcFont;
+  p.tgtBgColor=next.tgtBg;p.tgtFontColor=next.tgtFont;
+  p.accentColor=next.srcBg;
+  savePrefs(p);
+  document.documentElement.style.setProperty('--teal',next.srcBg);
+  openSettings();
+  applyBubbleTheme();
+}
 function applyTgtBg(val){
   var p=getPrefs();p.tgtBgColor=val;
   savePrefs(p);applyBubbleTheme();
@@ -3378,7 +3393,7 @@ function resetAllBubbleDefaults(){
   p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';
   p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';
   p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;
-  p.srcFontColor='';p.tgtFontColor='';
+  p.srcFontColor='';p.tgtFontColor='';p.bubblePreset='medium';
   savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');
   openSettings();applyBubbleTheme();toast('Appearance reset to defaults');
 }
@@ -3494,7 +3509,7 @@ function applyTgtWidth(v){var p=getPrefs();p.tgtBubbleWidth=parseInt(v);savePref
 function applySrcFontColor(v){var p=getPrefs();p.srcFontColor=v;savePrefs(p);applyBubbleTheme();}
 function applyTgtFontColor(v){var p=getPrefs();p.tgtFontColor=v;savePrefs(p);applyBubbleTheme();}
 function clearAppSettings(){if(!confirm('Clear all app settings (appearance, language, preferences)?'))return;var PREFS_KEY='joyPrefs';localStorage.removeItem(PREFS_KEY);toast('App settings cleared');openSettings();applyBubbleTheme();}
-function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
+function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';p.bubblePreset='medium';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
 function applyTargetAccent(v){var p=getPrefs();p.targetAccentColor=v;savePrefs(p);applyBubbleTheme();}
 function toggleNoOpOnSameLanguage(on){var p=getPrefs();p.noOpOnSameLanguage=!!on;savePrefs(p);}
 function toggleForceOppositePartyLanguage(on){var p=getPrefs();p.forceOppositePartyLanguage=!!on;savePrefs(p);}

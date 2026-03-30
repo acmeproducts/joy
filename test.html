@@ -338,6 +338,14 @@ textarea.field-input{resize:none;}
 /* ════ OVERLAYS ════ */
 .overlay{position:fixed;inset:0;background:rgba(26,23,20,.46);display:flex;align-items:flex-end;justify-content:center;z-index:200;animation:fadeIn .15s;}
 .overlay[hidden]{display:none!important;}
+/* Onboarding gate modal (non-blocking replacement for prompt onboarding) */
+.onboarding-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:260;padding:20px;}
+.onboarding-modal[hidden]{display:none!important;}
+.onboarding-card{width:min(100%,360px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px 16px;display:flex;flex-direction:column;gap:10px;}
+.onboarding-flag{font-size:28px;line-height:1;animation:onboard-wave .66s ease-in-out 0s 3;}
+@keyframes onboard-wave{0%,100%{transform:rotate(0deg)}25%{transform:rotate(14deg)}75%{transform:rotate(-10deg)}}
+.onboarding-title{font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);}
+.onboarding-error{font-size:12px;color:var(--red);min-height:16px;}
 @keyframes fadeIn{from{opacity:0;}}
 .sheet{background:var(--cream);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;animation:slideUp .22s ease-out;}
 @keyframes slideUp{from{transform:translateY(36px);opacity:.7;}}
@@ -570,6 +578,16 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <input id="settings-import-file" type="file" accept=".json,.csv,application/json,text/csv" style="display:none" onchange="handleImportFile(event)">
 
+<div class="onboarding-modal" id="onboarding-modal" hidden>
+  <div class="onboarding-card">
+    <div class="onboarding-flag" aria-hidden="true">🏳️</div>
+    <div class="onboarding-title">Hi, let’s get ready to chat! What’s your name?</div>
+    <input class="field-input" id="onboarding-name" placeholder="Your name" maxlength="40">
+    <button class="sheet-btn primary" id="onboarding-continue-btn" onclick="submitOnboardingName()">Continue</button>
+    <div class="onboarding-error" id="onboarding-error"></div>
+  </div>
+</div>
+
 <!-- ══ OVERLAYS ══ -->
 
 <div class="overlay" id="new-card-overlay" hidden onclick="if(event.target===this)this.hidden=true">
@@ -684,11 +702,19 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <div class="overlay" id="share-overlay" hidden onclick="if(event.target===this)this.hidden=true">
   <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
-    <div class="sheet-title">Invite link</div>
+    <div class="sheet-title">Share links</div>
+    <div style="font-size:12px;color:var(--ink-dim);font-weight:700;margin-bottom:6px;">Partner invite (new participant)</div>
+    <div id="share-partner-qr" style="width:120px;height:120px;background:#fff;border:1px solid var(--border);border-radius:8px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;"></div>
     <div style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;word-break:break-all;">
       <a style="color:var(--teal);font-size:14px;font-weight:600;" id="share-link-text" href="#" target="_blank">—</a>
     </div>
-    <p style="font-size:12px;color:var(--ink-dim);margin:10px 0 0;">Share this link with your partner. Session activates when they join.</p>
+    <p style="font-size:12px;color:var(--ink-dim);margin:10px 0 12px;">Use this to invite your chat partner.</p>
+    <div style="font-size:12px;color:var(--ink-dim);font-weight:700;margin-bottom:6px;">Owner handoff (same owner, new device)</div>
+    <div id="share-owner-qr" style="width:120px;height:120px;background:#fff;border:1px solid var(--border);border-radius:8px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;"></div>
+    <div style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;word-break:break-all;">
+      <a style="color:var(--teal);font-size:14px;font-weight:600;" id="share-handoff-link-text" href="#" target="_blank">—</a>
+    </div>
+    <p style="font-size:12px;color:var(--ink-dim);margin:10px 0 0;">Use this only when you are switching your own device.</p>
     <div class="sheet-btn-row">
       <button class="sheet-btn secondary" onclick="this.closest('.overlay').hidden=true">Close</button>
       <button class="sheet-btn primary" onclick="copyShareLink()">Copy link</button>
@@ -891,6 +917,7 @@ var state={
   pbExportBusy:false,
   ncBacktranslate:null
 };
+var pendingOnboardingFlow=null;
 var tagPickerSelectedTags=[];
 var tEngine='cloud',ttsActive=null;
 var typingTimer=null,lastTypingTs=0;
@@ -921,9 +948,11 @@ function normalizeSession(sess){
     ownerLangMode:(raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto'),
     ownerFixedLang:normalizeLangSetting(raw.ownerFixedLang!==undefined?raw.ownerFixedLang:p.myLang)||'',
     ownerLastSentLang:normalizeLangSetting(raw.ownerLastSentLang)||'',
+    ownerEffectiveReplyLang:normalizeLangSetting(raw.ownerEffectiveReplyLang)||'',
     partnerLangMode:(raw.partnerLangMode==='fixed'||raw.partnerLangMode==='auto')?raw.partnerLangMode:'auto',
     partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',
     partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
+    partnerEffectiveReplyLang:normalizeLangSetting(raw.partnerEffectiveReplyLang)||'',
     peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
@@ -1171,6 +1200,18 @@ function normalizeAutoReplyTargetLang(v){
   var t=normalizeLangSetting(v);
   return t===undefined?'':t;
 }
+function getEffectiveReplyLang(sess,side,fallbackLang){
+  var s=sess?normalizeSession(sess):normalizeSession({});
+  var key=side==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
+  var saved=normalizeLangSetting(s[key])||'';
+  if(saved)return saved;
+  return resolveEffectiveLang(s,side,fallbackLang);
+}
+function setEffectiveReplyLang(sess,side,lang){
+  if(!sess)return;
+  var key=side==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
+  sess[key]=normalizeLangSetting(lang)||'';
+}
 function resolveEffectiveLang(sess,side,fallbackLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
   var modeKey=side==='partner'?'partnerLangMode':'ownerLangMode';
@@ -1183,10 +1224,10 @@ function resolveEffectiveLang(sess,side,fallbackLang){
   return last||normalizeLangSetting(fallbackLang)||detectBrowserLang()||'en';
 }
 function resolveIncomingTargetLang(sess){
-  return resolveEffectiveLang(sess,'owner');
+  return getEffectiveReplyLang(sess,'owner','en');
 }
 function resolveTargetLang(sess){
-  return resolveEffectiveLang(sess,'partner');
+  return getEffectiveReplyLang(sess,'partner','en');
 }
 function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&targetLang&&sourceLang===targetLang);}
 
@@ -1196,7 +1237,7 @@ function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&tar
 function isPlaceholderName(name){var v=(name||'').trim().toLowerCase();return !v||v==='new chat'||v==='partner'||v==='yournamehere';}
 function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]||'').trim();if(v&&!isPlaceholderName(v))return v;}return '';}
 function getPreferredOwnerName(){var p=getPrefs();return firstRealName(p.globalName,p.userName)||'yournamehere';}
-function effectiveLangFromSession(sess){return resolveEffectiveLang(sess,'owner');}
+function effectiveLangFromSession(sess){return getEffectiveReplyLang(sess,'owner','en');}
 function getEffectiveTargetLang(sess){return resolveTargetLang(sess);}
 
 function stampMsgNames(msg,sess){
@@ -1229,7 +1270,7 @@ function addSystemNote(convId,text,timestamp){
   msgs=sortMessagesChronologically(msgs);
   if(convId===state.activeConvId){
     state.messages=msgs;
-    addSysMsg(m.text||'');
+    renderAllMessages();
   }
   var sess=getSession(convId);if(sess){sess.lastActivity=m.timestamp;putSession(sess);}
   saveMsgs(convId,msgs);
@@ -1465,15 +1506,12 @@ function noteRuntimeJoin(convId,key,text,ts){
   else if(key==='peerJoin'){if(rt.peerJoinNoted)return;rt.peerJoinNoted=true;rt.peerLeftNoted=false;}
   else if(key==='peerLeft'){if(rt.peerLeftNoted)return;rt.peerLeftNoted=true;}
   var now=ts||Date.now();
-  // Suppress duplicate local join notes for the full session history.
-  if(key==='localJoin'){
-    var allMsgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
-    if(allMsgs.some(function(m){return m.from==='system'&&m.text===text;}))return;
-  }
+  // Deterministic join notes: dedupe exact event text (reconnect-safe).
+  var allMsgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
+  if(allMsgs.some(function(m){return m.from==='system'&&m.text===text;}))return;
   // Suppress duplicate presence notes within 2 minutes to prevent reconnect spam.
   var cutoff=now-120000;
-  var msgs=(convId===state.activeConvId)?state.messages:(getMsgs(convId)||[]);
-  if(msgs.some(function(m){return m.from==='system'&&m.text===text&&m.timestamp>cutoff;}))return;
+  if(allMsgs.some(function(m){return m.from==='system'&&m.text===text&&m.timestamp>cutoff;}))return;
   addSystemNote(convId,text,now);
 }
 function markPeerSeen(convId,ts,opts){
@@ -1488,7 +1526,7 @@ function markPeerSeen(convId,ts,opts){
   }
   if(!wasPresent&&!opts.suppressJoinNote){
     var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
-    if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' joined',stamp);
+    if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' has joined · '+fmtDateTime(stamp),stamp);
   }
   updateDot();
 }
@@ -1504,7 +1542,12 @@ function peerIsFresh(){
 }
 function resetActivePresence(convId){
   var rt=getRoomRuntime(convId);
-  if(rt){if(!rt.selfPresent&&convId)noteRuntimeJoin(convId,'localJoin','You joined',Date.now());rt.selfPresent=!!convId;}
+  if(rt&&convId){
+    var sess=getSession(convId);
+    var initiator=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere';
+    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now());
+    rt.selfPresent=true;
+  }else if(rt){rt.selfPresent=false;}
   updateDot();
 }
 function fmtPresenceTime(ts){return ts?fmtDateTime(ts):'Not seen yet';}
@@ -1851,6 +1894,7 @@ function setMyLang(code){
     if(prev!==code){
       s.ownerLangMode=code?'fixed':'auto';
       s.ownerFixedLang=code||'';
+      if(code)setEffectiveReplyLang(s,'owner',code);
       putSession(s);
       addSystemNote(s.convId,actor+' switched from '+getLangLabel(prev)+' to '+getLangLabel(code),Date.now());
     }
@@ -1871,15 +1915,35 @@ function setMyLang(code){
   else{toast(getLangEntry(code).flag+' Language set to '+getLangEntry(code).label);}
 }
 
+function openOnboardingModal(onDone){
+  pendingOnboardingFlow=onDone||null;
+  var p=getPrefs();
+  var modal=document.getElementById('onboarding-modal');
+  var input=document.getElementById('onboarding-name');
+  var err=document.getElementById('onboarding-error');
+  if(err)err.textContent='';
+  if(input)input.value=firstRealName(p.globalName,p.userName)||'';
+  if(modal)modal.hidden=false;
+  setTimeout(function(){if(input)input.focus();},30);
+}
+function submitOnboardingName(){
+  var input=document.getElementById('onboarding-name');
+  var err=document.getElementById('onboarding-error');
+  var name=(input&&input.value||'').trim();
+  if(!name){if(err)err.textContent='Please enter your name to continue.';return;}
+  var p=getPrefs();p.globalName=name;p.userName=name;savePrefs(p);
+  var modal=document.getElementById('onboarding-modal');
+  if(modal)modal.hidden=true;
+  if(err)err.textContent='';
+  var resume=pendingOnboardingFlow;pendingOnboardingFlow=null;
+  if(typeof resume==='function')resume(name);
+}
 function ensureUserName(callback){
   var p=getPrefs();
   var existing=firstRealName(p.globalName,p.userName);
-  if(existing){callback(existing);return;}
-  var name=prompt('Enter your name:');
-  if(!name||!name.trim()){toast('Name required');return;}
-  name=name.trim();
-  p.globalName=name;p.userName=name;savePrefs(p);
-  callback(name);
+  if(existing){if(callback)callback(existing);return true;}
+  openOnboardingModal(function(name){if(callback)callback(name);});
+  return false;
 }
 function createNewSession(silent){
   ensureUserName(function(name){
@@ -1924,7 +1988,7 @@ function addInviteMessage(cid){
   var exists=state.messages.some(function(m){return m.from==='invite'&&m.convId===cid;});
   if(exists)return;
   var sess=getSession(cid)||{};
-  var url=buildInviteUrl(sess,getPrefs());
+  var url=buildInviteUrl(sess,getPrefs(),'partner-invite');
   var msg={id:'inv-'+cid,from:'invite',convId:cid,inviteUrl:url,text:'Session created',timestamp:Date.now()};
   state.messages.push(msg);
   saveMsgs(cid,state.messages);
@@ -2139,7 +2203,8 @@ function parseInviteFromSearch(searchParams){
   if(!rawInvite)return null;
   var payload=validateInvitePayload(decodeInvitePayload(rawInvite));
   if(!payload)return {rejected:true,reason:'invalid-payload'};
-  if(searchParams.get('join')!=='share'||payload.joinOrigin!=='share-icon')return {rejected:true,reason:'missing-share-origin'};
+  if(searchParams.get('join')!=='share')return {rejected:true,reason:'missing-share-origin'};
+  if(payload.joinOrigin!=='share-partner'&&payload.joinOrigin!=='share-owner-handoff')return {rejected:true,reason:'missing-share-origin'};
   return payload;
 }
 function validateInvitePayload(payload){
@@ -2149,12 +2214,20 @@ function validateInvitePayload(payload){
   if(typeof payload.initiatorDeviceId!=='string')return null;
   return payload;
 }
-function buildInvitePayload(sess,prefs){
+function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
-  return {sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',initiatorLang:resolveEffectiveLang(sess,'owner'),initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),schemaVersion:INVITE_SCHEMA_VERSION,joinOrigin:'share-icon',side:'owner',ownerIdentityId:sess.ownerIdentityId,ownerLangMode:sess.ownerLangMode,ownerFixedLang:sess.ownerFixedLang,ownerLastSentLang:sess.ownerLastSentLang};
+  var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
+  return {
+    sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',
+    initiatorLang:getEffectiveReplyLang(sess,'owner','en'),initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),
+    schemaVersion:INVITE_SCHEMA_VERSION,joinOrigin:(mode==='owner-handoff'?'share-owner-handoff':'share-partner'),
+    side:(mode==='owner-handoff'?'owner':'partner'),
+    ownerIdentityId:sess.ownerIdentityId,ownerLangMode:sess.ownerLangMode,ownerFixedLang:sess.ownerFixedLang,ownerLastSentLang:sess.ownerLastSentLang,ownerEffectiveReplyLang:sess.ownerEffectiveReplyLang,
+    partnerLangMode:sess.partnerLangMode,partnerFixedLang:sess.partnerFixedLang,partnerLastSentLang:sess.partnerLastSentLang,partnerEffectiveReplyLang:sess.partnerEffectiveReplyLang
+  };
 }
-function buildInviteUrl(sess,prefs){
-  var payload=buildInvitePayload(sess,prefs);
+function buildInviteUrl(sess,prefs,intent){
+  var payload=buildInvitePayload(sess,prefs,intent);
   var encoded=encodeInvitePayload(payload);
   if(encoded)return location.href.split('?')[0]+'?join=share&invite='+encodeURIComponent(encoded);
   return '';
@@ -2165,11 +2238,17 @@ function hydrateSessionFromInvite(sess,invite){
   var inviteName=firstRealName(invite.initiatorGlobalName);
   if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
   if(invite.side==='owner'){
+    // Preserve owner language-routing state across owner handoff device switches.
     if(invite.ownerIdentityId)sess.ownerIdentityId=invite.ownerIdentityId;
     if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
     if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
     if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
+    if(invite.ownerEffectiveReplyLang!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(invite.ownerEffectiveReplyLang)||'';
   }
+  if(invite.partnerLangMode==='fixed'||invite.partnerLangMode==='auto')sess.partnerLangMode=invite.partnerLangMode;
+  if(invite.partnerFixedLang!==undefined)sess.partnerFixedLang=normalizeLangSetting(invite.partnerFixedLang)||'';
+  if(invite.partnerLastSentLang!==undefined)sess.partnerLastSentLang=normalizeLangSetting(invite.partnerLastSentLang)||'';
+  if(invite.partnerEffectiveReplyLang!==undefined)sess.partnerEffectiveReplyLang=normalizeLangSetting(invite.partnerEffectiveReplyLang)||'';
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
   addDiagLog('handoff apply side='+(invite.side||'?')+' ownerIdentityId='+(sess.ownerIdentityId||'?')+' eff='+resolveEffectiveLang(sess,'owner'));
@@ -2178,10 +2257,17 @@ function hydrateSessionFromInvite(sess,invite){
 function shareSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
   var p=getPrefs();
-  var url=buildInviteUrl(sess,p);
-  if(!url){toast('Unable to generate share link');return;}
+  var url=buildInviteUrl(sess,p,'partner-invite');
+  var handoffUrl=buildInviteUrl(sess,p,'owner-handoff');
+  if(!url||!handoffUrl){toast('Unable to generate share link');return;}
   addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
   var el=document.getElementById('share-link-text');if(el){el.href=url;el.textContent=url;}
+  var h=document.getElementById('share-handoff-link-text');if(h){h.href=handoffUrl;h.textContent=handoffUrl;}
+  ['share-partner-qr','share-owner-qr'].forEach(function(id){var node=document.getElementById(id);if(node)node.innerHTML='';});
+  if(window.QRCode){
+    try{new QRCode(document.getElementById('share-partner-qr'),{text:url,width:110,height:110,colorDark:'#1A1714',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
+    try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:110,height:110,colorDark:'#1A1714',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
+  }
   document.getElementById('share-overlay').hidden=false;
   if(navigator.share){navigator.share({url:url}).catch(function(){});}
 }
@@ -2387,10 +2473,6 @@ function handleRelayEvent(d){
       resendUnacked();
       sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
-      var resolvedName=firstRealName(sess.partnerHandle,sess.peerName,d.name);
-      if(resolvedName&&(!wasEverSeen||(Date.now()-lastSeen)>300000)){
-        toast(resolvedName+' joined!');
-      }
       if(nameUpdate&&nameUpdate.prevName&&nameUpdate.nextName&&nameUpdate.prevName!==nameUpdate.nextName){
         addSystemNote(sess.convId,nameUpdate.prevName+' is now '+nameUpdate.nextName,Date.now());
       }
@@ -2408,8 +2490,13 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     var srcTxt=d.sourceText||d.orig||d.text||'';
     var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
-    // Receiver always wants translation in owner effective language
-    var myLang=resolveIncomingTargetLang(sess);
+    var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
+    var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
+    var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
+    sess.partnerLastSentLang=partnerOutLang;
+    setEffectiveReplyLang(sess,'partner',partnerOutLang);
+    // Receiver always wants translation in local effective reply language.
+    var myLang=getEffectiveReplyLang(sess,'owner','en');
     var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
     var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
     // Record partner's detected language in tally (partner messages only)
@@ -2417,7 +2504,6 @@ function handleRelayEvent(d){
     recordLangTally(partnerId,srcLang);
     var ps=ensureParticipantState(partnerId);
     sess.partnerIdentityId=sess.partnerIdentityId||partnerId;
-    sess.partnerLastSentLang=srcLang;
     putSession(sess);
     addDiagLog('partnerLang tally: '+(ps?getLangTallySummary(partnerId):'n/a'));
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));
@@ -3130,7 +3216,7 @@ function renderInviteCard(msg){
   card.appendChild(qrWrap);
   var qrLabel=document.createElement('div');
   qrLabel.style.cssText='font-size:11px;color:var(--ink-dim);font-weight:600;';
-  qrLabel.textContent='Owner-side QR link';
+  qrLabel.textContent='Partner invite QR/link';
   card.appendChild(qrLabel);
   // Link
   var linkDiv=document.createElement('div');
@@ -3186,18 +3272,22 @@ async function sendMessage(){
   var sess=getSession(state.activeConvId);if(!sess)return;
   var p=getPrefs();
 
-  var ownerEffective=resolveEffectiveLang(sess,'owner');
+  var ownerEffective=getEffectiveReplyLang(sess,'owner','en');
   var explicitLang=(sess.ownerLangMode==='fixed')?normalizeLangSetting(sess.ownerFixedLang||''):'';
   var detectedLang=detectLang(text,detectBrowserLang()||'en');
-  var outLang=explicitLang||ownerEffective||detectedLang||'en';
+  // Case A/B language rules:
+  // A) auto => semantic source and expected replies follow detected typed language.
+  // B) fixed => semantic source normalizes to fixed language and expected replies stay fixed.
+  var outLang=explicitLang||(detectedLang||ownerEffective||'en');
   var outboundText=text;
   if(explicitLang&&detectedLang&&detectedLang!==explicitLang){
     try{
       outboundText=(await translate(text,detectedLang,explicitLang))||text;
     }catch(_){outboundText=text;}
   }
-  var partnerTargetLang=resolveTargetLang(sess);
+  var partnerTargetLang=getEffectiveReplyLang(sess,'partner','en');
   sess.ownerLastSentLang=outLang;
+  setEffectiveReplyLang(sess,'owner',outLang);
   putSession(sess);
 
   var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:'owner',sourceText:outboundText,sourceLang:outLang,targetLang:partnerTargetLang,targetText:'',text:outboundText,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:partnerTargetLang});
@@ -3214,12 +3304,12 @@ async function sendMessage(){
 
   // Translate locally so sender sees target column filled in their own bubble
   if(outLang===msg.targetLang){
-    applyMsgTarget(msg,msg.targetLang,text);
+    applyMsgTarget(msg,msg.targetLang,outboundText);
     updateTransDOM(msg);
     saveMsgs(sess.convId,state.messages);
   }else{
-    translate(text,outLang,msg.targetLang).then(function(tr){
-      applyMsgTarget(msg,msg.targetLang,tr||text);
+    translate(outboundText,outLang,msg.targetLang).then(function(tr){
+      applyMsgTarget(msg,msg.targetLang,tr||outboundText);
       updateTransDOM(msg);
       saveMsgs(sess.convId,state.messages);
     });
@@ -4042,50 +4132,51 @@ document.addEventListener('DOMContentLoaded',function(){
   initTagPickerInput();
   updateDot();
 
-  // Deep link — share-origin invite only
-  var up=new URLSearchParams(location.search);
-  var invite=parseInviteFromSearch(up);
-  if(invite){
-    history.replaceState({},'',location.pathname);
-    if(invite.rejected){
-      addDiagLog('join rejected reason='+invite.reason,'warn');
-      toast('Please join using the Session Share icon link. Copying the page URL directly is not supported.');
-    }else{
-      addDiagLog('join accepted reason=share-origin session='+String(invite.sessionId||'').slice(0,8));
-      // Prompt for name if not set
-      if(isPlaceholderName(firstRealName(p.globalName,p.userName))){
-        var rname=prompt('Enter your name:');
-        if(rname&&rname.trim()){p.globalName=rname.trim();p.userName=rname.trim();savePrefs(p);}
-      }
-      var sess=getSession(invite.sessionId);
-      if(!sess){
-        var now=Date.now();
-        sess=normalizeSession({convId:invite.sessionId,myHandle:firstRealName(p.globalName,p.userName)||'yournamehere',myName:firstRealName(p.globalName,p.userName)||'yournamehere',partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
-        putSession(sess);
-        var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
+  function continueStartup(){
+    // Deep link — share-origin invite only
+    var up=new URLSearchParams(location.search);
+    var invite=parseInviteFromSearch(up);
+    if(invite){
+      history.replaceState({},'',location.pathname);
+      if(invite.rejected){
+        addDiagLog('join rejected reason='+invite.reason,'warn');
+        toast('Please join using a Talk + Say share link. Copying the page URL directly is not supported.');
       }else{
+        addDiagLog('join accepted reason=share-origin session='+String(invite.sessionId||'').slice(0,8));
+        var sess=getSession(invite.sessionId);
+        if(!sess){
+          var now=Date.now();
+          var ownerName=firstRealName(getPrefs().globalName,getPrefs().userName)||'yournamehere';
+          sess=normalizeSession({convId:invite.sessionId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+          putSession(sess);
+          var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
+        }else{
+          putSession(sess);
+        }
+        sess=hydrateSessionFromInvite(sess,invite);
+        state.activeConvId=invite.sessionId;
+        state.messages=getMsgs(invite.sessionId);
+        addInviteMessage(invite.sessionId);
         putSession(sess);
+        openSession(invite.sessionId);
+        return;
       }
-      sess=hydrateSessionFromInvite(sess,invite);
-      state.activeConvId=invite.sessionId;
-      state.messages=getMsgs(invite.sessionId);
-      addInviteMessage(invite.sessionId);
-      putSession(sess);
-      openSession(invite.sessionId);
-      return;
+    }
+
+    var aid=getActiveConvId();
+    if(aid&&getSession(aid)){
+      var savedSess=getSession(aid);
+      if(savedSess){openSession(aid);}
+      else{showEmptyShell();}
+    }else{
+      var allSessions=getAllSessions();
+      if(allSessions.length){openSession(allSessions[0].convId);}
+      else{showEmptyShell();}
     }
   }
-
-  var aid=getActiveConvId();
-  if(aid&&getSession(aid)){
-    var savedSess=getSession(aid);
-    if(savedSess){openSession(aid);}
-    else{showEmptyShell();}
-  }else{
-    var allSessions=getAllSessions();
-    if(allSessions.length){openSession(allSessions[0].convId);}
-    else{showEmptyShell();}
-  }
+  ensureUserName(function(){continueStartup();});
+  var onboardInput=document.getElementById('onboarding-name');
+  if(onboardInput)onboardInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submitOnboardingName();}});
 
   // Sheet drag-dismiss
   document.querySelectorAll('.overlay .sheet-handle').forEach(function(h){

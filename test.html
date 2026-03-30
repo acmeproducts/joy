@@ -418,6 +418,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
               </td>
             </tr>
             <tr>
+              <td>Tone</td>
+              <td><select id="set-bbl-preset-me" class="lsd-select" style="width:100%;" onchange="applyPresetChoice('me',this.value)"></select></td>
+              <td><select id="set-bbl-preset-partner" class="lsd-select" style="width:100%;" onchange="applyPresetChoice('partner',this.value)"></select></td>
+            </tr>
+            <tr>
               <td>Bubble</td>
               <td><input type="color" id="set-src-bg" value="#2E8B8B" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcBg(this.value)"></td>
               <td><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applyTgtBg(this.value)"></td>
@@ -1107,7 +1112,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';return p;}
+function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium',bubblePresetMeChoice:'pacific-blue',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='pacific-blue';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';return p;}
 function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';if(!next.bubblePreset)next.bubblePreset='medium';lsW(SK.prefs,JSON.stringify(next));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -3332,6 +3337,45 @@ var THEMES=[
   {id:'purple',label:'Violet',mine:'#7c3aed',theirs:'#f5f3ff',hdr:'#6d28d9'}
 ];
 var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,accentColor:'#2E8B8B',targetAccentColor:'#1A1714'};
+var PRESET_PALETTES={
+  light:[
+    {id:'atomic-tangerine',label:'Atomic Tangerine',hex:'#ff6b35'},
+    {id:'peach-glow',label:'Peach Glow',hex:'#f7c59f'},
+    {id:'beige',label:'Beige',hex:'#efefd0'},
+    {id:'steel-azure',label:'Steel Azure',hex:'#004e89'},
+    {id:'baltic-blue',label:'Baltic Blue',hex:'#1a659e'}
+  ],
+  medium:[
+    {id:'pacific-blue',label:'Pacific Blue',hex:'#46b1c9'},
+    {id:'frosted-blue',label:'Frosted Blue',hex:'#84c0c6'},
+    {id:'ash-grey',label:'Ash Grey',hex:'#9fb7b9'},
+    {id:'ash-grey-2',label:'Ash Grey 2',hex:'#bcc1ba'},
+    {id:'almond-cream',label:'Almond Cream',hex:'#f2e2d2'}
+  ],
+  dark:[
+    {id:'gunmetal',label:'Gunmetal',hex:'#474448'},
+    {id:'shadow-grey',label:'Shadow Grey',hex:'#2d232e'},
+    {id:'bone',label:'Bone',hex:'#e0ddcf'},
+    {id:'taupe-grey',label:'Taupe Grey',hex:'#534b52'},
+    {id:'parchment',label:'Parchment',hex:'#f1f0ea'}
+  ]
+};
+function paletteColorById(preset,id){
+  var colors=PRESET_PALETTES[preset]||PRESET_PALETTES.medium;
+  var hit=colors.find(function(c){return c.id===id;});
+  return hit?hit.hex:colors[0].hex;
+}
+function renderPresetChoices(preset,meChoice,partnerChoice){
+  var meSel=document.getElementById('set-bbl-preset-me');
+  var partnerSel=document.getElementById('set-bbl-preset-partner');
+  if(!meSel||!partnerSel)return;
+  var colors=PRESET_PALETTES[preset]||PRESET_PALETTES.medium;
+  var options=colors.map(function(c){return '<option value="'+c.id+'">'+c.label+'</option>';}).join('');
+  meSel.innerHTML=options;
+  partnerSel.innerHTML=options;
+  meSel.value=colors.some(function(c){return c.id===meChoice;})?meChoice:colors[0].id;
+  partnerSel.value=colors.some(function(c){return c.id===partnerChoice;})?partnerChoice:colors[Math.min(4,colors.length-1)].id;
+}
 
 function toggleSettingsDrawer(){
   var d=document.getElementById('left-settings-drawer');
@@ -3357,6 +3401,7 @@ function openSettings(){
   var bblW=document.getElementById('set-bbl-width');if(bblW)bblW.value=p.bubbleWidth||75;
   var tgtW=document.getElementById('set-tgt-width');if(tgtW)tgtW.value=p.tgtBubbleWidth||p.bubbleWidth||75;
   var arCb=document.getElementById('set-autoread');if(arCb)arCb.checked=!!state.autoSpeakIncoming;
+  renderPresetChoices(p.bubblePreset||'medium',p.bubblePresetMeChoice,p.bubblePresetPartnerChoice);
 }
 function closeSettings(){
   var d=document.getElementById('left-settings-drawer');
@@ -3376,19 +3421,41 @@ function applySrcBg(val){
 }
 function applySrcText(){}
 function applyBubblePreset(v){
-  var map={
-    light:{srcBg:'#59B2B2',srcFont:'#ffffff',tgtBg:'#F5F1EC',tgtFont:'#1A1714'},
-    medium:{srcBg:'#2E8B8B',srcFont:'#ffffff',tgtBg:'#F5F1EC',tgtFont:'#1A1714'},
-    dark:{srcBg:'#1E5C5C',srcFont:'#ffffff',tgtBg:'#D7D0C8',tgtFont:'#1A1714'}
-  };
-  var next=map[v]||map.medium;
+  var preset=PRESET_PALETTES[v]?v:'medium';
+  var colors=PRESET_PALETTES[preset];
+  var meChoice=colors[0].id;
+  var partnerChoice=colors[Math.min(4,colors.length-1)].id;
+  var srcBg=paletteColorById(preset,meChoice);
+  var tgtBg=paletteColorById(preset,partnerChoice);
   var p=getPrefs();
-  p.bubblePreset=v||'medium';
-  p.srcBgColor=next.srcBg;p.srcFontColor=next.srcFont;
-  p.tgtBgColor=next.tgtBg;p.tgtFontColor=next.tgtFont;
-  p.accentColor=next.srcBg;
+  p.bubblePreset=preset;
+  p.bubblePresetMeChoice=meChoice;
+  p.bubblePresetPartnerChoice=partnerChoice;
+  p.srcBgColor=srcBg;p.srcFontColor='';
+  p.tgtBgColor=tgtBg;p.tgtFontColor='';
+  p.accentColor=srcBg;
   savePrefs(p);
-  document.documentElement.style.setProperty('--teal',next.srcBg);
+  document.documentElement.style.setProperty('--teal',srcBg);
+  openSettings();
+  applyBubbleTheme();
+}
+function applyPresetChoice(side,choiceId){
+  var p=getPrefs();
+  var preset=PRESET_PALETTES[p.bubblePreset]?p.bubblePreset:'medium';
+  var list=PRESET_PALETTES[preset];
+  if(!list.some(function(c){return c.id===choiceId;}))return;
+  if(side==='partner'){
+    p.bubblePresetPartnerChoice=choiceId;
+    p.tgtBgColor=paletteColorById(preset,choiceId);
+    p.tgtFontColor='';
+  }else{
+    p.bubblePresetMeChoice=choiceId;
+    p.srcBgColor=paletteColorById(preset,choiceId);
+    p.srcFontColor='';
+    p.accentColor=p.srcBgColor;
+    document.documentElement.style.setProperty('--teal',p.srcBgColor);
+  }
+  savePrefs(p);
   openSettings();
   applyBubbleTheme();
 }
@@ -3402,7 +3469,7 @@ function resetAllBubbleDefaults(){
   p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';
   p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';
   p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;
-  p.srcFontColor='';p.tgtFontColor='';p.bubblePreset='medium';
+  p.srcFontColor='';p.tgtFontColor='';p.bubblePreset='medium';p.bubblePresetMeChoice='pacific-blue';p.bubblePresetPartnerChoice='almond-cream';
   savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');
   openSettings();applyBubbleTheme();toast('Appearance reset to defaults');
 }
@@ -3518,7 +3585,7 @@ function applyTgtWidth(v){var p=getPrefs();p.tgtBubbleWidth=parseInt(v);savePref
 function applySrcFontColor(v){var p=getPrefs();p.srcFontColor=v;savePrefs(p);applyBubbleTheme();}
 function applyTgtFontColor(v){var p=getPrefs();p.tgtFontColor=v;savePrefs(p);applyBubbleTheme();}
 function clearAppSettings(){if(!confirm('Clear all app settings (appearance, language, preferences)?'))return;var PREFS_KEY='joyPrefs';localStorage.removeItem(PREFS_KEY);toast('App settings cleared');openSettings();applyBubbleTheme();}
-function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';p.bubblePreset='medium';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
+function resetAllSettings(){var p=getPrefs();p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;p.srcFontColor='';p.tgtFontColor='';p.myLang='';p.bubblePreset='medium';p.bubblePresetMeChoice='pacific-blue';p.bubblePresetPartnerChoice='almond-cream';savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');openSettings();applyBubbleTheme();toast('All settings reset');}
 function applyTargetAccent(v){var p=getPrefs();p.targetAccentColor=v;savePrefs(p);applyBubbleTheme();}
 function toggleNoOpOnSameLanguage(on){var p=getPrefs();p.noOpOnSameLanguage=!!on;savePrefs(p);}
 function toggleForceOppositePartyLanguage(on){var p=getPrefs();p.forceOppositePartyLanguage=!!on;savePrefs(p);}

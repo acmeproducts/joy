@@ -3876,7 +3876,7 @@ function closeSessionNote(){document.getElementById('session-note-overlay').hidd
 function saveSessionNote(){if(!state.noteSessionId)return;var notes=getSessionNotes();notes[state.noteSessionId]=(document.getElementById('session-note-text').value||'').trim();saveSessionNotes(notes);closeSessionNote();toast('Note saved');}
 
 // Import/Export
-function downloadBlob(content,type,fileName){var blob=new Blob([content],{type:type});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fileName;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},0);}
+function downloadBlob(content,type,fileName,withBom){if(withBom)content='\uFEFF'+content;var blob=new Blob([content],{type:type});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fileName;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},0);}
 function formatExportMessageBlock(msg,sess){
   var ts=fmtDateTime(msg.timestamp||Date.now());
   if(msg.from==='system')return '['+ts+'] System\n'+String(msg.text||'').trim();
@@ -3897,11 +3897,11 @@ function exportSessionChat(cid){
   if(msgs.length){blocks.push('','Conversation');msgs.forEach(function(msg){blocks.push('',formatExportMessageBlock(msg,sess));});}
   else{blocks.push('','Conversation','','(No messages)');}
   blocks.push('','Diagnostics','',diagLog.length?diagLog.join('\n'):'(No diagnostic entries)');
-  downloadBlob(blocks.join('\n'),'text/plain;charset=utf-8','chat-export-'+safeTitle+'-'+Date.now()+'.txt');
+  downloadBlob(blocks.join('\n'),'text/plain;charset=utf-8','chat-export-'+safeTitle+'-'+Date.now()+'.txt',true);
   toast('Chat exported');
 }
 function downloadJSON(payload,filePrefix){downloadBlob(JSON.stringify(payload,null,2),'application/json',filePrefix+'-'+Date.now()+'.json');}
-function downloadCSV(rows,filePrefix){if(!rows.length){toast('Nothing to export');return;}var headers=Object.keys(rows[0]);var csv=[headers.map(csvEscape).join(',')].concat(rows.map(function(row){return headers.map(function(h){return csvEscape(row[h]);}).join(',');})).join('\n');downloadBlob(csv,'text/csv;charset=utf-8',filePrefix+'-'+Date.now()+'.csv');}
+function downloadCSV(rows,filePrefix){if(!rows.length){toast('Nothing to export');return;}var headers=Object.keys(rows[0]);var csv=[headers.map(csvEscape).join(',')].concat(rows.map(function(row){return headers.map(function(h){return csvEscape(row[h]);}).join(',');})).join('\n');downloadBlob(csv,'text/csv;charset=utf-8',filePrefix+'-'+Date.now()+'.csv',true);}
 function csvEscape(value){var str=value==null?'':String(value);return /[",\n]/.test(str)?'"'+str.replace(/"/g,'""')+'"':str;}
 function parseCsv(text){var rows=[];var row=[];var cell='';var inQuotes=false;for(var i=0;i<text.length;i++){var ch=text[i];var next=text[i+1];if(inQuotes){if(ch==='"'&&next==='"'){cell+='"';i++;}else if(ch==='"'){inQuotes=false;}else{cell+=ch;}}else if(ch==='"'){inQuotes=true;}else if(ch===','){row.push(cell);cell='';}else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';}else if(ch==='\r'){}else{cell+=ch;}}row.push(cell);if(row.length>1||row[0])rows.push(row);if(!rows.length)return[];var headers=rows.shift();return rows.filter(function(cols){return cols.some(function(v){return String(v||'').trim();});}).map(function(cols){var out={};headers.forEach(function(h,idx){out[h]=cols[idx]||'';});return out;});}
 function parseJSONField(value,fallback){if(!value)return fallback;try{return JSON.parse(value);}catch(_){return fallback;}}

@@ -3489,10 +3489,11 @@ function hexLumGlobal(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,
 function applyBubbleTheme(){
   var s=document.getElementById('bubble-theme-tag');if(!s){s=document.createElement('style');s.id='bubble-theme-tag';document.head.appendChild(s);}
   var p=getPrefs();
-  var srcWidth=p.bubbleWidth||BUBBLE_DEFAULTS.bubbleWidth;
-  var tgtWidth=p.tgtBubbleWidth||srcWidth;
-  var srcSize=p.bubbleFontSize||BUBBLE_DEFAULTS.bubbleFontSize;
-  var tgtSize=p.targetBubbleFontSize||BUBBLE_DEFAULTS.targetBubbleFontSize;
+  // "Me/Partner" controls are sender-based (mine/theirs), not left/right column based.
+  var mineWidth=p.bubbleWidth||BUBBLE_DEFAULTS.bubbleWidth;
+  var theirsWidth=p.tgtBubbleWidth||mineWidth;
+  var mineSize=p.bubbleFontSize||BUBBLE_DEFAULTS.bubbleFontSize;
+  var theirsSize=p.targetBubbleFontSize||BUBBLE_DEFAULTS.targetBubbleFontSize;
   function hexLum(h){h=(h||'#888').replace('#','');var r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4,6),16)/255;return 0.2126*r+0.7152*g+0.0722*b;}
   // Source (mine) bubble — text auto-computed; font color overridable
   var mineBg=p.srcBgColor||'#2E8B8B';
@@ -3515,10 +3516,10 @@ function applyBubbleTheme(){
   s.textContent=
     '.msg-row.mine .bubble-card{background:'+mineBg+';border-color:'+mineBg+';}'
     +'.msg-row.theirs .bubble-card{background:'+theirsBg+';border-color:'+theirsBg+';}'
-    +'.msg-row.mine{max-width:96%;width:'+srcWidth+'%;}'
-    +'.msg-row.theirs{max-width:96%;width:'+tgtWidth+'%;}'
-    +'.bbl-side:first-child .bbl-txt{font-size:'+srcSize+'px;}'
-    +'.bbl-side:last-child .bbl-txt{font-size:'+tgtSize+'px;}'
+    +'.msg-row.mine{max-width:96%;width:'+mineWidth+'%;}'
+    +'.msg-row.theirs{max-width:96%;width:'+theirsWidth+'%;}'
+    +'.msg-row.mine .bbl-txt{font-size:'+mineSize+'px;}'
+    +'.msg-row.theirs .bbl-txt{font-size:'+theirsSize+'px;}'
     // Mine text + icons
     +'.msg-row.mine .bbl-txt{color:'+mineText+';}'
     +'.msg-row.mine .bbl-sender{color:'+mineTextDim+';}'

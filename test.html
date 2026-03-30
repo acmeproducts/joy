@@ -78,9 +78,10 @@ textarea.field-input{resize:none;}
 .toggle-slider:before{position:absolute;content:'';height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;}
 .toggle-switch input:checked+.toggle-slider{background:var(--teal);}
 .toggle-switch input:checked+.toggle-slider:before{transform:translateX(18px);}
-/* Settings drawer in left panel */
-.left-settings-drawer{overflow:hidden;max-height:0;transition:max-height .28s cubic-bezier(.4,0,.2,1);}
-.left-settings-drawer.open{max-height:72vh;overflow-y:auto;border-bottom:1px solid var(--border);}
+/* Control panel drawer (separate from sessions panel) */
+.control-panel{position:absolute;inset:0 auto 0 0;width:min(86vw,320px);background:var(--cream);border-right:1px solid var(--border);box-shadow:var(--shadow);transform:translateX(-105%);transition:transform .22s cubic-bezier(.4,0,.2,1);z-index:31;display:flex;flex-direction:column;}
+.control-panel.open{transform:translateX(0);}
+.control-panel-body{flex:1;overflow-y:auto;}
 .left-gear.active{color:var(--teal);background:var(--teal-light);}
 .lsd-section{border-bottom:1px solid var(--border);}
 .lsd-section:last-child{border-bottom:none;}
@@ -311,6 +312,7 @@ textarea.field-input{resize:none;}
 .settings-icon-btn{background:none;border:none;color:var(--ink-mid);cursor:pointer;padding:4px;border-radius:6px;line-height:0;}
 .settings-icon-btn:hover{background:var(--paper);}
 .settings-icon-btn.danger:hover{color:var(--red);background:var(--red-light);}
+.settings-icon-btn svg{display:block;width:16px;height:16px;}
 
 /* ════ SEARCH OVERLAY ════ */
 .search-overlay{position:fixed;inset:0;background:var(--cream);z-index:35;display:none;flex-direction:column;}
@@ -380,65 +382,44 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <div class="left-scrim" id="left-scrim" onclick="closeLeftPanel()"></div>
   <aside class="left-panel" id="left-panel">
     <div class="left-top">
-      <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
+      <button class="left-gear" id="left-gear-btn" onclick="toggleControlPanel()" title="Control panel">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
 
-    <!-- Settings drawer — slides down below gear row -->
-    <div class="left-settings-drawer" id="left-settings-drawer">
+    <div class="left-body" id="left-body">
+      <div id="session-list"></div>
+      <div id="recycle-bin"></div>
+      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
+    </div>
+  </aside>
+  <aside class="control-panel" id="control-panel">
+    <div class="control-panel-body">
       <!-- Appearance -->
       <div class="lsd-section">
         <div class="lsd-section-title">Appearance</div>
         <table class="lsd-table" style="padding:0 0 4px;">
           <thead><tr><td></td><td>Me</td><td>Partner</td></tr></thead>
           <tbody>
-            <tr>
-              <td>Bubble</td>
-              <td><input type="color" id="set-src-bg" value="#2E8B8B" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcBg(this.value)"></td>
-              <td><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applyTgtBg(this.value)"></td>
-            </tr>
-            <tr>
-              <td>Font</td>
-              <td><input type="color" id="set-src-font" value="#ffffff" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcFontColor(this.value)"></td>
-              <td><input type="color" id="set-tgt-font" value="#1A1714" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applyTgtFontColor(this.value)"></td>
-            </tr>
-            <tr>
-              <td>Size</td>
-              <td><select id="set-bbl-size" class="lsd-select" onchange="applyGlobalSize(this.value)"><option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></td>
-              <td><select id="set-target-size" class="lsd-select" onchange="applyTargetSize(this.value)"><option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></td>
-            </tr>
-            <tr>
-              <td>Width</td>
-              <td style="padding:3px 8px 3px 4px;"><input type="range" min="50" max="95" step="5" id="set-bbl-width" class="lsd-range" oninput="applyGlobalWidth(this.value)"></td>
-              <td style="padding:3px 8px 3px 4px;"><input type="range" min="50" max="95" step="5" id="set-tgt-width" class="lsd-range" oninput="applyTgtWidth(this.value)"></td>
-            </tr>
+            <tr><td>Bubble</td><td><input type="color" id="set-src-bg" value="#2E8B8B" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcBg(this.value)"></td><td><input type="color" id="set-tgt-bg" value="#F5F1EC" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applyTgtBg(this.value)"></td></tr>
+            <tr><td>Font</td><td><input type="color" id="set-src-font" value="#ffffff" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applySrcFontColor(this.value)"></td><td><input type="color" id="set-tgt-font" value="#1A1714" style="width:34px;height:24px;border:none;border-radius:5px;cursor:pointer;padding:0;" oninput="applyTgtFontColor(this.value)"></td></tr>
+            <tr><td>Size</td><td><select id="set-bbl-size" class="lsd-select" onchange="applyGlobalSize(this.value)"><option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></td><td><select id="set-target-size" class="lsd-select" onchange="applyTargetSize(this.value)"><option>12</option><option>13</option><option>14</option><option selected>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></td></tr>
+            <tr><td>Width</td><td style="padding:3px 8px 3px 4px;"><input type="range" min="50" max="95" step="5" id="set-bbl-width" class="lsd-range" oninput="applyGlobalWidth(this.value)"></td><td style="padding:3px 8px 3px 4px;"><input type="range" min="50" max="95" step="5" id="set-tgt-width" class="lsd-range" oninput="applyTgtWidth(this.value)"></td></tr>
           </tbody>
         </table>
         <div style="padding:4px 14px 10px;"><button class="lsd-btn secondary" style="width:100%;" onclick="resetAllBubbleDefaults()">Reset appearance</button></div>
       </div>
-      <!-- Data -->
       <div class="lsd-section">
         <div class="lsd-section-title">Data</div>
         <table class="data-mgmt-grid" style="margin-bottom:6px;">
           <thead><tr><th></th><th>Settings</th></tr></thead>
           <tbody>
-            <tr>
-              <td>Export</td>
-              <td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td>
-            </tr>
-            <tr>
-              <td>Import</td>
-              <td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td>
-            </tr>
-            <tr>
-              <td>Clear</td>
-              <td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td>
-            </tr>
+            <tr><td>Export</td><td><button class="settings-icon-btn" onclick="exportAppSettings()" title="Export settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></td></tr>
+            <tr><td>Import</td><td><button class="settings-icon-btn" onclick="importAppSettings()" title="Import settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button></td></tr>
+            <tr><td>Clear</td><td><button class="settings-icon-btn danger" onclick="clearAppSettings()" title="Clear settings"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button></td></tr>
           </tbody>
         </table>
       </div>
-      <!-- Footer: reset + info -->
       <div class="lsd-section" style="border-bottom:none;">
         <div style="padding:8px 14px 10px;display:flex;flex-direction:column;gap:6px;">
           <button class="lsd-btn danger" style="width:100%;" onclick="resetAllSettings()">Reset all settings</button>
@@ -448,12 +429,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="left-body" id="left-body">
-      <div id="session-list"></div>
-      <div id="recycle-bin"></div>
-      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
     </div>
   </aside>
 
@@ -1798,8 +1773,8 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(function(s)
 // LEFT PANEL
 // ════════════════════════════════════════════════════════
 function openLeftPanel(){document.getElementById('left-panel').classList.add('open');document.getElementById('left-scrim').classList.add('show');renderSessionList();}
-function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');}
-function openControlPanel(){openLeftPanel();toggleSettingsDrawer();}
+function closeLeftPanel(){document.getElementById('left-panel').classList.remove('open');document.getElementById('left-scrim').classList.remove('show');closeSettings();}
+function openControlPanel(){openLeftPanel();toggleControlPanel(true);}
 function closeControlPanel(){closeSettings();}
 function saveLocalName(el){
   var prev=getPrefs().userName||'yournamehere';
@@ -3313,11 +3288,11 @@ var THEMES=[
 ];
 var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,accentColor:'#2E8B8B',targetAccentColor:'#1A1714'};
 
-function toggleSettingsDrawer(){
-  var d=document.getElementById('left-settings-drawer');
+function toggleControlPanel(forceOpen){
+  var d=document.getElementById('control-panel');
   var gb=document.getElementById('left-gear-btn');
   if(!d)return;
-  var opening=!d.classList.contains('open');
+  var opening=(typeof forceOpen==='boolean')?forceOpen:!d.classList.contains('open');
   d.classList.toggle('open',opening);
   if(gb)gb.classList.toggle('active',opening);
   if(opening)openSettings();
@@ -3336,7 +3311,7 @@ function openSettings(){
   var arCb=document.getElementById('set-autoread');if(arCb)arCb.checked=!!state.autoSpeakIncoming;
 }
 function closeSettings(){
-  var d=document.getElementById('left-settings-drawer');
+  var d=document.getElementById('control-panel');
   if(d)d.classList.remove('open');
   var gb=document.getElementById('left-gear-btn');
   if(gb)gb.classList.remove('active');

@@ -2209,10 +2209,28 @@ function renderRecycleBin(){var bin=document.getElementById('recycle-bin');if(!b
 
 // Share / invite
 function shareCurrentSession(){if(!state.activeConvId){toast('No active session');return;}shareSession(state.activeConvId);}
-var INVITE_SCHEMA_VERSION=1;
-function encodeInvitePayload(payload){try{return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));}catch(_){return '';}}
-function decodeInvitePayload(encoded){if(!encoded)return null;try{return JSON.parse(decodeURIComponent(escape(atob(encoded))));}catch(_){return null;}}
-function parseInviteFromSearch(searchParams){
+var INVITE_SCHEMA_VERSION=2;
+function encodeInvitePayload(payload){
+  try{
+    return btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
+      .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }catch(_){return '';}
+}
+function decodeInvitePayload(encoded){
+  if(!encoded)return null;
+  try{
+    var safe=String(encoded).replace(/-/g,'+').replace(/_/g,'/');
+    while(safe.length%4)safe+='=';
+    return JSON.parse(decodeURIComponent(escape(atob(safe))));
+  }catch(_){return null;}
+}
+function parseInviteFromSearch(searchParams,hashParams){
+  var hashInvite=hashParams&&hashParams.get('i');
+  if(hashInvite){
+    var hashPayload=validateInvitePayload(decodeInvitePayload(hashInvite));
+    if(!hashPayload)return {rejected:true,reason:'invalid-payload'};
+    return hashPayload;
+  }
   if(searchParams.get('j'))return {rejected:true,reason:'legacy-raw-url'};
   var rawInvite=searchParams.get('invite');
   if(!rawInvite)return null;
@@ -2224,13 +2242,43 @@ function parseInviteFromSearch(searchParams){
 }
 function validateInvitePayload(payload){
   if(!payload||typeof payload!=='object')return null;
-  if(payload.schemaVersion!==INVITE_SCHEMA_VERSION)return null;
-  if(typeof payload.sessionId!=='string'||!payload.sessionId.trim())return null;
-  if(typeof payload.initiatorDeviceId!=='string')return null;
-  if(payload.joinOrigin!=='share-partner'&&payload.joinOrigin!=='share-owner-handoff')return null;
-  if(payload.joinOrigin==='share-owner-handoff'&&payload.side!=='owner')return null;
-  if(payload.joinOrigin==='share-partner'&&payload.side!=='partner')return null;
-  return payload;
+  if(payload.schemaVersion===INVITE_SCHEMA_VERSION){
+    if(typeof payload.s!=='string'||!payload.s.trim())return null;
+    if(typeof payload.d!=='string')return null;
+    if(payload.o!=='p'&&payload.o!=='o')return null;
+    var mapped={
+      schemaVersion:INVITE_SCHEMA_VERSION,
+      sessionId:payload.s,
+      initiatorDeviceId:payload.d,
+      initiatorGlobalName:payload.n||'',
+      initiatorLang:payload.l||'',
+      initiatorAnnouncedAt:payload.a,
+      createdAt:payload.c,
+      joinOrigin:payload.o==='o'?'share-owner-handoff':'share-partner',
+      side:payload.o==='o'?'owner':'partner'
+    };
+    if(payload.pm!==undefined)mapped.partnerLangMode=payload.pm;
+    if(payload.pf!==undefined)mapped.partnerFixedLang=payload.pf;
+    if(payload.pl!==undefined)mapped.partnerLastSentLang=payload.pl;
+    if(payload.pe!==undefined)mapped.partnerEffectiveReplyLang=payload.pe;
+    if(payload.o==='o'){
+      if(payload.oi!==undefined)mapped.ownerIdentityId=payload.oi;
+      if(payload.om!==undefined)mapped.ownerLangMode=payload.om;
+      if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
+      if(payload.ol!==undefined)mapped.ownerLastSentLang=payload.ol;
+      if(payload.oe!==undefined)mapped.ownerEffectiveReplyLang=payload.oe;
+    }
+    return mapped;
+  }
+  if(payload.schemaVersion===1){
+    if(typeof payload.sessionId!=='string'||!payload.sessionId.trim())return null;
+    if(typeof payload.initiatorDeviceId!=='string')return null;
+    if(payload.joinOrigin!=='share-partner'&&payload.joinOrigin!=='share-owner-handoff')return null;
+    if(payload.joinOrigin==='share-owner-handoff'&&payload.side!=='owner')return null;
+    if(payload.joinOrigin==='share-partner'&&payload.side!=='partner')return null;
+    return payload;
+  }
+  return null;
 }
 function pruneInvitePayload(payload){
   var out={};
@@ -2244,23 +2292,22 @@ function pruneInvitePayload(payload){
 function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
   var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
-  var base={
-    sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',
-    initiatorLang:getEffectiveReplyLang(sess,'owner','en'),initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),
-    schemaVersion:INVITE_SCHEMA_VERSION,joinOrigin:(mode==='owner-handoff'?'share-owner-handoff':'share-partner'),
-    side:(mode==='owner-handoff'?'owner':'partner'),
-    partnerLangMode:sess.partnerLangMode,partnerFixedLang:sess.partnerFixedLang,partnerLastSentLang:sess.partnerLastSentLang,partnerEffectiveReplyLang:sess.partnerEffectiveReplyLang
-  };
+  var base={schemaVersion:INVITE_SCHEMA_VERSION,s:sess.convId,d:PART_ID,n:sess.myName||prefs.userName||'yournamehere',
+    l:getEffectiveReplyLang(sess,'owner','en'),a:Date.now(),c:Date.now(),o:(mode==='owner-handoff'?'o':'p')};
+  if(mode==='partner-invite'){
+    base.pm=sess.partnerLangMode;base.pf=sess.partnerFixedLang;base.pl=sess.partnerLastSentLang;base.pe=sess.partnerEffectiveReplyLang;
+  }
   if(mode==='owner-handoff'){
     // Preserve full owner/partner language-routing invariants during handoff hydration.
-    base.ownerIdentityId=sess.ownerIdentityId;base.ownerLangMode=sess.ownerLangMode;base.ownerFixedLang=sess.ownerFixedLang;base.ownerLastSentLang=sess.ownerLastSentLang;base.ownerEffectiveReplyLang=sess.ownerEffectiveReplyLang;
+    base.oi=sess.ownerIdentityId;base.om=sess.ownerLangMode;base.of=sess.ownerFixedLang;base.ol=sess.ownerLastSentLang;base.oe=sess.ownerEffectiveReplyLang;
+    base.pm=sess.partnerLangMode;base.pf=sess.partnerFixedLang;base.pl=sess.partnerLastSentLang;base.pe=sess.partnerEffectiveReplyLang;
   }
   return pruneInvitePayload(base);
 }
 function buildInviteUrl(sess,prefs,intent){
   var payload=buildInvitePayload(sess,prefs,intent);
   var encoded=encodeInvitePayload(payload);
-  if(encoded)return location.href.split('?')[0]+'?join=share&invite='+encodeURIComponent(encoded);
+  if(encoded)return location.href.split('?')[0].split('#')[0]+'#i='+encoded;
   return '';
 }
 
@@ -4195,7 +4242,8 @@ document.addEventListener('DOMContentLoaded',function(){
   function continueStartup(){
     // Deep link — share-origin invite only
     var up=new URLSearchParams(location.search);
-    var invite=parseInviteFromSearch(up);
+    var hp=new URLSearchParams((location.hash||'').replace(/^#/,''));
+    var invite=parseInviteFromSearch(up,hp);
     if(invite){
       history.replaceState({},'',location.pathname);
       if(invite.rejected){

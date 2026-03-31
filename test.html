@@ -131,6 +131,8 @@ textarea.field-input{resize:none;}
 .share-qr-frame.square{border-radius:10px;}
 .share-qr-frame.round{border-radius:999px;border-color:#2E8B8B;box-shadow:inset 0 0 0 4px rgba(46,139,139,.12);}
 .share-qr-canvas{width:280px;height:280px;display:flex;align-items:center;justify-content:center;}
+.share-qr-card.owner .share-qr-frame.round{background:#1D4ED8;border-color:#1D4ED8;box-shadow:inset 0 0 0 4px rgba(255,255,255,.18);}
+.share-qr-card.owner .share-qr-canvas{width:210px;height:210px;background:#fff;border-radius:0;overflow:hidden;}
 .share-qr-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:66%;padding:4px 8px;border-radius:10px;background:rgba(255,255,255,.92);font-size:12px;font-weight:700;line-height:1.25;text-align:center;color:var(--ink);pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.08);}
 .share-qr-card.partner .share-qr-label{color:#B42318;}
 .share-qr-card.owner .share-qr-label{color:#1D4ED8;}
@@ -762,10 +764,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </div>
     <div style="text-align:center;margin-top:-4px;">
       <a style="color:var(--ink);font-size:30px;font-weight:500;font-family:'Lora',serif;text-decoration:none;" id="share-handoff-link-text" href="#" target="_blank" onclick="copyShareLink('handoff');">Copy or Click</a>
-    </div>
-    <div class="sheet-btn-row">
-      <button class="sheet-btn secondary" onclick="this.closest('.overlay').hidden=true">Close</button>
-      <button class="sheet-btn secondary" onclick="copyShareLink('handoff')">Copy handoff link</button>
     </div>
   </div></div>
 </div>
@@ -2492,10 +2490,10 @@ function shareSession(cid){
   addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
   var h=document.getElementById('share-handoff-link-text');if(h){h.href=handoffUrl;h.dataset.url=handoffUrl;}
   var ownerLabel=document.getElementById('share-owner-label');
-  if(ownerLabel)ownerLabel.textContent='To Join as '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner')+'-'+(getSessionLabel(sess)||'Chat');
+  if(ownerLabel)ownerLabel.textContent='To Join as '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner');
   ['share-owner-qr'].forEach(function(id){var node=document.getElementById(id);if(node)node.innerHTML='';});
   if(window.QRCode){
-    try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:280,height:280,colorDark:'#1D4ED8',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
+    try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:210,height:210,colorDark:'#1D4ED8',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
   }
   document.getElementById('share-overlay').hidden=false;
 }

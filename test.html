@@ -1948,12 +1948,10 @@ function forceReconnect(){
   transportConnect(state.activeConvId,{preserveQueue:true});toast('Reconnecting\u2026');
 }
 
-// ── Dot indicator (element removed; keep function for call sites) ──────────
+// ── Presence indicator refresh ─────────────────────────
 function updateDot(){updatePresenceIndicators();}
 
 function onTransportEvent(h){transportHandlers.push(h);}
-
-// updateDot defined in transport block above
 
 // ════════════════════════════════════════════════════════
 // NAVIGATION
@@ -2145,7 +2143,6 @@ function closeInviteScreen(){
   state.pendingInviteId=null;
   showScreen('chat-screen');
 }
-// copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
   if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess){var hello=Object.assign({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId},buildOwnerRoutingHints(sess));transportSend(hello);}}
   toast('Invite resent');
@@ -2277,7 +2274,9 @@ function mergeHistorySyncChunk(sess,d){
     var wireFrom=raw&&raw.from;
     var role=(raw&&raw.ownerRole)||'';
     var localFrom=role==='owner'?'me':(role==='partner'?'them':((wireFrom==='me')?'them':(wireFrom==='them'?'me':wireFrom)));
-    var msg=normalizeMsgSchema(Object.assign({},raw,{from:localFrom,ownerRole:role||(localFrom==='me'?'owner':'partner')}),{sourceLang:raw.sourceLang||raw.lang||'en',targetLang:raw.targetLang||''});
+    var sourceFallback=getEffectiveReplyLang(sess,localFrom==='me'?'owner':'partner','en');
+    var targetFallback=getEffectiveReplyLang(sess,localFrom==='me'?'partner':'owner','');
+    var msg=normalizeMsgSchema(Object.assign({},raw,{from:localFrom,ownerRole:role||(localFrom==='me'?'owner':'partner')}),{sourceLang:raw.sourceLang||raw.lang||sourceFallback,targetLang:raw.targetLang||targetFallback});
     if(byId[msg.id])return;
     stampMsgNames(msg,sess);
     existing.push(msg);byId[msg.id]=msg;changed=true;

@@ -356,6 +356,17 @@ textarea.field-input{resize:none;}
 .onboarding-title-wrap::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;}
 .onboarding-title{position:relative;font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);padding:14px;}
 .onboarding-error{font-size:12px;color:var(--red);min-height:16px;}
+.new-chat-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;}
+.new-chat-modal[hidden]{display:none!important;}
+.new-chat-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
+.new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;}
+.new-chat-sub{font-size:12px;color:var(--ink-dim);}
+.new-chat-actions{display:flex;gap:8px;margin-top:6px;}
+.helper-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:280;width:min(92vw,420px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;}
+.helper-toast[hidden]{display:none!important;}
+.helper-toast-msg{font-size:12px;color:var(--ink);line-height:1.4;}
+.helper-toast-links{margin-top:8px;display:flex;gap:10px;}
+.helper-toast-link{background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:0;}
 @keyframes fadeIn{from{opacity:0;}}
 .sheet{background:var(--cream);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;animation:slideUp .22s ease-out;}
 @keyframes slideUp{from{transform:translateY(36px);opacity:.7;}}
@@ -503,7 +514,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="left-body" id="left-body">
       <div id="session-list"></div>
       <div id="recycle-bin"></div>
-      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
+      <button class="fab-plus" onclick="openNewChatModal()" title="New chat">+</button>
     </div>
   </aside>
 
@@ -529,7 +540,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <div class="shell-empty" id="shell-empty">
     <div class="shell-empty-logo">talk</div>
     <div style="color:var(--ink-dim);font-size:14px;text-align:center;">Select a conversation or start a new one</div>
-    <button onclick="createNewSession()" style="background:var(--teal);color:#fff;border:none;border-radius:11px;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">New Chat</button>
+    <button onclick="openNewChatModal()" style="background:var(--teal);color:#fff;border:none;border-radius:11px;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">New Chat</button>
   </div>
 
   <!-- Messages -->
@@ -596,6 +607,35 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <input class="field-input" id="onboarding-name" placeholder="Your name" maxlength="40">
     <button class="sheet-btn primary" id="onboarding-continue-btn" onclick="submitOnboardingName()">Continue</button>
     <div class="onboarding-error" id="onboarding-error"></div>
+  </div>
+</div>
+
+<div class="new-chat-modal" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal(true)">
+  <div class="new-chat-card">
+    <div class="new-chat-title">Start new chat</div>
+    <div class="new-chat-sub">Press Enter for OK, or Cancel to go back.</div>
+    <label class="field-label" style="margin-top:2px;">Your language</label>
+    <select class="field-select" id="new-chat-my-lang"></select>
+    <label class="field-label">Partner language</label>
+    <select class="field-select" id="new-chat-partner-lang"></select>
+    <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">Auto-read
+      <label class="toggle-switch" title="Auto-read for this chat launch">
+        <input type="checkbox" id="new-chat-autoread" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </label>
+    <div class="new-chat-actions">
+      <button class="sheet-btn secondary" type="button" onclick="closeNewChatModal(true)">Cancel</button>
+      <button class="sheet-btn primary" type="button" onclick="submitNewChatModal()">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="helper-toast" id="auto-read-helper" hidden>
+  <div class="helper-toast-msg">Auto-read is on. You can switch it off/on any time using the toggle in the top bar.</div>
+  <div class="helper-toast-links">
+    <button class="helper-toast-link" type="button" onclick="dismissAutoReadHelper()">Dismiss</button>
+    <button class="helper-toast-link" type="button" onclick="disableAutoReadHelper()">Don’t show again</button>
   </div>
 </div>
 
@@ -1185,7 +1225,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium',bubblePresetMeChoice:'pacific-blue',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='pacific-blue';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';return p;}
+function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoReadHelperSeenCount:0,autoReadHelperDisabled:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium',bubblePresetMeChoice:'pacific-blue',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='pacific-blue';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';if(!hasOwn(p,'autoReadHelperSeenCount'))p.autoReadHelperSeenCount=0;if(!hasOwn(p,'autoReadHelperDisabled'))p.autoReadHelperDisabled=false;return p;}
 function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';if(!next.bubblePreset)next.bubblePreset='medium';lsW(SK.prefs,JSON.stringify(next));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -2001,10 +2041,48 @@ function ensureUserName(callback){
   openOnboardingModal(function(name){if(callback)callback(name);});
   return false;
 }
-function createNewSession(silent){
+function populateNewChatLangSelect(id){
+  var sel=document.getElementById(id);if(!sel)return;
+  var cur=sel.value||'auto';
+  var rows=['<option value="auto">🌐 Auto</option>'];
+  LANGS.forEach(function(l){rows.push('<option value="'+l.code+'">'+l.flag+' '+escHtml(l.label)+'</option>');});
+  sel.innerHTML=rows.join('');
+  sel.value=cur||'auto';
+}
+function openNewChatModal(){
+  var modal=document.getElementById('new-chat-modal');
+  populateNewChatLangSelect('new-chat-my-lang');
+  populateNewChatLangSelect('new-chat-partner-lang');
+  var my=document.getElementById('new-chat-my-lang');if(my)my.value='auto';
+  var peer=document.getElementById('new-chat-partner-lang');if(peer)peer.value='auto';
+  var ar=document.getElementById('new-chat-autoread');if(ar)ar.checked=true;
+  if(modal)modal.hidden=false;
+  setTimeout(function(){if(my)my.focus();},30);
+}
+function closeNewChatModal(cancelled){
+  var modal=document.getElementById('new-chat-modal');
+  if(modal)modal.hidden=true;
+  if(cancelled)return;
+}
+function submitNewChatModal(){
+  var mySel=document.getElementById('new-chat-my-lang');
+  var peerSel=document.getElementById('new-chat-partner-lang');
+  var ar=document.getElementById('new-chat-autoread');
+  var opts={myLang:(mySel&&mySel.value)||'auto',partnerLang:(peerSel&&peerSel.value)||'auto',autoRead:!(ar&&!ar.checked)};
+  closeNewChatModal(false);
+  createNewSession(false,opts);
+}
+function createNewSession(silent,opts){
+  opts=opts||{};
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
+    var peerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(myLang?'fixed':'auto'),ownerFixedLang:myLang||'',partnerLangMode:(peerLang?'fixed':'auto'),partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    p.autoSpeakIncoming=opts.autoRead!==false;
+    savePrefs(p);
+    state.autoSpeakIncoming=!!p.autoSpeakIncoming;
+    updateAutoReadBtn();
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();
@@ -2029,6 +2107,7 @@ function openInviteScreen(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
+  showAutoReadHelperIfNeeded();
   resetActivePresence(cid);
   transportConnect(cid);
   renderAllMessages();
@@ -2094,6 +2173,7 @@ function openSession(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
+  showAutoReadHelperIfNeeded();
   resetActivePresence(cid);
   transportConnect(cid);
   state.pendingInviteId=cid;
@@ -2585,6 +2665,27 @@ function setAutoReadFromRibbon(checked){
 }
 function muteAutoRead(){if(canSpeak)synth.cancel();}
 function dismissAutoRead(){if(canSpeak)synth.cancel();if(state.autoSpeakIncoming)toggleAutoRead();}
+function showAutoReadHelperIfNeeded(){
+  var p=getPrefs();
+  if(!state.autoSpeakIncoming||p.autoReadHelperDisabled)return;
+  var seen=Number(p.autoReadHelperSeenCount)||0;
+  if(seen>=3)return;
+  var helper=document.getElementById('auto-read-helper');
+  if(!helper)return;
+  helper.hidden=false;
+  p.autoReadHelperSeenCount=seen+1;
+  savePrefs(p);
+}
+function dismissAutoReadHelper(){
+  var helper=document.getElementById('auto-read-helper');
+  if(helper)helper.hidden=true;
+}
+function disableAutoReadHelper(){
+  var p=getPrefs();
+  p.autoReadHelperDisabled=true;
+  savePrefs(p);
+  dismissAutoReadHelper();
+}
 
 // ════════════════════════════════════════════════════════
 // STT
@@ -4317,6 +4418,12 @@ function seedStarterData(){
 // ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   seedStarterData();
+  document.addEventListener('keydown',function(e){
+    var modal=document.getElementById('new-chat-modal');
+    if(!modal||modal.hidden)return;
+    if(e.key==='Enter'){e.preventDefault();submitNewChatModal();}
+    else if(e.key==='Escape'){e.preventDefault();closeNewChatModal(true);}
+  });
   if(canSpeak){synth.getVoices();if(synth.onvoiceschanged!==undefined)synth.onvoiceschanged=function(){synth.getVoices();};}
   if(!SpeechRec){var b=document.getElementById('stt-btn');if(b)b.style.display='none';}
 

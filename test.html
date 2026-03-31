@@ -962,7 +962,8 @@ function normalizeSession(sess){
     peerPresenceGeneration:Math.max(1,Number(raw.peerPresenceGeneration)||1),
     ownerPresenceGeneration:Math.max(1,Number(raw.ownerPresenceGeneration)||1),
     noteJoinKeys:(raw.noteJoinKeys&&typeof raw.noteJoinKeys==='object')?raw.noteJoinKeys:{},
-    noteRemapKeys:(raw.noteRemapKeys&&typeof raw.noteRemapKeys==='object')?raw.noteRemapKeys:{}
+    noteRemapKeys:(raw.noteRemapKeys&&typeof raw.noteRemapKeys==='object')?raw.noteRemapKeys:{},
+    noteRemapState:(raw.noteRemapState&&typeof raw.noteRemapState==='object')?raw.noteRemapState:{}
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
@@ -1571,6 +1572,23 @@ function getRoomRuntime(convId) {
 function buildLifecycleNoteKey(convId,identityId,role,phase,generation){
   return [String(convId||''),String(identityId||'unknown'),String(role||'partner'),String(phase||'join'),String(Math.max(1,Number(generation)||1))].join('/');
 }
+function getLifecycleIdentityId(sess,opts){
+  opts=opts||{};
+  var role=String(opts.role||'partner');
+  var fallbackName=firstRealName(opts.fallbackName)||'';
+  if(role==='owner')return String(opts.identityId||sess&&sess.ownerIdentityId||fallbackName||'owner');
+  return String(opts.identityId||sess&&sess.partnerIdentityId||sess&&sess.inviterDeviceId||fallbackName||'partner');
+}
+function pruneLifecycleKeys(map,max){
+  if(!map||typeof map!=='object')return {};
+  var limit=Math.max(50,Number(max)||200);
+  var keys=Object.keys(map);
+  if(keys.length<=limit)return map;
+  keys.sort(function(a,b){return Number(map[b]||0)-Number(map[a]||0);});
+  var out={};
+  keys.slice(0,limit).forEach(function(k){out[k]=map[k];});
+  return out;
+}
 function noteRuntimeJoin(convId,key,text,ts,dedupeKey){
   var rt=getRoomRuntime(convId);if(!rt||!text)return;
   if(key==='localJoin'){if(rt.localJoinNoted)return;rt.localJoinNoted=true;}
@@ -1584,6 +1602,7 @@ function noteRuntimeJoin(convId,key,text,ts,dedupeKey){
   if(sess){
     sess.noteJoinKeys=sess.noteJoinKeys&&typeof sess.noteJoinKeys==='object'?sess.noteJoinKeys:{};
     sess.noteJoinKeys[stableKey]=now;
+    sess.noteJoinKeys=pruneLifecycleKeys(sess.noteJoinKeys,300);
     putSession(sess);
   }
   addSystemNote(convId,text,now);
@@ -1598,6 +1617,7 @@ function noteRuntimeRemap(convId,text,ts,dedupeKey){
   if(sess){
     sess.noteRemapKeys=sess.noteRemapKeys&&typeof sess.noteRemapKeys==='object'?sess.noteRemapKeys:{};
     sess.noteRemapKeys[stableKey]=now;
+    sess.noteRemapKeys=pruneLifecycleKeys(sess.noteRemapKeys,300);
     putSession(sess);
   }
   addSystemNote(convId,text,now);
@@ -1616,7 +1636,7 @@ function markPeerSeen(convId,ts,opts){
   }
   if(!wasPresent&&!opts.suppressJoinNote){
     var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
-    var stablePeerKey=buildLifecycleNoteKey(convId,(peerLifecycleId||String(sess&&sess.partnerIdentityId||partnerName)),'partner','join',sess&&sess.peerPresenceGeneration);
+    var stablePeerKey=buildLifecycleNoteKey(convId,getLifecycleIdentityId(sess,{role:'partner',identityId:peerLifecycleId,fallbackName:partnerName}),'partner','join',sess&&sess.peerPresenceGeneration);
     if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' has joined · '+fmtDateTime(stamp),stamp,'peerJoin:'+stablePeerKey);
   }
   updateDot();
@@ -1638,13 +1658,23 @@ function peerIsFresh(){
   var rt=getRoomRuntime(state.activeConvId||connectedConvId);
   return !!(rt&&rt.peerPresent&&rt.peerLastSeenAt&&(Date.now()-rt.peerLastSeenAt)<30000);
 }
+function maybeExpirePeerPresence(convId,now,opts){
+  var rt=getRoomRuntime(convId);opts=opts||{};
+  if(!rt||!rt.peerPresent||!rt.peerLastSeenAt)return false;
+  var at=Number(now)||Date.now();
+  var ttl=Math.max(1000,Number(opts.ttlMs)||PING_TIMEOUT_MS);
+  if((at-rt.peerLastSeenAt)<ttl)return false;
+  markPeerLeft(convId,at,{suppressNote:true});
+  addDiagLog('PRESENCE expired after '+Math.round((at-rt.peerLastSeenAt)/1000)+'s');
+  return true;
+}
 function resetActivePresence(convId){
   var rt=getRoomRuntime(convId);
   if(rt&&convId){
     var sess=getSession(convId);
     var initiator=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere';
     if(sess){sess.ownerPresenceGeneration=Math.max(1,Number(sess.ownerPresenceGeneration)||1);putSession(sess);}
-    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now(),'localJoin:'+buildLifecycleNoteKey(convId,String(sess&&sess.ownerIdentityId||initiator),'owner','join',sess&&sess.ownerPresenceGeneration));
+    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now(),'localJoin:'+buildLifecycleNoteKey(convId,getLifecycleIdentityId(sess,{role:'owner',fallbackName:initiator}),'owner','join',sess&&sess.ownerPresenceGeneration));
     rt.selfPresent=true;
   }else if(rt){rt.selfPresent=false;}
   updateDot();
@@ -1728,6 +1758,7 @@ function startHeartbeatLoop(){
   hbTimer=setInterval(function(){
     if(!ws||ws.readyState!==1)return;
     var now=Date.now();
+    maybeExpirePeerPresence(connectedConvId,now,{ttlMs:PING_TIMEOUT_MS});
     var lastAct=Math.max(lastPongAt||0,lastRxAt||0);
     if(lastAct&&(now-lastAct)>PING_TIMEOUT_MS){
       markPeerLeft(connectedConvId,now,{suppressNote:true});
@@ -2582,13 +2613,23 @@ function upsertPartnerFromEnvelope(sess,d,opts){
 }
 function maybeEmitPartnerRemapNote(sess,nameUpdate,stamp){
   if(!sess||!nameUpdate)return;
-  var prevName=firstRealName(nameUpdate.prevName);
   var nextName=firstRealName(nameUpdate.nextName);
-  if(!prevName||!nextName||prevName===nextName)return;
-  var identity=nameUpdate.nextIdentity||sess.partnerIdentityId||sess.inviterDeviceId||'partner';
+  if(!nextName)return;
+  var effectiveStamp=Number(stamp)||Date.now();
+  var identity=getLifecycleIdentityId(sess,{role:'partner',identityId:(nameUpdate.nextIdentity||nameUpdate.prevIdentity),fallbackName:nextName});
   var gen=Math.max(1,Number(sess.peerPresenceGeneration)||1);
-  var remapKey=buildLifecycleNoteKey(sess.convId,identity,'partner','remap',gen)+'/'+prevName+'->'+nextName;
-  noteRuntimeRemap(sess.convId,prevName+' is now '+nextName,stamp||Date.now(),'peerRemap:'+remapKey);
+  var lifecycleKey=buildLifecycleNoteKey(sess.convId,identity,'partner','remap',gen);
+  sess.noteRemapState=(sess.noteRemapState&&typeof sess.noteRemapState==='object')?sess.noteRemapState:{};
+  var prior=sess.noteRemapState[lifecycleKey]&&typeof sess.noteRemapState[lifecycleKey]==='object'?sess.noteRemapState[lifecycleKey]:{};
+  var priorName=firstRealName(prior.currentName,nameUpdate.prevName);
+  var priorTs=Number(prior.ts)||0;
+  if(priorTs&&effectiveStamp<priorTs)return;
+  sess.noteRemapState[lifecycleKey]={currentName:nextName,ts:effectiveStamp};
+  sess.noteRemapState=pruneLifecycleKeys(sess.noteRemapState,120);
+  putSession(sess);
+  if(!priorName||priorName===nextName)return;
+  var remapKey=lifecycleKey+'/'+priorName+'->'+nextName;
+  noteRuntimeRemap(sess.convId,priorName+' is now '+nextName,effectiveStamp,'peerRemap:'+remapKey);
 }
 
 

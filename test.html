@@ -1071,7 +1071,13 @@ function getMsgs(cid){
   return norm;
 }
 function saveMsgs(cid,m){lsW('ts3_m_'+cid,JSON.stringify(sortMessagesChronologically(m).slice(-MAX_MSGS_PER_SESSION)));}
-function getMsgTranslatedText(msg,targetLang,fallback){var map=ensureMsgTranslations(msg);if(targetLang&&typeof map[targetLang]==='string'&&map[targetLang].trim())return map[targetLang];return fallback||'';}
+function getMsgTranslatedText(msg,targetLang,fallback){
+  var map=ensureMsgTranslations(msg);
+  if(targetLang&&typeof map[targetLang]==='string'&&map[targetLang].trim()){
+    return {text:map[targetLang],langUsed:targetLang};
+  }
+  return {text:fallback||'',langUsed:targetLang||msg&&msg.targetLang||''};
+}
 function deleteSessData(cid){lsDel('ts3_m_'+cid);}
 function markViewed(cid){var ss=getAllSessions();var s=ss.find(function(x){return x.convId===cid;});if(s){s.lastViewedAt=Date.now();saveSessions(ss);}}
 
@@ -1330,7 +1336,8 @@ function applyMsgTarget(msg,targetLang,targetText){
   var changed=false;
   if(setMsgTranslation(msg,targetLang,targetText||''))changed=true;
   if(msg.targetLang!==targetLang){msg.targetLang=targetLang;changed=true;}
-  var next=getMsgTranslatedText(msg,targetLang,targetText||'');
+  var nextInfo=getMsgTranslatedText(msg,targetLang,targetText||'');
+  var next=nextInfo.text;
   if((msg.targetText||'')!==next){msg.targetText=next;changed=true;}
   if(targetLang===msg.sourceLang&&msg.sourceText&&!(msg.translations||{})[targetLang]){setMsgTranslation(msg,targetLang,msg.sourceText);}
   var activeSess=getSession(state.activeConvId)||{};
@@ -2461,8 +2468,16 @@ function speak(text,lang,btn){
   ensureVoices(function(voices){
     var utt=new SpeechSynthesisUtterance(text);
     var locale=TTS_LOCALE[lang]||lang;
-    var voice=voices.find(function(v){return v.lang===locale;})||voices.find(function(v){return v.lang&&v.lang.indexOf(lang+'-')===0;});
-    if(voice)utt.voice=voice;else utt.lang=locale;
+    var base=(locale||lang||'').split('-')[0].toLowerCase();
+    var voice=
+      voices.find(function(v){return (v.lang||'').toLowerCase()===(locale||'').toLowerCase();}) ||
+      voices.find(function(v){return (v.lang||'').toLowerCase().indexOf(base+'-')===0;}) ||
+      voices.find(function(v){return ((v.lang||'').split('-')[0]||'').toLowerCase()===base;}) ||
+      voices.find(function(v){return !!v.default;}) ||
+      null;
+    utt.lang=locale||lang||'en';
+    if(voice)utt.voice=voice;
+    console.log('[TTS] attempt len=%d lang=%s voice=%s',String(text||'').length,utt.lang,(voice&&voice.name)||'browser-default');
     setTTSBtn(btn,true);ttsActive=btn;
     utt.onend=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
     utt.onerror=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
@@ -2722,12 +2737,14 @@ function handleRelayEvent(d){
 //   theme: 'mine' | 'theirs' | 'pb'
 // ════════════════════════════════════════════════════════
 function buildBubbleCard(cfg){
-  // cfg: {id, srcTxt, srcLang, tgtTxt, tgtLang, headerLeft, time, prov, footerMode, isMine, ctx}
+  // cfg: {id, srcTxt, srcLang, tgtTxt, tgtLang, srcTtsLang, tgtTtsLang, headerLeft, time, prov, footerMode, isMine, ctx}
   var id=cfg.id;
   var srcTxt=cfg.srcTxt||'';
   var tgtTxt=cfg.tgtTxt||'';
   var srcLang=cfg.srcLang||'en';
   var tgtLang=cfg.tgtLang||'en';
+  var srcTtsLang=cfg.srcTtsLang||srcLang;
+  var tgtTtsLang=cfg.tgtTtsLang||tgtLang;
   var isMine=!!cfg.isMine;
   var ctx=cfg.ctx||'chat';
 
@@ -2749,8 +2766,8 @@ function buildBubbleCard(cfg){
     +'</div></div>';
 
   // Body row 1+2: two equal columns with Use + TTS per side
-  var aS=attrSafe(srcTxt);var aSL=attrSafe(srcLang);
-  var aT=attrSafe(tgtTxt);var aTL=attrSafe(tgtLang);
+  var aS=attrSafe(srcTxt);var aSL=attrSafe(srcTtsLang);
+  var aT=attrSafe(tgtTxt);var aTL=attrSafe(tgtTtsLang);
   var srcClass='bbl-txt'+(srcTxt?'':' loading');
   var tgtClass='bbl-txt'+(tgtTxt?'':' loading');
 
@@ -2820,18 +2837,22 @@ function getSides(msg){
     // Left: what I typed (my lang). Right: translation into partner's lang.
     var srcTxt=msg.sourceText||'';
     var srcLang=msg.sourceLang||myLang;
-    var tgtTxt=getMsgTranslatedText(msg,partnerLang,msg.targetText||'');
-    var tgtLang=partnerLang;
-    return {srcLang:srcLang,srcTxt:srcTxt,tgtLang:tgtLang,tgtTxt:tgtTxt};
+    var targetKey=msg.targetLang||partnerLang;
+    var tgtInfo=getMsgTranslatedText(msg,targetKey,msg.targetText||'');
+    var tgtTxt=tgtInfo.text;
+    var tgtLang=targetKey;
+    return {srcLang:srcLang,srcTxt:srcTxt,srcTtsLang:srcLang,tgtLang:tgtLang,tgtTxt:tgtTxt,tgtTtsLang:tgtInfo.langUsed||tgtLang};
   }else{
     // Received message: left=translation (my lang), right=original (partner's lang).
     // This way the reader sees the meaning first, source second.
     var origTxt=msg.sourceText||'';
     var origLang=msg.sourceLang||partnerLang;
-    var transTxt=getMsgTranslatedText(msg,myLang,msg.targetText||'');
-    var transLang=myLang;
+    var targetKey=msg.targetLang||myLang;
+    var transInfo=getMsgTranslatedText(msg,targetKey,msg.targetText||'');
+    var transTxt=transInfo.text;
+    var transLang=targetKey;
     // srcTxt/srcLang = LEFT column, tgtTxt/tgtLang = RIGHT column
-    return {srcLang:transLang,srcTxt:transTxt,tgtLang:origLang,tgtTxt:origTxt};
+    return {srcLang:transLang,srcTxt:transTxt,srcTtsLang:transInfo.langUsed||transLang,tgtLang:origLang,tgtTxt:origTxt,tgtTtsLang:msg.sourceLang||origLang};
   }
 }
 
@@ -2844,11 +2865,11 @@ function getBacktranslateContextFromMsg(msg){
   var partnerLang=getEffectiveReplyLang(sess,'partner','en');
   if(msg.from==='me'){
     // Back-translate: take partner-lang translation, translate back to my lang
-    var tgtTxt=getMsgTranslatedText(msg,partnerLang,msg.targetText||'');
+    var tgtTxt=getMsgTranslatedText(msg,msg.targetLang||partnerLang,msg.targetText||'').text;
     return {inputText:tgtTxt,fromLang:partnerLang,toLang:msg.sourceLang||myLang};
   }else{
     // Back-translate: take my-lang translation, translate back to partner's lang (= source)
-    var transTxt=getMsgTranslatedText(msg,myLang,msg.targetText||'');
+    var transTxt=getMsgTranslatedText(msg,msg.targetLang||myLang,msg.targetText||'').text;
     return {inputText:transTxt,fromLang:myLang,toLang:msg.sourceLang||partnerLang};
   }
 }
@@ -2865,8 +2886,8 @@ function renderMsg(msg){
 
   var inner=buildBubbleCard({
     id:msg.id,
-    srcTxt:sides.srcTxt,srcLang:sides.srcLang,
-    tgtTxt:sides.tgtTxt,tgtLang:sides.tgtLang,
+    srcTxt:sides.srcTxt,srcLang:sides.srcLang,srcTtsLang:sides.srcTtsLang,
+    tgtTxt:sides.tgtTxt,tgtLang:sides.tgtLang,tgtTtsLang:sides.tgtTtsLang,
     headerLeft:name,
     time:fmtTime(msg.timestamp||Date.now()),
     status:msg.status||'sent',
@@ -3179,10 +3200,12 @@ function bblSave(id){
   var sourceText, sourceLang, targetText, targetLang;
   if(msg.from==='me'){
     sourceText=msg.sourceText||'';sourceLang=msg.sourceLang||myLang;
-    targetText=getMsgTranslatedText(msg,partnerLang,msg.targetText||'');targetLang=partnerLang;
+    targetLang=msg.targetLang||partnerLang;
+    targetText=getMsgTranslatedText(msg,targetLang,msg.targetText||'').text;
   }else{
     sourceText=msg.sourceText||'';sourceLang=msg.sourceLang||partnerLang;
-    targetText=getMsgTranslatedText(msg,myLang,msg.targetText||'');targetLang=myLang;
+    targetLang=msg.targetLang||myLang;
+    targetText=getMsgTranslatedText(msg,targetLang,msg.targetText||'').text;
   }
   if(!sourceText){toast('Nothing to save');return;}
   if(!targetText){toast('Wait for translation before saving');return;}

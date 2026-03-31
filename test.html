@@ -2006,11 +2006,16 @@ function openInviteScreen(cid){
 }
 
 function addInviteMessage(cid){
-  // Only add once per session
-  var exists=state.messages.some(function(m){return m.from==='invite'&&m.convId===cid;});
-  if(exists)return;
   var sess=getSession(cid)||{};
   var url=buildInviteUrl(sess,getPrefs(),'partner-invite');
+  var existing=state.messages.find(function(m){return m.from==='invite'&&m.convId===cid;});
+  if(existing){
+    if(existing.inviteUrl!==url){
+      existing.inviteUrl=url;
+      saveMsgs(cid,state.messages);
+    }
+    return;
+  }
   var msg={id:'inv-'+cid,from:'invite',convId:cid,inviteUrl:url,text:'Session created',timestamp:Date.now()};
   state.messages.push(msg);
   saveMsgs(cid,state.messages);
@@ -2230,6 +2235,19 @@ function decodeInvitePayload(encoded){
     while(safe.length%4)safe+='=';
     return JSON.parse(decodeURIComponent(escape(atob(safe))));
   }catch(_){return null;}
+}
+function isLegacyInviteUrl(url){
+  if(!url)return true;
+  try{
+    var parsed=new URL(url,location.href);
+    var s=parsed.searchParams;
+    var h=new URLSearchParams((parsed.hash||'').replace(/^#/,''));
+    if(h.get('i'))return false;
+    if(s.get('j'))return true;
+    if(s.get('invite'))return true;
+    if(s.get('join'))return true;
+    return false;
+  }catch(_){return true;}
 }
 function parseInviteFromSearch(searchParams,hashParams){
   var hashInvite=hashParams&&hashParams.get('i');
@@ -3322,7 +3340,15 @@ function addSysMsg(t){var c=document.getElementById('messages');if(!c)return;var
 
 function renderInviteCard(msg){
   var c=document.getElementById('messages');if(!c)return;
-  var url=msg.inviteUrl||'';
+  var cid=msg.convId||state.activeConvId;
+  var sess=cid?getSession(cid):null;
+  var currentUrl=sess?buildInviteUrl(sess,getPrefs(),'partner-invite'):'';
+  var needsMigration=!msg.inviteUrl||isLegacyInviteUrl(msg.inviteUrl)||!decodeInvitePayload(new URLSearchParams(String(msg.inviteUrl).split('#')[1]||'').get('i'));
+  if(currentUrl&&needsMigration&&msg.inviteUrl!==currentUrl){
+    msg.inviteUrl=currentUrl;
+    if(cid&&state.messages&&state.messages.indexOf(msg)>=0)saveMsgs(cid,state.messages);
+  }
+  var url=msg.inviteUrl||currentUrl||'';
   var card=document.createElement('div');
   card.id='invite-card-'+msg.id;
   card.style.cssText='background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:10px;';

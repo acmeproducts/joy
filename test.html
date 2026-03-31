@@ -713,35 +713,19 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <div class="overlay" id="share-overlay" hidden onclick="if(event.target===this)this.hidden=true">
   <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
-    <div class="sheet-title">Share links</div>
-    <div class="share-qr-card partner">
-      <div class="share-qr-title">Partner Invite (for your chat partner)</div>
-      <div class="share-qr-frame square">
-        <div id="share-partner-qr" class="share-qr-canvas"></div>
-        <div id="share-partner-label" class="share-qr-label">Chat with your partner</div>
-      </div>
-    </div>
-    <div style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;word-break:break-all;">
-      <a style="color:var(--teal);font-size:14px;font-weight:600;" id="share-link-text" href="#" target="_blank">—</a>
-    </div>
-    <p class="share-qr-note">Use this to invite your chat partner.</p>
+    <div class="sheet-title" style="text-align:center;font-size:32px;letter-spacing:.04em;">OWNER</div>
     <div class="share-qr-card owner">
-      <div class="share-qr-title">Owner Handoff (same owner, new device)</div>
       <div class="share-qr-frame round">
         <div id="share-owner-qr" class="share-qr-canvas"></div>
-        <div id="share-owner-label" class="share-qr-label">Join as owner</div>
+        <div id="share-owner-label" class="share-qr-label">To Join as owner</div>
       </div>
     </div>
-    <div style="background:var(--paper);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;word-break:break-all;">
-      <a style="color:var(--teal);font-size:14px;font-weight:600;" id="share-handoff-link-text" href="#" target="_blank">—</a>
+    <div style="text-align:center;margin-top:-4px;">
+      <a style="color:var(--ink);font-size:30px;font-weight:500;font-family:'Lora',serif;text-decoration:none;" id="share-handoff-link-text" href="#" target="_blank" onclick="copyShareLink('handoff');">Copy or Click</a>
     </div>
-    <p class="share-qr-note">Use this only when you are switching your own device.</p>
     <div class="sheet-btn-row">
       <button class="sheet-btn secondary" onclick="this.closest('.overlay').hidden=true">Close</button>
-      <button class="sheet-btn secondary" onclick="copyShareLink('partner')">Copy partner link</button>
       <button class="sheet-btn secondary" onclick="copyShareLink('handoff')">Copy handoff link</button>
-      <button class="sheet-btn primary" onclick="shareInviteLink('partner')">Share Partner Invite</button>
-      <button class="sheet-btn primary" onclick="shareInviteLink('handoff')">Share Owner Handoff</button>
     </div>
   </div></div>
 </div>
@@ -980,6 +964,7 @@ function normalizeSession(sess){
     partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',
     partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
     partnerEffectiveReplyLang:normalizeLangSetting(raw.partnerEffectiveReplyLang)||'',
+    partnerJoinedAt:Number(raw.partnerJoinedAt)||0,
     peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
@@ -2318,6 +2303,7 @@ function evaluateInviteAdmission(invite){
   if(!invite||invite.joinOrigin!=='share-partner')return {allowed:true};
   var sess=invite.sessionId&&getSession(invite.sessionId);
   if(!sess)return {allowed:true};
+  if(Number(sess.partnerJoinedAt)&&Date.now()>Number(sess.partnerJoinedAt))return {allowed:false,reason:'partner-joined-at-locked'};
   var rt=getRoomRuntime(invite.sessionId);
   var hasPartnerIdentity=!!String(sess.partnerIdentityId||'').trim();
   var activePeer=!!(rt&&rt.peerEverSeen&&((Date.now()-(rt.peerLastSeenAt||0))<180000));
@@ -2418,30 +2404,25 @@ function hydrateSessionFromInvite(sess,invite){
 function shareSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
   var p=getPrefs();
-  var url=buildInviteUrl(sess,p,'partner-invite');
   var handoffUrl=buildInviteUrl(sess,p,'owner-handoff');
-  if(!url||!handoffUrl){toast('Unable to generate share link');return;}
+  if(!handoffUrl){toast('Unable to generate share link');return;}
   var SHARE_URL_WARN_LEN=520;
-  addDiagLog('share url length partner='+url.length+' owner-handoff='+handoffUrl.length);
-  if(url.length>SHARE_URL_WARN_LEN||handoffUrl.length>SHARE_URL_WARN_LEN)toast('Share link is long; QR scan may be less reliable on older cameras.');
+  addDiagLog('share url length owner-handoff='+handoffUrl.length);
+  if(handoffUrl.length>SHARE_URL_WARN_LEN)toast('Share link is long; QR scan may be less reliable on older cameras.');
   addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
-  var el=document.getElementById('share-link-text');if(el){el.href=url;el.textContent=url;}
-  var h=document.getElementById('share-handoff-link-text');if(h){h.href=handoffUrl;h.textContent=handoffUrl;}
-  var partnerLabel=document.getElementById('share-partner-label');
-  if(partnerLabel)partnerLabel.textContent='Chat with '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'your partner');
+  var h=document.getElementById('share-handoff-link-text');if(h){h.href=handoffUrl;h.dataset.url=handoffUrl;}
   var ownerLabel=document.getElementById('share-owner-label');
-  if(ownerLabel)ownerLabel.textContent='Join "'+(getSessionLabel(sess)||'Chat')+'" as "'+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner')+'"';
-  ['share-partner-qr','share-owner-qr'].forEach(function(id){var node=document.getElementById(id);if(node)node.innerHTML='';});
+  if(ownerLabel)ownerLabel.textContent='To Join as '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner')+'-'+(getSessionLabel(sess)||'Chat');
+  ['share-owner-qr'].forEach(function(id){var node=document.getElementById(id);if(node)node.innerHTML='';});
   if(window.QRCode){
-    try{new QRCode(document.getElementById('share-partner-qr'),{text:url,width:280,height:280,colorDark:'#B42318',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
     try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:280,height:280,colorDark:'#1D4ED8',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
   }
   document.getElementById('share-overlay').hidden=false;
 }
 function getShareLink(kind){
-  var id=(kind==='handoff')?'share-handoff-link-text':'share-link-text';
+  var id='share-handoff-link-text';
   var el=document.getElementById(id);
-  return el?el.href:'';
+  return el?(el.dataset.url||el.href):'';
 }
 function shareInviteLink(kind){
   var url=getShareLink(kind);
@@ -3439,54 +3420,39 @@ function renderInviteCard(msg){
     if(cid&&state.messages&&state.messages.indexOf(msg)>=0)saveMsgs(cid,state.messages);
   }
   var url=msg.inviteUrl||currentUrl||'';
+  var ownerName=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'Mike';
   var card=document.createElement('div');
   card.id='invite-card-'+msg.id;
-  card.style.cssText='background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:10px;';
-  // Timestamp
-  var ts=document.createElement('div');
-  ts.style.cssText='font-size:10px;color:var(--ink-dim);';
-  ts.textContent='Session created \u00b7 '+fmtDateTime(msg.timestamp);
-  card.appendChild(ts);
+  card.style.cssText='background:#D9D9D9;border:1px solid #cfcfcf;border-radius:0;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:8px;';
+  var title=document.createElement('div');
+  title.style.cssText='font-size:34px;line-height:1;font-weight:700;color:#000;letter-spacing:.03em;';
+  title.textContent='PARTNER';
+  card.appendChild(title);
   // QR code
   var qrWrap=document.createElement('div');
-  qrWrap.style.cssText='width:180px;height:180px;background:#fff;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+  qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:flex;align-items:center;justify-content:center;overflow:hidden;';
   card.appendChild(qrWrap);
   var qrLabel=document.createElement('div');
-  qrLabel.style.cssText='font-size:11px;color:var(--ink-dim);font-weight:600;';
-  qrLabel.textContent='Partner invite QR/link';
-  card.appendChild(qrLabel);
-  // Link
-  var linkDiv=document.createElement('div');
-  linkDiv.style.cssText='width:100%;background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:6px 8px;word-break:break-all;font-size:10px;color:var(--teal);font-weight:600;';
-  linkDiv.textContent=url;
-  card.appendChild(linkDiv);
-  // Buttons
-  var btnRow=document.createElement('div');
-  btnRow.style.cssText='display:flex;gap:6px;width:100%;';
-  var copyBtn=document.createElement('button');
-  copyBtn.textContent='Copy';
-  copyBtn.style.cssText='flex:1;background:var(--teal);color:#fff;border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;';
-  copyBtn.addEventListener('click',function(){copyTextToClipboard(url);});
-  btnRow.appendChild(copyBtn);
-  if(navigator.share){
-    var shareBtn=document.createElement('button');
-    shareBtn.textContent='Share';
-    shareBtn.style.cssText='flex:1;background:var(--paper);color:var(--ink-mid);border:1.5px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;';
-    shareBtn.addEventListener('click',function(){navigator.share({url:url}).catch(function(){});});
-    btnRow.appendChild(shareBtn);
-  }
-  card.appendChild(btnRow);
-  // Status line
-  var statusDiv=document.createElement('div');
-  statusDiv.id='invite-status-'+msg.convId;
-  statusDiv.style.cssText='font-size:11px;color:var(--ink-dim);';
-  card.appendChild(statusDiv);
+  qrLabel.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;color:#D92D20;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:600;';
+  qrLabel.textContent='Chat with '+ownerName;
+  qrWrap.appendChild(qrLabel);
+  var joinLine=document.createElement('div');
+  joinLine.style.cssText='font-size:22px;line-height:1.1;color:#000;font-weight:700;text-align:center;';
+  joinLine.textContent='To Chat with '+ownerName;
+  card.appendChild(joinLine);
+  var actionLink=document.createElement('a');
+  actionLink.href=url||'#';
+  actionLink.target='_blank';
+  actionLink.rel='noopener';
+  actionLink.style.cssText='font-size:30px;line-height:1;color:#000;text-decoration:none;';
+  actionLink.textContent='Copy or Click';
+  actionLink.addEventListener('click',function(){if(url)copyTextToClipboard(url);});
+  card.appendChild(actionLink);
   c.appendChild(card);
   // Draw QR
   if(url&&window.QRCode){
-    try{new QRCode(qrWrap,{text:url,width:180,height:180,colorDark:'#1A1714',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
+    try{new QRCode(qrWrap,{text:url,width:170,height:170,colorDark:'#D92D20',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});}catch(e){}
   }
-  refreshInviteStatus(msg.convId);
 }
 
 // Composer
@@ -4409,6 +4375,7 @@ document.addEventListener('DOMContentLoaded',function(){
         sess=hydrateSessionFromInvite(sess,invite);
         sess.localRole=getSessionLocalRole(sess,invite);
         if(sess.localRole==='partner'&&!sess.partnerIdentityId)sess.partnerIdentityId=String(PART_ID||DEVICE_ID||uid());
+        if(invite.side==='partner'&&!sess.partnerJoinedAt)sess.partnerJoinedAt=Date.now();
         state.activeConvId=invite.sessionId;
         state.messages=getMsgs(invite.sessionId);
         addInviteMessage(invite.sessionId);

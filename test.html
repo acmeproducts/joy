@@ -493,7 +493,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="left-body" id="left-body">
       <div id="session-list"></div>
       <div id="recycle-bin"></div>
-      <button class="fab-plus" onclick="createNewSession()" title="New chat">+</button>
+      <button class="fab-plus" onclick="createNewSession()" data-new-chat-btn="1" title="New chat">+</button>
     </div>
   </aside>
 
@@ -519,7 +519,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <div class="shell-empty" id="shell-empty">
     <div class="shell-empty-logo">talk</div>
     <div style="color:var(--ink-dim);font-size:14px;text-align:center;">Select a conversation or start a new one</div>
-    <button onclick="createNewSession()" style="background:var(--teal);color:#fff;border:none;border-radius:11px;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">New Chat</button>
+    <button onclick="createNewSession()" data-new-chat-btn="1" style="background:var(--teal);color:#fff;border:none;border-radius:11px;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">New Chat</button>
   </div>
 
   <!-- Messages -->
@@ -4401,6 +4401,12 @@ document.addEventListener('DOMContentLoaded',function(){
     }
   }
   ensureUserName(function(){continueStartup();});
+  document.querySelectorAll('[data-new-chat-btn="1"]').forEach(function(btn){
+    btn.addEventListener('click',function(ev){
+      if(ev&&typeof ev.preventDefault==='function')ev.preventDefault();
+      createNewSession();
+    });
+  });
   var onboardInput=document.getElementById('onboarding-name');
   if(onboardInput)onboardInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submitOnboardingName();}});
 

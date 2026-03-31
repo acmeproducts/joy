@@ -717,8 +717,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <p style="font-size:12px;color:var(--ink-dim);margin:10px 0 0;">Use this only when you are switching your own device.</p>
     <div class="sheet-btn-row">
       <button class="sheet-btn secondary" onclick="this.closest('.overlay').hidden=true">Close</button>
-      <button class="sheet-btn primary" onclick="copyShareLink('partner')">Copy partner link</button>
-      <button class="sheet-btn primary" onclick="copyShareLink('handoff')">Copy handoff link</button>
+      <button class="sheet-btn primary" onclick="copyShareLink()">Copy link</button>
     </div>
   </div></div>
 </div>
@@ -923,9 +922,7 @@ var tagPickerSelectedTags=[];
 var tEngine='cloud',ttsActive=null;
 var typingTimer=null;
 var typingStopTimer=null;
-var peerTypingStartedAt=0;
 var localTypingActive=false;
-var pendingIncomingReadAt={};
 var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
 var recognition=null,sttActive=false;
 
@@ -958,11 +955,7 @@ function normalizeSession(sess){
     partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',
     partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
     partnerEffectiveReplyLang:normalizeLangSetting(raw.partnerEffectiveReplyLang)||'',
-    peerLastSeenAt:Number(raw.peerLastSeenAt)||0,
-    peerPresenceGeneration:Math.max(1,Number(raw.peerPresenceGeneration)||1),
-    ownerPresenceGeneration:Math.max(1,Number(raw.ownerPresenceGeneration)||1),
-    noteJoinKeys:(raw.noteJoinKeys&&typeof raw.noteJoinKeys==='object')?raw.noteJoinKeys:{},
-    noteRemapKeys:(raw.noteRemapKeys&&typeof raw.noteRemapKeys==='object')?raw.noteRemapKeys:{}
+    peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
@@ -1248,15 +1241,6 @@ function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]
 function getPreferredOwnerName(){var p=getPrefs();return firstRealName(p.globalName,p.userName)||'yournamehere';}
 function effectiveLangFromSession(sess){return getEffectiveReplyLang(sess,'owner','en');}
 function getEffectiveTargetLang(sess){return resolveTargetLang(sess);}
-function buildOwnerRoutingHints(sess){
-  var s=normalizeSession(sess||{});
-  return {
-    ownerLangMode:s.ownerLangMode,
-    ownerFixedLang:s.ownerFixedLang||'',
-    ownerLastSentLang:s.ownerLastSentLang||'',
-    ownerEffectiveReplyLang:getEffectiveReplyLang(s,'owner','en')
-  };
-}
 
 function stampMsgNames(msg,sess){
   var s=sess?normalizeSession(sess):normalizeSession({});
@@ -1306,37 +1290,6 @@ function fmtTime(t){return new Date(t).toLocaleTimeString([],{hour:'2-digit',min
 function fmtDateTime(t){if(!t)return'';return new Date(t).toLocaleString([],{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 var statusPopupState={msgId:null,anchorKey:''};
 function closeStatusPopup(){var pop=document.getElementById('status-popup');if(pop)pop.hidden=true;statusPopupState.msgId=null;statusPopupState.anchorKey='';}
-function markIncomingReadAt(msg,stamp){
-  if(!msg||msg.from!=='them'||msg.readAt)return false;
-  msg.readAt=stamp||Date.now();
-  return true;
-}
-function queueIncomingReadAt(convId,msgId,stamp){
-  if(!convId||!msgId)return;
-  if(!pendingIncomingReadAt[convId])pendingIncomingReadAt[convId]={};
-  if(!pendingIncomingReadAt[convId][msgId])pendingIncomingReadAt[convId][msgId]=stamp||Date.now();
-}
-function flushPendingIncomingRead(convId){
-  var cid=convId||state.activeConvId;
-  if(!cid||document.hidden)return;
-  var byId=pendingIncomingReadAt[cid];
-  if(!byId)return;
-  var msgs=(cid===state.activeConvId)?state.messages:getMsgs(cid);
-  var changed=false;
-  Object.keys(byId).forEach(function(msgId){
-    for(var i=0;i<msgs.length;i++){
-      if(msgs[i]&&msgs[i].id===msgId&&msgs[i].from==='them'){
-        if(markIncomingReadAt(msgs[i],Date.now()))changed=true;
-        break;
-      }
-    }
-  });
-  delete pendingIncomingReadAt[cid];
-  if(changed){
-    saveMsgs(cid,msgs);
-    if(cid===state.activeConvId)renderAllMessages();
-  }
-}
 function openStatusPopup(msgId,anchorEl){
   var msg=findMsg(msgId);
   var deliveredEl=document.getElementById('status-popup-delivered');
@@ -1559,17 +1512,9 @@ function getRoomRuntime(convId) {
   if (!roomRuntimeByConv[convId]) roomRuntimeByConv[convId] = {
     selfPresent:false,peerPresent:false,peerEverSeen:false,
     peerLastSeenAt:0,localJoinNoted:false,peerJoinNoted:false,
-    peerLeftNoted:false,connectedOnce:false,lastHistorySyncSentAt:0,joinEventKeys:{},remapEventKeys:{}
+    peerLeftNoted:false,connectedOnce:false,lastHistorySyncSentAt:0,joinEventKeys:{}
   };
-  var sess=getSession(convId);
-  if(sess){
-    roomRuntimeByConv[convId].joinEventKeys=(sess.noteJoinKeys&&typeof sess.noteJoinKeys==='object')?sess.noteJoinKeys:roomRuntimeByConv[convId].joinEventKeys||{};
-    roomRuntimeByConv[convId].remapEventKeys=(sess.noteRemapKeys&&typeof sess.noteRemapKeys==='object')?sess.noteRemapKeys:roomRuntimeByConv[convId].remapEventKeys||{};
-  }
   return roomRuntimeByConv[convId];
-}
-function buildLifecycleNoteKey(convId,identityId,role,phase,generation){
-  return [String(convId||''),String(identityId||'unknown'),String(role||'partner'),String(phase||'join'),String(Math.max(1,Number(generation)||1))].join('/');
 }
 function noteRuntimeJoin(convId,key,text,ts,dedupeKey){
   var rt=getRoomRuntime(convId);if(!rt||!text)return;
@@ -1580,58 +1525,30 @@ function noteRuntimeJoin(convId,key,text,ts,dedupeKey){
   var stableKey=String(dedupeKey||key||'join');
   if(rt.joinEventKeys&&rt.joinEventKeys[stableKey])return;
   rt.joinEventKeys[stableKey]=now;
-  var sess=getSession(convId);
-  if(sess){
-    sess.noteJoinKeys=sess.noteJoinKeys&&typeof sess.noteJoinKeys==='object'?sess.noteJoinKeys:{};
-    sess.noteJoinKeys[stableKey]=now;
-    putSession(sess);
-  }
-  addSystemNote(convId,text,now);
-}
-function noteRuntimeRemap(convId,text,ts,dedupeKey){
-  var rt=getRoomRuntime(convId);if(!rt||!text)return;
-  var now=ts||Date.now();
-  var stableKey=String(dedupeKey||'remap');
-  if(rt.remapEventKeys&&rt.remapEventKeys[stableKey])return;
-  rt.remapEventKeys[stableKey]=now;
-  var sess=getSession(convId);
-  if(sess){
-    sess.noteRemapKeys=sess.noteRemapKeys&&typeof sess.noteRemapKeys==='object'?sess.noteRemapKeys:{};
-    sess.noteRemapKeys[stableKey]=now;
-    putSession(sess);
-  }
   addSystemNote(convId,text,now);
 }
 function markPeerSeen(convId,ts,opts){
   var rt=getRoomRuntime(convId);opts=opts||{};
   if(!rt||opts.fromBackfill)return;
   var stamp=ts||Date.now();var wasPresent=rt.peerPresent;
-  var peerLifecycleId=String(opts.peerLifecycleId||'');
   rt.peerLastSeenAt=stamp;rt.peerEverSeen=true;rt.peerPresent=true;
   var sess=getSession(convId);
   if(sess){
     sess.peerLastSeenAt=stamp;
-    sess.peerPresenceGeneration=Math.max(1,Number(sess.peerPresenceGeneration)||1);
     putSession(sess);
   }
   if(!wasPresent&&!opts.suppressJoinNote){
     var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
-    var stablePeerKey=buildLifecycleNoteKey(convId,(peerLifecycleId||String(sess&&sess.partnerIdentityId||partnerName)),'partner','join',sess&&sess.peerPresenceGeneration);
-    if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' has joined · '+fmtDateTime(stamp),stamp,'peerJoin:'+stablePeerKey);
+    if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' has joined · '+fmtDateTime(stamp),stamp,'peerJoin:'+String(sess&&sess.partnerIdentityId||partnerName));
   }
   updateDot();
 }
-function markPeerLeft(convId,ts,opts){
-  opts=opts||{};
+function markPeerLeft(convId,ts){
   var rt=getRoomRuntime(convId);if(!rt||!rt.peerPresent)return;
   rt.peerPresent=false;
   rt.peerJoinNoted=false;
-  var sess=getSession(convId);
-  if(sess){
-    sess.peerPresenceGeneration=Math.max(1,Number(sess.peerPresenceGeneration)||1)+1;
-    putSession(sess);
-  }
-  if(!opts.suppressNote)noteRuntimeJoin(convId,'peerLeft','Partner left',ts||Date.now());
+  Object.keys(rt.joinEventKeys||{}).forEach(function(k){if(k.indexOf('peerJoin:')===0)delete rt.joinEventKeys[k];});
+  noteRuntimeJoin(convId,'peerLeft','Partner left',ts||Date.now());
   updateDot();
 }
 function peerIsFresh(){
@@ -1643,8 +1560,7 @@ function resetActivePresence(convId){
   if(rt&&convId){
     var sess=getSession(convId);
     var initiator=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere';
-    if(sess){sess.ownerPresenceGeneration=Math.max(1,Number(sess.ownerPresenceGeneration)||1);putSession(sess);}
-    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now(),'localJoin:'+buildLifecycleNoteKey(convId,String(sess&&sess.ownerIdentityId||initiator),'owner','join',sess&&sess.ownerPresenceGeneration));
+    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now(),'localJoin:'+String(sess&&sess.ownerIdentityId||initiator));
     rt.selfPresent=true;
   }else if(rt){rt.selfPresent=false;}
   updateDot();
@@ -1730,7 +1646,6 @@ function startHeartbeatLoop(){
     var now=Date.now();
     var lastAct=Math.max(lastPongAt||0,lastRxAt||0);
     if(lastAct&&(now-lastAct)>PING_TIMEOUT_MS){
-      markPeerLeft(connectedConvId,now,{suppressNote:true});
       addDiagLog('HEARTBEAT timeout — reconnecting');
       ws.close(4002,'ping-timeout');return;
     }
@@ -1790,7 +1705,6 @@ function transportConnect(convId,opts){
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq};
-    Object.assign(hello,buildOwnerRoutingHints(sess));
     addDiagLog('TX hello name='+hello.name+' lang='+hello.lang);
     try{ws.send(JSON.stringify(hello));}catch(_){}
     fetchBackfill();
@@ -1814,7 +1728,6 @@ function transportConnect(convId,opts){
   ws.onclose=function(ev){
     if(ws!==ref)return;ws=null;stopHeartbeatLoop();clearTimeout(ct);
     addDiagLog('DISCONNECTED code='+ev.code+(intentionalClose?' (intentional)':''));
-    markPeerLeft(connectedConvId,Date.now(),{suppressNote:true});
     if(intentionalClose){setSocketState('closed');return;}
     var rt=getRoomRuntime(connectedConvId);if(rt)rt.selfPresent=false;
     setSocketState('reconnecting');scheduleReconnect();
@@ -1843,7 +1756,6 @@ function transportDisconnect(opts){
   stopHeartbeatLoop();
   if(!opts.preserveQueue){outQ=[];pendingAcks={};}
   var prev=connectedConvId;connectedConvId=null;
-  markPeerLeft(prev,Date.now(),{suppressNote:true});
   var rt=getRoomRuntime(prev);if(rt)rt.selfPresent=false;
   setSocketState('closed');
 }
@@ -1889,7 +1801,6 @@ function markMessageDeliveryState(convId,msgId,status,stamp){
 // ── Visibility / focus ────────────────────────────────────
 document.addEventListener('visibilitychange',function(){
   if(document.hidden){_hiddenAt=Date.now();/* heartbeat keeps running */return;}
-  flushPendingIncomingRead(state.activeConvId);
   var hiddenMs=Date.now()-(_hiddenAt||0);
   if(state.activeConvId){
     if(hiddenMs>20000||!ws||ws.readyState!==1){
@@ -1899,7 +1810,6 @@ document.addEventListener('visibilitychange',function(){
   }
 });
 window.addEventListener('focus',function(){
-  flushPendingIncomingRead(state.activeConvId);
   var hiddenMs=_hiddenAt?Date.now()-_hiddenAt:0;
   if(state.activeConvId){
     if(hiddenMs>20000||!ws||ws.readyState!==1){addDiagLog('FOCUS return — reconnecting');rcAttempts=0;transportConnect(state.activeConvId,{preserveQueue:true});}
@@ -1950,7 +1860,6 @@ function saveLocalName(el){
     var sess=getSession(connectedConvId);
     var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:'owner',identityId:sess&&sess.ownerIdentityId,
       name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),ts:Date.now(),seq:++msgSeq};
-    Object.assign(helloMsg,buildOwnerRoutingHints(sess));
     try{ws.send(JSON.stringify(helloMsg));}catch(_){}
   }
   toast('Name saved');
@@ -2015,7 +1924,6 @@ function setMyLang(code){
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq};
-    Object.assign(hello,buildOwnerRoutingHints(sess));
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
   if(!code){toast('🌐 Language set to Auto-detect');}
@@ -2116,7 +2024,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess){var hello=Object.assign({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId},buildOwnerRoutingHints(sess));transportSend(hello);}}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId});}
   toast('Invite resent');
 }
 
@@ -2195,7 +2103,7 @@ function saveOwnerName(el){
   updatePartnerHeader(sess);
   renderSessionList();
   addSystemNote(sess.convId,'You are now '+v,Date.now());
-  transportSend(Object.assign({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId,timestamp:Date.now()},buildOwnerRoutingHints(sess)));
+  transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess.ownerIdentityId,timestamp:Date.now()});
 }
 
 var HISTORY_SYNC_MAX=1500;
@@ -2337,15 +2245,15 @@ function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
   var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
   var base={
-    sessionId:sess.convId,initiatorDeviceId:DEVICE_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',
+    sessionId:sess.convId,initiatorDeviceId:PART_ID,initiatorGlobalName:sess.myName||prefs.userName||'yournamehere',
     initiatorLang:getEffectiveReplyLang(sess,'owner','en'),initiatorAnnouncedAt:Date.now(),createdAt:Date.now(),
     schemaVersion:INVITE_SCHEMA_VERSION,joinOrigin:(mode==='owner-handoff'?'share-owner-handoff':'share-partner'),
-    side:(mode==='owner-handoff'?'owner':'partner')
+    side:(mode==='owner-handoff'?'owner':'partner'),
+    partnerLangMode:sess.partnerLangMode,partnerFixedLang:sess.partnerFixedLang,partnerLastSentLang:sess.partnerLastSentLang,partnerEffectiveReplyLang:sess.partnerEffectiveReplyLang
   };
   if(mode==='owner-handoff'){
     // Preserve full owner/partner language-routing invariants during handoff hydration.
     base.ownerIdentityId=sess.ownerIdentityId;base.ownerLangMode=sess.ownerLangMode;base.ownerFixedLang=sess.ownerFixedLang;base.ownerLastSentLang=sess.ownerLastSentLang;base.ownerEffectiveReplyLang=sess.ownerEffectiveReplyLang;
-    base.partnerLangMode=sess.partnerLangMode;base.partnerFixedLang=sess.partnerFixedLang;base.partnerLastSentLang=sess.partnerLastSentLang;base.partnerEffectiveReplyLang=sess.partnerEffectiveReplyLang;
   }
   return pruneInvitePayload(base);
 }
@@ -2358,8 +2266,6 @@ function buildInviteUrl(sess,prefs,intent){
 
 function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
-  var prevPartnerName=firstRealName(sess.partnerHandle,sess.peerName);
-  var prevIdentity=sess.partnerIdentityId||'';
   var inviteName=firstRealName(invite.initiatorGlobalName);
   if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
   if(invite.side==='owner'){
@@ -2377,9 +2283,7 @@ function hydrateSessionFromInvite(sess,invite){
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
   addDiagLog('handoff apply side='+(invite.side||'?')+' ownerIdentityId='+(sess.ownerIdentityId||'?')+' eff='+resolveEffectiveLang(sess,'owner'));
-  var normalized=normalizeSession(sess);
-  maybeEmitPartnerRemapNote(normalized,{prevName:prevPartnerName,nextName:firstRealName(normalized.partnerHandle,normalized.peerName),prevIdentity:prevIdentity,nextIdentity:(normalized.partnerIdentityId||invite.initiatorDeviceId||prevIdentity||'')},Date.now());
-  return normalized;
+  return normalizeSession(sess);
 }
 function shareSession(cid){
   var sess=getSession(cid);if(!sess){toast('Not found');return;}
@@ -2396,15 +2300,9 @@ function shareSession(cid){
     try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:220,height:220,colorDark:'#1A1714',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.H});}catch(_){}
   }
   document.getElementById('share-overlay').hidden=false;
+  if(navigator.share){navigator.share({url:url}).catch(function(){});}
 }
-function copyShareLink(which){
-  var isHandoff=which==='handoff';
-  var el=document.getElementById(isHandoff?'share-handoff-link-text':'share-link-text');
-  var url=el?el.href:'';
-  if(!url){toast('No link available');return;}
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast(isHandoff?'Handoff link copied':'Partner link copied');});
-  else{fallbackCopy(url);}
-}
+function copyShareLink(){var el=document.getElementById('share-link-text');var url=el?el.href:'';if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('Copied');document.getElementById('share-overlay').hidden=true;});else{fallbackCopy(url);document.getElementById('share-overlay').hidden=true;}}
 
 
 // ════════════════════════════════════════════════════════
@@ -2570,25 +2468,13 @@ function toggleSTT(){
 // ════════════════════════════════════════════════════════
 function upsertPartnerFromEnvelope(sess,d,opts){
   if(!sess||!d)return;
-  opts=opts||{};
   var prevName=firstRealName(sess.partnerHandle,sess.peerName);
   var partnerName=firstRealName(d.name,sess.partnerHandle,sess.peerName);
-  var prevIdentity=sess.partnerIdentityId||'';
   if(partnerName){sess.partnerHandle=partnerName;sess.peerName=partnerName;}
-  if(d.identityId&&(opts.allowIdentityOverwrite!==false||!prevIdentity))sess.partnerIdentityId=d.identityId;
+  if(d.identityId)sess.partnerIdentityId=d.identityId;
   putSession(sess);
   if(state.activeConvId===sess.convId)updatePartnerHeader(sess);
-  return {prevName:prevName,nextName:partnerName,prevIdentity:prevIdentity,nextIdentity:(d.identityId||prevIdentity||'')};
-}
-function maybeEmitPartnerRemapNote(sess,nameUpdate,stamp){
-  if(!sess||!nameUpdate)return;
-  var prevName=firstRealName(nameUpdate.prevName);
-  var nextName=firstRealName(nameUpdate.nextName);
-  if(!prevName||!nextName||prevName===nextName)return;
-  var identity=nameUpdate.nextIdentity||sess.partnerIdentityId||sess.inviterDeviceId||'partner';
-  var gen=Math.max(1,Number(sess.peerPresenceGeneration)||1);
-  var remapKey=buildLifecycleNoteKey(sess.convId,identity,'partner','remap',gen)+'/'+prevName+'->'+nextName;
-  noteRuntimeRemap(sess.convId,prevName+' is now '+nextName,stamp||Date.now(),'peerRemap:'+remapKey);
+  return {prevName:prevName,nextName:partnerName};
 }
 
 
@@ -2600,10 +2486,6 @@ function applyPeerRoutingHints(sess,d){
   if(d.partnerFixedLang!==undefined){var pf=normalizeLangSetting(d.partnerFixedLang)||'';if(sess.partnerFixedLang!==pf){sess.partnerFixedLang=pf;changed=true;}}
   if(d.effectiveTargetLang){var et=normalizeLangSetting(d.effectiveTargetLang)||'';if(et&&sess.partnerEffectiveReplyLang!==et){sess.partnerEffectiveReplyLang=et;changed=true;}}
   if(d.partnerEffectiveReplyLang!==undefined){var pe=normalizeLangSetting(d.partnerEffectiveReplyLang)||'';if(sess.partnerEffectiveReplyLang!==pe){sess.partnerEffectiveReplyLang=pe;changed=true;}}
-  if(d.ownerLangMode==='fixed'||d.ownerLangMode==='auto'){if(sess.partnerLangMode!==d.ownerLangMode){sess.partnerLangMode=d.ownerLangMode;changed=true;}}
-  if(d.ownerFixedLang!==undefined){var of=normalizeLangSetting(d.ownerFixedLang)||'';if(sess.partnerFixedLang!==of){sess.partnerFixedLang=of;changed=true;}}
-  if(d.ownerLastSentLang!==undefined){var ol=normalizeLangSetting(d.ownerLastSentLang)||'';if(ol&&sess.partnerLastSentLang!==ol){sess.partnerLastSentLang=ol;changed=true;}}
-  if(d.ownerEffectiveReplyLang!==undefined){var oe=normalizeLangSetting(d.ownerEffectiveReplyLang)||'';if(sess.partnerEffectiveReplyLang!==oe){sess.partnerEffectiveReplyLang=oe;changed=true;}}
   return changed;
 }
 function handleRelayEvent(d){
@@ -2621,9 +2503,12 @@ function handleRelayEvent(d){
   if(shouldDrop(d)){addDiagLog('RX dedupe-dropped: '+d.type,'warn');return;}
 
   if(d.type==='hello'){
+    var rt=getRoomRuntime(sess.convId);
     applyPeerRoutingHints(sess,d);
-    var nameUpdate=upsertPartnerFromEnvelope(sess,d,{allowIdentityOverwrite:false});
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,peerLifecycleId:(d.identityId||sess.partnerIdentityId||d.from||'peer')});
+    var wasEverSeen=rt&&rt.peerEverSeen;
+    var lastSeen=rt&&rt.peerLastSeenAt||0;
+    var nameUpdate=upsertPartnerFromEnvelope(sess,d,{});
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     addDiagLog('HELLO from '+(d.name||'?')+' side='+(d.side||'?')+' identity='+(d.identityId||'?'));
     updatePartnerHeader(sess);
     renderSessionList();
@@ -2631,31 +2516,29 @@ function handleRelayEvent(d){
       resendUnacked();
       sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
-      maybeEmitPartnerRemapNote(sess,nameUpdate,d.timestamp||d.ts||Date.now());
+      if(nameUpdate&&nameUpdate.prevName&&nameUpdate.nextName&&nameUpdate.prevName!==nameUpdate.nextName){
+        addSystemNote(sess.convId,nameUpdate.prevName+' is now '+nameUpdate.nextName,Date.now());
+      }
     }
     return;
   }
 
   if(d.type==='history-sync'){
     mergeHistorySyncChunk(sess,d);
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true,peerLifecycleId:(d.identityId||sess.partnerIdentityId||d.from||'peer')});
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     return;
   }
   if(d.type==='presence'){
-    var presenceNameUpdate=upsertPartnerFromEnvelope(sess,d,{allowIdentityOverwrite:false});
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true,peerLifecycleId:(d.identityId||sess.partnerIdentityId||d.from||'peer')});
-    if(d.present===false||d.online===false){markPeerLeft(sess.convId,d.timestamp||d.ts||Date.now(),{suppressNote:true});}
-    maybeEmitPartnerRemapNote(sess,presenceNameUpdate,d.timestamp||d.ts||Date.now());
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     if(applyPeerRoutingHints(sess,d))putSession(sess);
     return;
   }
 
   if(d.type==='msg'){
-    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,peerLifecycleId:(d.identityId||sess.partnerIdentityId||d.from||'peer')});
+    markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     applyPeerRoutingHints(sess,d);
     var srcTxt=d.sourceText||d.orig||d.text||'';
-    var partnerReplyLang=getEffectiveReplyLang(sess,'partner','en');
-    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,partnerReplyLang)||partnerReplyLang;
+    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
     var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
     var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
     var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
@@ -2682,27 +2565,22 @@ function handleRelayEvent(d){
       if(srcLang&&existing.sourceLang!==srcLang){existing.sourceLang=srcLang;existing.lang=srcLang;changed=true;}
       if(incomingForcedText)changed=applyMsgTarget(existing,myLang,incomingForcedText)||changed;
       if(!existing.deliveredAt){existing.deliveredAt=d.timestamp||d.ts||Date.now();changed=true;}
-      if(!existing.readAt){
-        if(document.hidden){queueIncomingReadAt(sess.convId,existing.id,d.timestamp||d.ts||Date.now());}
-        else if(markIncomingReadAt(existing,Date.now()))changed=true;
-      }
+      if(!existing.readAt){existing.readAt=Date.now();changed=true;}
       if(changed){updateTransDOM(existing);saveMsgs(state.activeConvId,state.messages);}
       return;
     }
 
-    upsertPartnerFromEnvelope(sess,d,{allowIdentityOverwrite:false});
+    upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:false});
     updatePartnerHeader(sess);
     if(state.pendingInviteId===sess.convId){
       state.pendingInviteId=null;
     }
     var rxTs=d.timestamp||d.ts||Date.now();
-    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',deliveredAt:rxTs,readAt:0,timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
+    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',deliveredAt:rxTs,readAt:Date.now(),timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
     // Use wire name for display, not stale session name
     msg.displayFromName=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
     mergeMsgTranslations(msg,d.translations||{});
     stampMsgNames(msg,sess);
-    if(document.hidden)queueIncomingReadAt(sess.convId,msg.id,rxTs);
-    else markIncomingReadAt(msg,Date.now());
     state.messages.push(msg);renderMsg(msg);scrollBottom();
     sess.lastActivity=msg.timestamp;putSession(sess);saveMsgs(sess.convId,state.messages);
 
@@ -2729,7 +2607,7 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     var m2=findMsg(d.id);
     if(m2){
-      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?getEffectiveReplyLang(sess,'partner','en'):getEffectiveReplyLang(sess,'owner','en'))});
+      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
       applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
       markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
       updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);
@@ -2887,19 +2765,24 @@ function buildBubbleCard(cfg){
 // CHAT MESSAGE RENDERING
 // ════════════════════════════════════════════════════════
 function getSides(msg){
+  var sess=getSession(state.activeConvId)||{};
+  var myLang=getEffectiveReplyLang(sess,'owner','en');
+  var partnerLang=getEffectiveReplyLang(sess,'partner','en');
+
   if(msg.from==='me'){
-    // Left: what I typed. Right: translation into message target language.
+    // Left: what I typed (my lang). Right: translation into partner's lang.
     var srcTxt=msg.sourceText||'';
-    var srcLang=msg.sourceLang||'en';
-    var tgtLang=msg.targetLang||'en';
-    var tgtTxt=getMsgTranslatedText(msg,tgtLang,msg.targetText||'');
+    var srcLang=msg.sourceLang||myLang;
+    var tgtTxt=getMsgTranslatedText(msg,partnerLang,msg.targetText||'');
+    var tgtLang=partnerLang;
     return {srcLang:srcLang,srcTxt:srcTxt,tgtLang:tgtLang,tgtTxt:tgtTxt};
   }else{
-    // Received message: left=translation target language, right=original source language.
+    // Received message: left=translation (my lang), right=original (partner's lang).
+    // This way the reader sees the meaning first, source second.
     var origTxt=msg.sourceText||'';
-    var origLang=msg.sourceLang||'en';
-    var transLang=msg.targetLang||'en';
-    var transTxt=getMsgTranslatedText(msg,transLang,msg.targetText||'');
+    var origLang=msg.sourceLang||partnerLang;
+    var transTxt=getMsgTranslatedText(msg,myLang,msg.targetText||'');
+    var transLang=myLang;
     // srcTxt/srcLang = LEFT column, tgtTxt/tgtLang = RIGHT column
     return {srcLang:transLang,srcTxt:transTxt,tgtLang:origLang,tgtTxt:origTxt};
   }
@@ -2984,7 +2867,6 @@ function renderAllMessages(){
     if(state.chatBtOpen[m.id]){var bt=document.getElementById('bbt-'+m.id);if(bt){bt.classList.add('open');renderBubbleBacktranslateFooter(m.id,'chat');}}
     syncFooterButtonState(m.id);
   });
-  flushPendingIncomingRead(state.activeConvId);
   scrollBottom();
 }
 
@@ -3428,27 +3310,19 @@ function composerInput(){
   autoResize();updateSendBtn();
   if(!localTypingActive){localTypingActive=true;sendTyping('start');}
   if(typingStopTimer)clearTimeout(typingStopTimer);
-  typingStopTimer=setTimeout(function(){if(localTypingActive){localTypingActive=false;sendTyping('stop');}},1200);
+  typingStopTimer=setTimeout(function(){if(localTypingActive){localTypingActive=false;sendTyping('stop');}},1800);
 }
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
 function sendTyping(kind){
   var sess=getSession(state.activeConvId);var n=normalizeSession(sess||{});
-  transportSend(Object.assign({type:'typing',typing:kind||'start',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n),lang:effectiveLangFromSession(n),side:'owner',identityId:n.ownerIdentityId,timestamp:Date.now()},buildOwnerRoutingHints(n)));
+  transportSend({type:'typing',typing:kind||'start',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n),lang:effectiveLangFromSession(n),side:'owner',identityId:n.ownerIdentityId,timestamp:Date.now()});
 }
 function showTyping(n,kind){
   var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);
   if(!el)return;
-  if(kind==='stop'){
-    var activeFor=peerTypingStartedAt?Math.max(0,Date.now()-peerTypingStartedAt):0;
-    var clearMs=activeFor>=4000?1800:600;
-    clearTimeout(typingTimer);
-    typingTimer=setTimeout(function(){if(el)el.textContent='';},clearMs);
-    peerTypingStartedAt=0;
-    return;
-  }
-  if(!peerTypingStartedAt)peerTypingStartedAt=Date.now();
+  if(kind==='stop'){el.textContent='';if(typingTimer)clearTimeout(typingTimer);return;}
   el.textContent=(firstRealName(n,sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner')+' is typing…';
-  clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';peerTypingStartedAt=0;},2200);
+  clearTimeout(typingTimer);typingTimer=setTimeout(function(){if(el)el.textContent='';},3200);
 }
 
 async function sendMessage(){
@@ -3481,7 +3355,7 @@ async function sendMessage(){
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
 
-  var payload=Object.assign({type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',side:'owner',identityId:sess.ownerIdentityId},buildOwnerRoutingHints(sess));
+  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',side:'owner',identityId:sess.ownerIdentityId};
   var ok=sendReliable(payload);
   if(!ok){msg.status='queued';addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}

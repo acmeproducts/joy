@@ -1709,13 +1709,6 @@ function markPeerSeen(convId,ts,opts){
     sess.peerLastSeenAt=stamp;
     putSession(sess);
   }
-  if(!wasPresent&&!opts.suppressJoinNote){
-    var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
-    if(partnerName){
-      var identity=buildLocalEnvelope(sess,{side:'partner',identityId:String(sess&&sess.partnerIdentityId||'')});
-      appendCanonicalEvent(convId,'join',{name:partnerName},identity);
-    }
-  }
   updateDot();
 }
 function markPeerLeft(convId,ts){
@@ -1723,9 +1716,6 @@ function markPeerLeft(convId,ts){
   rt.peerPresent=false;
   rt.peerJoinNoted=false;
   Object.keys(rt.joinEventKeys||{}).forEach(function(k){if(k.indexOf('peerJoin:')===0)delete rt.joinEventKeys[k];});
-  var sess=getSession(convId);
-  var identity=buildLocalEnvelope(sess,{side:'partner',identityId:String(sess&&sess.partnerIdentityId||'')});
-  appendCanonicalEvent(convId,'leave',{name:firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner'},identity);
   updateDot();
 }
 function peerIsFresh(){
@@ -1735,11 +1725,6 @@ function peerIsFresh(){
 function resetActivePresence(convId){
   var rt=getRoomRuntime(convId);
   if(rt&&convId){
-    var sess=getSession(convId);
-    var initiator=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere';
-    if(!rt.selfPresent){
-      appendCanonicalEvent(convId,'join',{name:initiator},buildLocalEnvelope(sess,{}));
-    }
     rt.selfPresent=true;
   }else if(rt){rt.selfPresent=false;}
   updateDot();
@@ -2908,11 +2893,21 @@ function handleRelayEvent(d){
     return;
   }
   if(d.type==='evt'&&d.event){
-    if(d.event.convId!==sess.convId){addDiagLog('canonical reject inbound conv mismatch','warn');return;}
-    if(d.side&&d.event.role&&d.side!==d.event.role){addDiagLog('canonical reject inbound side mismatch','warn');return;}
-    if(d.identityId&&d.event.identityId&&d.identityId!==d.event.identityId){addDiagLog('canonical reject inbound identity mismatch','warn');return;}
-    if(d.event.role==='owner'&&sess.ownerIdentityId&&d.event.identityId!==sess.ownerIdentityId){addDiagLog('canonical reject inbound owner mismatch','warn');return;}
-    if(d.event.role==='partner'&&sess.partnerIdentityId&&d.event.identityId!==sess.partnerIdentityId){addDiagLog('canonical reject inbound partner mismatch','warn');return;}
+    if(!d.event||typeof d.event!=='object'){addDiagLog('canonical reject inbound invalid-event-payload','warn');return;}
+    var actorRole=String(d.event.role||'').trim();
+    var actorIdentityId=String(d.event.identityId||'').trim();
+    var actorDeviceId=String(d.event.deviceId||'').trim();
+    var actorConvId=String(d.event.convId||'').trim();
+    if(!actorConvId){addDiagLog('canonical reject inbound missing-actor-convId','warn');return;}
+    if(!actorIdentityId){addDiagLog('canonical reject inbound missing-actor-identityId','warn');return;}
+    if(!actorDeviceId){addDiagLog('canonical reject inbound missing-actor-deviceId','warn');return;}
+    if(actorRole!=='owner'&&actorRole!=='partner'){addDiagLog('canonical reject inbound invalid-actor-role','warn');return;}
+    if(actorConvId!==sess.convId){addDiagLog('canonical reject inbound conv-mismatch','warn');return;}
+    if(d.side&&actorRole&&d.side!==actorRole){addDiagLog('canonical reject inbound role-mismatch','warn');return;}
+    if(d.identityId&&actorIdentityId&&d.identityId!==actorIdentityId){addDiagLog('canonical reject inbound identity-mismatch','warn');return;}
+    if(d.deviceId&&actorDeviceId&&d.deviceId!==actorDeviceId){addDiagLog('canonical reject inbound device-mismatch','warn');return;}
+    if(actorRole==='owner'&&sess.ownerIdentityId&&actorIdentityId!==sess.ownerIdentityId){addDiagLog('canonical reject inbound owner-mismatch','warn');return;}
+    if(actorRole==='partner'&&sess.partnerIdentityId&&actorIdentityId!==sess.partnerIdentityId){addDiagLog('canonical reject inbound partner-mismatch','warn');return;}
     ingestCanonicalEvent(d.event,{persist:true});
     return;
   }
@@ -2932,10 +2927,10 @@ function handleRelayEvent(d){
     var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
     var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
     // Record partner's detected language in tally (partner messages only)
-    var partnerId=(d.identityId||sess.partnerIdentityId||sess.inviterDeviceId||d.from||'partner');
+    var partnerId=String(d.identityId||'').trim();
+    if(!partnerId){addDiagLog('canonical reject inbound missing-actor-identityId type=msg','warn');return;}
     recordLangTally(partnerId,srcLang);
     var ps=ensureParticipantState(partnerId);
-    sess.partnerIdentityId=sess.partnerIdentityId||partnerId;
     putSession(sess);
     addDiagLog('partnerLang tally: '+(ps?getLangTallySummary(partnerId):'n/a'));
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));
@@ -3662,7 +3657,7 @@ function renderInviteCard(msg){
   card.appendChild(title);
   // QR code
   var qrWrap=document.createElement('div');
-  qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:flex;align-items:center;justify-content:center;overflow:hidden;';
+  qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:none;align-items:center;justify-content:center;overflow:hidden;';
   card.appendChild(qrWrap);
   var qrLabel=document.createElement('div');
   qrLabel.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;color:#D92D20;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:600;';
@@ -3672,14 +3667,21 @@ function renderInviteCard(msg){
   joinLine.style.cssText='font-size:22px;line-height:1.1;color:#000;font-weight:700;text-align:center;';
   joinLine.textContent='To Chat with '+ownerName;
   card.appendChild(joinLine);
-  var actionLink=document.createElement('a');
-  actionLink.href=url||'#';
-  actionLink.target='_blank';
-  actionLink.rel='noopener';
-  actionLink.style.cssText='font-size:30px;line-height:1;color:#000;text-decoration:none;';
-  actionLink.textContent='Copy or Click';
-  actionLink.addEventListener('click',function(){if(url)copyTextToClipboard(url);});
-  card.appendChild(actionLink);
+  var actions=document.createElement('div');
+  actions.style.cssText='display:flex;gap:8px;';
+  var copyBtn=document.createElement('button');
+  copyBtn.type='button';
+  copyBtn.style.cssText='font-size:16px;line-height:1.1;color:#000;border:1px solid #aaa;background:#fff;padding:6px 10px;cursor:pointer;';
+  copyBtn.textContent='Copy Link';
+  copyBtn.addEventListener('click',function(){if(url)copyTextToClipboard(url);});
+  actions.appendChild(copyBtn);
+  var qrBtn=document.createElement('button');
+  qrBtn.type='button';
+  qrBtn.style.cssText='font-size:16px;line-height:1.1;color:#000;border:1px solid #aaa;background:#fff;padding:6px 10px;cursor:pointer;';
+  qrBtn.textContent='Show QR';
+  qrBtn.addEventListener('click',function(){qrWrap.style.display='flex';});
+  actions.appendChild(qrBtn);
+  card.appendChild(actions);
   c.appendChild(card);
   // Draw QR
   if(url&&window.QRCode){

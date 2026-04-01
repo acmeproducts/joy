@@ -756,6 +756,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <div class="overlay" id="share-overlay" hidden onclick="if(event.target===this)this.hidden=true">
   <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
+    <div class="sheet-title" style="text-align:center;font-size:32px;letter-spacing:.04em;">OWNER</div>
     <div class="share-qr-card owner">
       <div class="share-qr-frame square">
         <div id="share-owner-qr" class="share-qr-canvas"></div>
@@ -873,26 +874,6 @@ Owner</div>
   </div>
   <div class="status-popup-row" id="status-popup-delivered"></div>
   <div class="status-popup-row" id="status-popup-read"></div>
-</div>
-
-<div class="overlay" id="join-blocked-overlay" hidden onclick="if(event.target===this)closeJoinBlockedModal()">
-  <div style="background:var(--cream);border-radius:14px;padding:22px;width:calc(100% - 44px);max-width:360px;margin:auto;align-self:center;">
-    <div style="font-family:'Lora',serif;font-size:17px;font-weight:600;margin-bottom:8px;">Unable to join this chat</div>
-    <div style="font-size:13px;color:var(--ink-mid);line-height:1.55;margin-bottom:16px;">
-      Please join using the [
-      <span style="display:inline-flex;vertical-align:middle;line-height:0;" aria-label="Share icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4"/><path d="M15.4 6.5l-6.8 4"/></svg>
-      </span>
-      ] icon from the session card under the [
-      <span style="display:inline-flex;vertical-align:middle;line-height:0;" aria-label="Menu icon">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </span>
-      ] menu
-    </div>
-    <div class="sheet-btn-row">
-      <button class="sheet-btn primary" onclick="closeJoinBlockedModal()">OK</button>
-    </div>
-  </div>
 </div>
 
 <div id="toast"></div>
@@ -2649,14 +2630,6 @@ function showShareQr(){
     if(qrState)qrState.textContent='QR: error (tap Copy Link)';
   }
 }
-function showJoinBlockedModal(){
-  var modal=document.getElementById('join-blocked-overlay');
-  if(modal)modal.hidden=false;
-}
-function closeJoinBlockedModal(){
-  var modal=document.getElementById('join-blocked-overlay');
-  if(modal)modal.hidden=true;
-}
 
 
 // ════════════════════════════════════════════════════════
@@ -3672,7 +3645,11 @@ function renderInviteCard(msg){
   var ownerName=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'Mike';
   var card=document.createElement('div');
   card.id='invite-card-'+msg.id;
-  card.style.cssText='background:#fff;border:1px solid #cfcfcf;border-radius:0;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:8px;';
+  card.style.cssText='background:#D9D9D9;border:1px solid #cfcfcf;border-radius:0;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:8px;';
+  var title=document.createElement('div');
+  title.style.cssText='font-size:34px;line-height:1;font-weight:700;color:#000;letter-spacing:.03em;';
+  title.textContent='PARTNER';
+  card.appendChild(title);
   // QR code
   var qrWrap=document.createElement('div');
   qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:none;align-items:center;justify-content:center;overflow:hidden;';
@@ -4636,7 +4613,7 @@ document.addEventListener('DOMContentLoaded',function(){
         var admission=evaluateInviteAdmission(invite);
         if(!admission.allowed){
           addDiagLog('join rejected reason='+admission.reason+' session='+String(invite.sessionId||'').slice(0,8)+' flow='+(invite.joinOrigin||'?'),'warn');
-          showJoinBlockedModal();
+          toast('This chat is already active with two participants. Use the Share icon from the specific chat/device flow.');
           return;
         }
         addDiagLog('join accepted reason=share-origin session='+String(invite.sessionId||'').slice(0,8));

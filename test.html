@@ -762,9 +762,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
         <div id="share-owner-label" class="share-qr-label">To Join as owner</div>
       </div>
     </div>
-    <div style="text-align:center;margin-top:-4px;">
-      <a style="color:var(--ink);font-size:30px;font-weight:500;font-family:'Lora',serif;text-decoration:none;" id="share-handoff-link-text" href="#" target="_blank" onclick="copyShareLink('handoff');">Copy or Click</a>
+    <div style="text-align:center;margin-top:-4px;display:flex;gap:8px;justify-content:center;">
+      <button class="sheet-btn secondary" onclick="copyShareLink()">Copy Link</button>
+      <button class="sheet-btn primary" onclick="showShareQr()">Show QR</button>
     </div>
+    <div id="share-qr-state" class="share-qr-note" style="text-align:center;">QR: loading</div>
   </div></div>
 </div>
 
@@ -918,7 +920,7 @@ var ICON_BACK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" strok
 var ICON_DELETE='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
 // Storage keys
-var SK={sessions:'ts3_sessions',activeConv:'ts3_active',prefs:'ts3_prefs',devId:'ts3_dev',partId:'ts3_part',order:'ts3_order',recycled:'ts3_recycled',notes:'ts3_notes'};
+var SK={sessions:'ts3_sessions',activeConv:'ts3_active',prefs:'ts3_prefs',devId:'ts3_dev',partId:'ts3_part',order:'ts3_order',recycled:'ts3_recycled',notes:'ts3_notes',events:'ts3_events',seq:'ts3_seq',writer:'ts3_writer',eventRejects:'ts3_event_rejects',annDedup:'ts3_ann_dedup'};
 var SAY={catalogs:'say_catalogs',cards:'say_cards',tags:'say_tags'};
 
 function ls(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -931,6 +933,11 @@ function getDeviceId(){var id=ls(SK.devId);if(!id){id=(crypto.randomUUID?crypto.
 function getPartId(){var id=ls(SK.partId);if(!id){id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14));lsW(SK.partId,id);}return id;}
 var DEVICE_ID=getDeviceId();
 var PART_ID=getPartId();
+var TAB_ID=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14));
+var tabBus=('BroadcastChannel' in window)?new BroadcastChannel('ts3-tab-coord'):null;
+var tabWriterLeaseMs=12000;
+var isActiveTabWriter=false;
+var writerEpoch=0;
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -963,6 +970,8 @@ var state={
   pbExportBusy:false,
   ncBacktranslate:null
 };
+var canonicalLedger={byEventId:{},eventsByConv:{},seqByConv:{},rejected:[]};
+var announcementDedup={};
 var pendingOnboardingFlow=null;
 var tagPickerSelectedTags=[];
 var tEngine='cloud',ttsActive=null;
@@ -991,7 +1000,7 @@ function normalizeSession(sess){
     peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
-    ownerIdentityId:String(raw.ownerIdentityId||raw.myIdentityId||PART_ID||DEVICE_ID||uid()),
+    ownerIdentityId:String(raw.ownerIdentityId||raw.myIdentityId||PART_ID||''),
     partnerIdentityId:String(raw.partnerIdentityId||''),
     localRole:(raw.localRole==='partner')?'partner':'owner',
     ownerLangMode:(raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto'),
@@ -1020,10 +1029,10 @@ function getSessionLocalRole(sess,invite){
 function getLocalIdentityForRole(sess,role){
   var s=normalizeSession(sess||{});
   if(role==='partner'){
-    s.partnerIdentityId=String(s.partnerIdentityId||PART_ID||DEVICE_ID||uid());
+    s.partnerIdentityId=String(s.partnerIdentityId||PART_ID||'');
     return {side:'partner',identityId:s.partnerIdentityId};
   }
-  s.ownerIdentityId=String(s.ownerIdentityId||PART_ID||DEVICE_ID||uid());
+  s.ownerIdentityId=String(s.ownerIdentityId||PART_ID||'');
   return {side:'owner',identityId:s.ownerIdentityId};
 }
 function buildLocalEnvelope(sess,ev){
@@ -1337,18 +1346,118 @@ function sortMessagesChronologically(msgs){
   }).map(function(entry){return entry.msg;});
 }
 
-function addSystemNote(convId,text,timestamp){
-  if(!convId)return;
-  var m={id:uid(),from:'system',text:text,timestamp:timestamp||Date.now()};
-  var msgs=(convId===state.activeConvId)?state.messages.slice():getMsgs(convId);
-  msgs.push(m);
+function loadCanonicalLedger(){
+  canonicalLedger={byEventId:{},eventsByConv:{},seqByConv:{},rejected:lsJSON(SK.eventRejects,[])};
+  announcementDedup=lsJSON(SK.annDedup,{})||{};
+  var events=lsJSON(SK.events,[]);
+  (Array.isArray(events)?events:[]).forEach(function(ev){ingestCanonicalEvent(ev,{persist:false,skipProjection:true});});
+}
+function persistCanonicalLedger(){
+  var all=[];Object.keys(canonicalLedger.eventsByConv).forEach(function(cid){all=all.concat(canonicalLedger.eventsByConv[cid]);});
+  all.sort(function(a,b){if(a.seq!==b.seq)return a.seq-b.seq;return String(a.eventId).localeCompare(String(b.eventId));});
+  lsW(SK.events,JSON.stringify(all.slice(-5000)));
+  lsW(SK.seq,JSON.stringify(canonicalLedger.seqByConv||{}));
+  lsW(SK.eventRejects,JSON.stringify((canonicalLedger.rejected||[]).slice(-250)));
+  lsW(SK.annDedup,JSON.stringify(announcementDedup||{}));
+}
+function fmtAnnouncementTime(ts){return fmtDateTime(ts);}
+function nextSeq(convId){
+  var seqs=lsJSON(SK.seq,{});
+  var n=(Number(seqs[convId])||0)+1;
+  seqs[convId]=n;
+  canonicalLedger.seqByConv[convId]=n;
+  lsW(SK.seq,JSON.stringify(seqs));
+  return n;
+}
+function isAnnouncementEventType(t){return ['join','leave','name_change','lang_change','device_change','handoff'].indexOf(t)>=0;}
+function stableStringify(v){
+  if(!v||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(stableStringify).join(',')+']';
+  var keys=Object.keys(v).sort();
+  return '{'+keys.map(function(k){return JSON.stringify(k)+':'+stableStringify(v[k]);}).join(',')+'}';
+}
+function dedupeAnnouncementKey(ev){
+  var base=[ev.convId,ev.identityId,ev.type].join('|');
+  if(ev.type==='name_change'||ev.type==='lang_change'||ev.type==='device_change')base+='|'+stableStringify(ev.payload||{});
+  return base;
+}
+function shouldDedupAnnouncement(ev){
+  if(!isAnnouncementEventType(ev.type))return false;
+  if(['join','name_change','lang_change','device_change'].indexOf(ev.type)<0)return false;
+  var key=dedupeAnnouncementKey(ev);var now=Date.now();var ttl=6000;
+  Object.keys(announcementDedup||{}).forEach(function(k){if(Number(announcementDedup[k])<=now)delete announcementDedup[k];});
+  if(announcementDedup[key]&&announcementDedup[key]>now)return true;
+  announcementDedup[key]=now+ttl;
+  return false;
+}
+function projectAnnouncementText(ev){
+  var p=ev.payload||{};
+  if(ev.type==='join')return (p.name||'Participant')+' joined · '+fmtAnnouncementTime(ev.ts);
+  if(ev.type==='leave')return (p.name||'Participant')+' left · '+fmtAnnouncementTime(ev.ts);
+  if(ev.type==='name_change')return (p.prevName||'Participant')+' is now '+(p.nextName||'Participant');
+  if(ev.type==='lang_change')return (p.actor||'Participant')+' switched from '+(p.from||'Auto')+' to '+(p.to||'Auto');
+  if(ev.type==='device_change')return (p.name||'Participant')+' switched device';
+  if(ev.type==='handoff')return (p.name||'Participant')+' handoff complete';
+  return '';
+}
+function projectSystemAnnouncements(convId){
+  var msgs=getMsgs(convId).filter(function(m){return m.from!=='system';});
+  var evs=(canonicalLedger.eventsByConv[convId]||[]).filter(function(ev){return ev.visibility==='chat'&&isAnnouncementEventType(ev.type);});
+  evs.sort(function(a,b){if(a.seq!==b.seq)return a.seq-b.seq;return String(a.eventId).localeCompare(String(b.eventId));});
+  evs.forEach(function(ev){
+    msgs.push({id:'sys-'+ev.eventId,from:'system',text:projectAnnouncementText(ev),timestamp:ev.ts,eventId:ev.eventId});
+  });
   msgs=sortMessagesChronologically(msgs);
-  if(convId===state.activeConvId){
-    state.messages=msgs;
-    renderAllMessages();
-  }
-  var sess=getSession(convId);if(sess){sess.lastActivity=m.timestamp;putSession(sess);}
   saveMsgs(convId,msgs);
+  if(convId===state.activeConvId){state.messages=msgs;renderAllMessages();}
+}
+function validateCanonicalEvent(ev){
+  return !!(ev&&ev.convId&&ev.identityId&&ev.deviceId&&ev.role&&ev.eventId&&Number.isFinite(Number(ev.seq))&&ev.type&&ev.visibility&&ev.ts);
+}
+function ingestCanonicalEvent(ev,opts){
+  opts=opts||{};
+  function reject(reason){
+    addDiagLog('canonical reject '+reason,'warn');
+    canonicalLedger.rejected=canonicalLedger.rejected||[];
+    canonicalLedger.rejected.push({reason:reason,eventId:ev&&ev.eventId||'',convId:ev&&ev.convId||'',ts:Date.now()});
+    if(opts.persist!==false)persistCanonicalLedger();
+    return false;
+  }
+  if(!validateCanonicalEvent(ev))return reject('malformed event');
+  if(ev.role!=='owner'&&ev.role!=='partner')return reject('bad role='+ev.role);
+  if(canonicalLedger.byEventId[ev.eventId])return false;
+  var sess=getSession(ev.convId);
+  if(sess){
+    if(ev.role==='owner'){
+      if(sess.ownerIdentityId&&sess.ownerIdentityId!==ev.identityId)return reject('owner identity mismatch');
+      if(!sess.ownerIdentityId){sess.ownerIdentityId=ev.identityId;putSession(sess);}
+    }else{
+      if(sess.partnerIdentityId&&sess.partnerIdentityId!==ev.identityId)return reject('partner identity mismatch');
+      if(!sess.partnerIdentityId){sess.partnerIdentityId=ev.identityId;putSession(sess);}
+    }
+    if(sess.ownerIdentityId&&sess.partnerIdentityId&&sess.ownerIdentityId===sess.partnerIdentityId)return reject('same identity for both roles');
+    var ids=[sess.ownerIdentityId,sess.partnerIdentityId].filter(Boolean);
+    if(ids.indexOf(ev.identityId)<0&&ids.length>=2)return reject('third identity');
+  }
+  var prevSeq=Number(canonicalLedger.seqByConv[ev.convId])||0;
+  if(Number(ev.seq)<=prevSeq)return reject('non-monotonic seq conv='+ev.convId+' seq='+ev.seq+' prev='+prevSeq);
+  canonicalLedger.byEventId[ev.eventId]=true;
+  if(!canonicalLedger.eventsByConv[ev.convId])canonicalLedger.eventsByConv[ev.convId]=[];
+  canonicalLedger.eventsByConv[ev.convId].push(Object.freeze(Object.assign({},ev)));
+  if(Number(ev.seq)>(Number(canonicalLedger.seqByConv[ev.convId])||0))canonicalLedger.seqByConv[ev.convId]=Number(ev.seq);
+  if(!opts.skipProjection&&isAnnouncementEventType(ev.type))projectSystemAnnouncements(ev.convId);
+  if(opts.persist!==false)persistCanonicalLedger();
+  return true;
+}
+function appendCanonicalEvent(convId,type,payload,identity){
+  if(!isActiveTabWriter)return null;
+  var sess=getSession(convId);if(!sess)return null;
+  var local=identity||buildLocalEnvelope(sess,{});
+  var ev={eventId:'evt_'+uid(),seq:nextSeq(convId),ts:Date.now(),convId:convId,identityId:local.identityId,deviceId:DEVICE_ID,role:local.side,type:type,visibility:'chat',payload:payload||{},writerEpoch:writerEpoch};
+  if(shouldDedupAnnouncement(ev))return null;
+  if(!ingestCanonicalEvent(ev,{persist:true}))return null;
+  transportSend({type:'evt',event:ev});
+  return ev;
 }
 // ════════════════════════════════════════════════════════
 // UTILITIES
@@ -1590,17 +1699,6 @@ function getRoomRuntime(convId) {
   };
   return roomRuntimeByConv[convId];
 }
-function noteRuntimeJoin(convId,key,text,ts,dedupeKey){
-  var rt=getRoomRuntime(convId);if(!rt||!text)return;
-  if(key==='localJoin'){if(rt.localJoinNoted)return;rt.localJoinNoted=true;}
-  else if(key==='peerJoin'){if(rt.peerJoinNoted)return;rt.peerJoinNoted=true;rt.peerLeftNoted=false;}
-  else if(key==='peerLeft'){if(rt.peerLeftNoted)return;rt.peerLeftNoted=true;}
-  var now=ts||Date.now();
-  var stableKey=String(dedupeKey||key||'join');
-  if(rt.joinEventKeys&&rt.joinEventKeys[stableKey])return;
-  rt.joinEventKeys[stableKey]=now;
-  addSystemNote(convId,text,now);
-}
 function markPeerSeen(convId,ts,opts){
   var rt=getRoomRuntime(convId);opts=opts||{};
   if(!rt||opts.fromBackfill)return;
@@ -1613,7 +1711,10 @@ function markPeerSeen(convId,ts,opts){
   }
   if(!wasPresent&&!opts.suppressJoinNote){
     var partnerName=firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName);
-    if(partnerName)noteRuntimeJoin(convId,'peerJoin',partnerName+' has joined · '+fmtDateTime(stamp),stamp,'peerJoin:'+String(sess&&sess.partnerIdentityId||partnerName));
+    if(partnerName){
+      var identity=buildLocalEnvelope(sess,{side:'partner',identityId:String(sess&&sess.partnerIdentityId||'')});
+      appendCanonicalEvent(convId,'join',{name:partnerName},identity);
+    }
   }
   updateDot();
 }
@@ -1622,7 +1723,9 @@ function markPeerLeft(convId,ts){
   rt.peerPresent=false;
   rt.peerJoinNoted=false;
   Object.keys(rt.joinEventKeys||{}).forEach(function(k){if(k.indexOf('peerJoin:')===0)delete rt.joinEventKeys[k];});
-  noteRuntimeJoin(convId,'peerLeft','Partner left',ts||Date.now());
+  var sess=getSession(convId);
+  var identity=buildLocalEnvelope(sess,{side:'partner',identityId:String(sess&&sess.partnerIdentityId||'')});
+  appendCanonicalEvent(convId,'leave',{name:firstRealName(sess&&sess.partnerHandle,sess&&sess.peerName)||'Partner'},identity);
   updateDot();
 }
 function peerIsFresh(){
@@ -1634,7 +1737,9 @@ function resetActivePresence(convId){
   if(rt&&convId){
     var sess=getSession(convId);
     var initiator=firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere';
-    if(!rt.selfPresent)noteRuntimeJoin(convId,'localJoin',initiator+' has joined · '+fmtDateTime(Date.now()),Date.now(),'localJoin:'+String(sess&&sess.ownerIdentityId||initiator));
+    if(!rt.selfPresent){
+      appendCanonicalEvent(convId,'join',{name:initiator},buildLocalEnvelope(sess,{}));
+    }
     rt.selfPresent=true;
   }else if(rt){rt.selfPresent=false;}
   updateDot();
@@ -1838,18 +1943,24 @@ function transportDisconnect(opts){
 function transportSend(ev){
   if(!connectedConvId)return false;
   var isEphemeral=['ping','pong','typing','reattach','hello','ack'].indexOf(ev.type)>=0||ev.transient===true;
+  if(!isEphemeral&&!isActiveTabWriter){addDiagLog('durable send blocked passive tab','warn');return false;}
+  if(!isEphemeral&&writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('durable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
-  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq});
+  if(!isEphemeral&&(!connectedConvId||!localMeta.identityId||!DEVICE_ID||!localMeta.side)){addDiagLog('durable send rejected missing envelope','warn');return false;}
+  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,deviceId:DEVICE_ID,role:localMeta.side,ts:Date.now(),seq:++msgSeq});
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));return true;}catch(_){}}
   if(!isEphemeral)queueOutMsg(m);
   return false;
 }
 
 function sendReliable(ev){
+  if(!isActiveTabWriter){addDiagLog('reliable send blocked passive tab','warn');return false;}
+  if(writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('reliable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
-  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq});
+  if(!connectedConvId||!localMeta.identityId||!DEVICE_ID||!localMeta.side){addDiagLog('reliable send rejected missing envelope','warn');return false;}
+  var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,deviceId:DEVICE_ID,role:localMeta.side,ts:Date.now(),seq:++msgSeq});
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true;}catch(_){}}
   queueOutMsg(m);return false;
 }
@@ -1989,7 +2100,7 @@ function setMyLang(code){
       s.ownerFixedLang=code||'';
       if(code)setEffectiveReplyLang(s,'owner',code);
       putSession(s);
-      addSystemNote(s.convId,actor+' switched from '+getLangLabel(prev)+' to '+getLangLabel(code),Date.now());
+      appendCanonicalEvent(s.convId,'lang_change',{actor:actor,from:getLangLabel(prev),to:getLangLabel(code)},buildLocalEnvelope(s,{}));
     }
   });
   updateLangPill();
@@ -2096,6 +2207,7 @@ function openInviteScreen(cid){
     transportDisconnect({preserveQueue:false});
   }
   state.activeConvId=cid;
+  projectSystemAnnouncements(cid);
   state.messages=getMsgs(cid);
   setActiveConvId(cid);markViewed(cid);
   // Add invite system message if not already present
@@ -2163,7 +2275,7 @@ function openSession(cid){
     if(oldCard)oldCard.remove();
     state.pendingInviteId=null;
   }
-  state.activeConvId=cid;state.messages=getMsgs(cid);
+  state.activeConvId=cid;projectSystemAnnouncements(cid);state.messages=getMsgs(cid);
   if(stampExistingMessageNames(state.messages,sess))saveMsgs(cid,state.messages);
   setActiveConvId(cid);markViewed(cid);
   document.getElementById('shell-empty').style.display='none';
@@ -2226,7 +2338,7 @@ function saveOwnerName(el){
   sess.myHandle=v;sess.myName=v;putSession(sess);
   updatePartnerHeader(sess);
   renderSessionList();
-  addSystemNote(sess.convId,'You are now '+v,Date.now());
+  appendCanonicalEvent(sess.convId,'name_change',{prevName:oldName,nextName:v},buildLocalEnvelope(sess,{}));
   transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),timestamp:Date.now()});
 }
 
@@ -2488,31 +2600,43 @@ function shareSession(cid){
   addDiagLog('share url length owner-handoff='+handoffUrl.length);
   if(handoffUrl.length>SHARE_URL_WARN_LEN)toast('Share link is long; QR scan may be less reliable on older cameras.');
   addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
-  var h=document.getElementById('share-handoff-link-text');if(h){h.href=handoffUrl;h.dataset.url=handoffUrl;}
+  var h=document.getElementById('share-overlay');if(h)h.dataset.url=handoffUrl;
   var ownerLabel=document.getElementById('share-owner-label');
   if(ownerLabel)ownerLabel.textContent='To Join as '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner');
-  ['share-owner-qr'].forEach(function(id){var node=document.getElementById(id);if(node)node.innerHTML='';});
-  if(window.QRCode){
-    try{new QRCode(document.getElementById('share-owner-qr'),{text:handoffUrl,width:170,height:170,colorDark:'#1D4ED8',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
-  }
+  var qrState=document.getElementById('share-qr-state');
+  if(qrState)qrState.textContent='QR: loading';
+  var qrNode=document.getElementById('share-owner-qr');if(qrNode)qrNode.innerHTML='';
   document.getElementById('share-overlay').hidden=false;
 }
-function getShareLink(kind){
-  var id='share-handoff-link-text';
-  var el=document.getElementById(id);
-  return el?(el.dataset.url||el.href):'';
+function getShareLink(){
+  var overlay=document.getElementById('share-overlay');
+  return (overlay&&overlay.dataset&&overlay.dataset.url)||'';
 }
-function shareInviteLink(kind){
-  var url=getShareLink(kind);
+function copyShareLink(){
+  var url=getShareLink();
   if(!url){toast('No share link available');return;}
-  if(navigator.share){navigator.share({url:url}).then(function(){toast(kind==='handoff'?'Shared owner handoff link':'Shared partner invite link');}).catch(function(){});}
-  else{fallbackCopy(url);toast(kind==='handoff'?'Copied owner handoff link':'Copied partner invite link');}
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('Copied owner handoff link');});
+  else{fallbackCopy(url);toast('Copied owner handoff link');}
 }
-function copyShareLink(kind){
-  var url=getShareLink(kind);
-  if(!url){toast('No share link available');return;}
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast(kind==='handoff'?'Copied owner handoff link':'Copied partner invite link');});
-  else{fallbackCopy(url);toast(kind==='handoff'?'Copied owner handoff link':'Copied partner invite link');}
+function showShareQr(){
+  var url=getShareLink();
+  var qrState=document.getElementById('share-qr-state');
+  var qrNode=document.getElementById('share-owner-qr');
+  if(!url||!qrNode){if(qrState)qrState.textContent='QR: error';return;}
+  if(qrState)qrState.textContent='QR: loading';
+  qrNode.innerHTML='';
+  if(!window.QRCode){
+    addDiagLog('QR render failed reason=missing-qrcode-lib','err');
+    if(qrState)qrState.textContent='QR: error (library unavailable)';
+    return;
+  }
+  try{
+    new QRCode(qrNode,{text:url,width:170,height:170,colorDark:'#1D4ED8',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});
+    if(qrState)qrState.textContent='QR: ready';
+  }catch(e){
+    addDiagLog('QR render failed reason='+String(e),'err');
+    if(qrState)qrState.textContent='QR: error (tap Copy Link)';
+  }
 }
 
 
@@ -2767,7 +2891,7 @@ function handleRelayEvent(d){
       sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
       if(nameUpdate&&nameUpdate.prevName&&nameUpdate.nextName&&nameUpdate.prevName!==nameUpdate.nextName){
-        addSystemNote(sess.convId,nameUpdate.prevName+' is now '+nameUpdate.nextName,Date.now());
+        appendCanonicalEvent(sess.convId,'name_change',{prevName:nameUpdate.prevName,nextName:nameUpdate.nextName},buildLocalEnvelope(sess,{side:'partner',identityId:String(sess.partnerIdentityId||'')}));
       }
     }
     return;
@@ -2781,6 +2905,15 @@ function handleRelayEvent(d){
   if(d.type==='presence'){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     if(applyPeerRoutingHints(sess,d))putSession(sess);
+    return;
+  }
+  if(d.type==='evt'&&d.event){
+    if(d.event.convId!==sess.convId){addDiagLog('canonical reject inbound conv mismatch','warn');return;}
+    if(d.side&&d.event.role&&d.side!==d.event.role){addDiagLog('canonical reject inbound side mismatch','warn');return;}
+    if(d.identityId&&d.event.identityId&&d.identityId!==d.event.identityId){addDiagLog('canonical reject inbound identity mismatch','warn');return;}
+    if(d.event.role==='owner'&&sess.ownerIdentityId&&d.event.identityId!==sess.ownerIdentityId){addDiagLog('canonical reject inbound owner mismatch','warn');return;}
+    if(d.event.role==='partner'&&sess.partnerIdentityId&&d.event.identityId!==sess.partnerIdentityId){addDiagLog('canonical reject inbound partner mismatch','warn');return;}
+    ingestCanonicalEvent(d.event,{persist:true});
     return;
   }
 
@@ -4411,10 +4544,35 @@ function seedStarterData(){
 // add-tag-btn CSS (not in main sheet since it's used in NC overlay only)
 (function(){var s=document.createElement('style');s.textContent='.tags-wrap{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}.tag-pill{background:var(--tag-bg);color:var(--tag-text);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:3px;}.tag-remove{background:none;border:none;font-size:11px;color:inherit;cursor:pointer;padding:0;line-height:1;opacity:.65;}.tag-remove:hover{opacity:1;}.add-tag-btn{background:none;border:1.5px dashed var(--ink-dim);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--ink-dim);cursor:pointer;font-family:"DM Sans",sans-serif;}';document.head.appendChild(s);})();
 
+function refreshTabWriterLease(){
+  var now=Date.now();
+  var lease=lsJSON(SK.writer,{});
+  if(!lease.tabId||Number(lease.expiresAt||0)<=now||lease.tabId===TAB_ID){
+    lease={tabId:TAB_ID,expiresAt:now+tabWriterLeaseMs,epoch:(Number(lease.epoch)||0)+(lease.tabId===TAB_ID?0:1)};
+    lsW(SK.writer,JSON.stringify(lease));
+  }
+  isActiveTabWriter=(lease.tabId===TAB_ID);
+  writerEpoch=Number(lease.epoch)||0;
+}
+function setupTabCoordination(){
+  refreshTabWriterLease();
+  setInterval(refreshTabWriterLease,4000);
+  if(tabBus){
+    tabBus.onmessage=function(ev){
+      if(ev&&ev.data&&ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID)refreshTabWriterLease();
+    };
+    setInterval(function(){try{tabBus.postMessage({type:'writer-ping',tabId:TAB_ID,ts:Date.now()});}catch(_){}},5000);
+  }else{
+    window.addEventListener('storage',function(e){if(e&&e.key===SK.writer)refreshTabWriterLease();});
+  }
+}
+
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
+  setupTabCoordination();
+  loadCanonicalLedger();
   seedStarterData();
   document.addEventListener('keydown',function(e){
     var modal=document.getElementById('new-chat-modal');
@@ -4479,9 +4637,10 @@ document.addEventListener('DOMContentLoaded',function(){
         }
         sess=hydrateSessionFromInvite(sess,invite);
         sess.localRole=getSessionLocalRole(sess,invite);
-        if(sess.localRole==='partner'&&!sess.partnerIdentityId)sess.partnerIdentityId=String(PART_ID||DEVICE_ID||uid());
+        if(sess.localRole==='partner'&&!sess.partnerIdentityId)sess.partnerIdentityId=String(PART_ID||'');
         if(invite.side==='partner'&&!sess.partnerJoinedAt)sess.partnerJoinedAt=Date.now();
         state.activeConvId=invite.sessionId;
+        projectSystemAnnouncements(invite.sessionId);
         state.messages=getMsgs(invite.sessionId);
         addInviteMessage(invite.sessionId);
         putSession(sess);

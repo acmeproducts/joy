@@ -2014,7 +2014,8 @@ function markMessageDeliveryState(convId,msgId,status,stamp){
     if(msgs[i]&&msgs[i].id===msgId){
       msgs[i].status=status;
       if(status==='delivered')msgs[i].deliveredAt=at;
-      if(status==='translated'||status==='read')msgs[i].readAt=at;
+      if(status==='translated'&&!msgs[i].deliveredAt)msgs[i].deliveredAt=at;
+      if(status==='read')msgs[i].readAt=at;
       changed=true;break;
     }
   }
@@ -3134,7 +3135,7 @@ function buildBubbleCard(cfg){
   var statusDot='';
   if(ctx==='chat'){
     var deliveredOn=!!cfg.deliveredAt||cfg.status==='delivered'||cfg.status==='translated';
-    var readOn=!!cfg.readAt||cfg.status==='translated';
+    var readOn=!!cfg.readAt||cfg.status==='read';
     var dotClass=readOn?'on-read':(deliveredOn?'on-delivered':'off');
     statusDot='<span class="msg-status-dots">'
       +'<button class="msg-status-dot '+dotClass+'" type="button" onclick="openStatusPopup(\''+id+'\',this)">\u25CF</button>'
@@ -3300,7 +3301,7 @@ function updateMessageStatusUI(msg){
   var dot=row.querySelector('.msg-status-dot');
   if(!dot)return;
   var deliveredOn=!!msg.deliveredAt||msg.status==='delivered'||msg.status==='translated';
-  var readOn=!!msg.readAt||msg.status==='translated'||msg.status==='read';
+  var readOn=!!msg.readAt||msg.status==='read';
   dot.className='msg-status-dot '+(readOn?'on-read':(deliveredOn?'on-delivered':'off'));
   dot.textContent=readOn?'✓':'●';
   var holder=dot.parentElement;

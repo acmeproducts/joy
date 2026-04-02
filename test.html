@@ -4624,7 +4624,9 @@ function seedStarterData(){
 function refreshTabWriterLease(){
   var now=Date.now();
   var lease=lsJSON(SK.writer,{});
-  if(!lease.tabId||Number(lease.expiresAt||0)<=now||lease.tabId===TAB_ID){
+  var leaseExpiry=Number(lease.expiresAt||0);
+  var leaseInvalid=!Number.isFinite(leaseExpiry)||leaseExpiry>(now+300000);
+  if(!lease.tabId||leaseInvalid||leaseExpiry<=now||lease.tabId===TAB_ID){
     lease={tabId:TAB_ID,expiresAt:now+tabWriterLeaseMs,epoch:(Number(lease.epoch)||0)+(lease.tabId===TAB_ID?0:1)};
     lsW(SK.writer,JSON.stringify(lease));
   }
@@ -4658,7 +4660,8 @@ function hideSingleTabStop(){
 function requestFocusActiveTab(){
   var lease=lsJSON(SK.writer,{})||{};
   var target=activeWriterTabId||String(lease.tabId||'');
-  var leaseExpired=Number(lease.expiresAt||0)<=Date.now();
+  var leaseExpiry=Number(lease.expiresAt||0);
+  var leaseExpired=!Number.isFinite(leaseExpiry)||leaseExpiry>(Date.now()+300000)||leaseExpiry<=Date.now();
   if(!target||target===TAB_ID||leaseExpired){
     takeOverThisTab();
     return;
@@ -4666,7 +4669,7 @@ function requestFocusActiveTab(){
   if(tabBus){try{tabBus.postMessage({type:'focus-request',targetTabId:target,fromTabId:TAB_ID,ts:Date.now()});}catch(_){}}
   setTimeout(function(){
     refreshTabWriterLease();
-    if(!isActiveTabWriter&&Number((lsJSON(SK.writer,{})||{}).expiresAt||0)<=Date.now())takeOverThisTab();
+    if(!isActiveTabWriter)takeOverThisTab();
   },700);
   toast('Tried to switch to active tab');
 }

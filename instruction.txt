@@ -1,0 +1,631 @@
+Talk + Say v3.5 — Ship Release Prompt
+Codex Execution Spec — April 1, 2026 · File: test.html (single-file app)
+══════════════════════════════════════════════════════════════════════════
+
+This document prescribes every change required to ship Talk + Say v3.5.
+For each item: what to add, change, or remove; the expected user-visible
+proof point; and a Codex-specific instruction block. All changes target
+test.html in the acmeproducts/joy repository. The relay worker is
+off-limits — all fixes are client-side.
+
+Ensure that every reference to v3.4 is changed to v3.5 this includes but is not limited to in the code comments in the HTML title and anything visible to the user. 
+Ensure that the build date and time stamp is updated so that we identify this specific incorrect version of the code that we are testing 
+
+
+
+
+
+══════════════════════════════════════════════════════════════════════════
+IDENTITY & SECURITY
+══════════════════════════════════════════════════════════════════════════
+
+#1 — Same-Identity Guard
+─────────────────────────
+
+What must change:
+When any device presents its identity during session join, compare the
+joining identity against the existing owner identity. If they match, do
+NOT assign the joining device to the partner slot. Instead, treat it as
+an additional owner device. This applies in both the invite-link join
+flow and the WebSocket hello handshake.
+
+What must be added:
+A guard check at two locations: (a) in the invite admission evaluation
+(evaluateInviteAdmission), and (b) in the hello handler
+(handleRelayEvent, type==='hello'). At both points, before writing to
+partnerIdentityId, check: if the incoming identityId ===
+sess.ownerIdentityId, do not assign to partner. Instead, set localRole
+to 'owner' and proceed as an owner-device-add.
+
+What must be removed:
+Nothing removed. This is purely additive.
+
+Proof point:
+Create a session on Device A. Open the partner-invite link on the same
+device or a device with the same identity. The session must NOT show the
+same identity in both ownerIdentityId and partnerIdentityId. Export
+sessions JSON and confirm the two fields are never identical for any
+session.
+
+Codex instructions:
+In function evaluateInviteAdmission(invite): after resolving sess, add:
+if (invite.initiatorDeviceId === PART_ID || (sess.ownerIdentityId &&
+sess.ownerIdentityId === PART_ID)) return {allowed:true,
+redirectToOwner:true}. In the startup continueStartup() flow where
+invite is processed, check if admission.redirectToOwner is true — if so,
+call hydrateSessionFromInvite with the owner side, set
+sess.localRole='owner', toast('Opening on this device as you'), and
+proceed to openSession. In handleRelayEvent for type==='hello': in
+upsertPartnerFromEnvelope, before writing d.identityId to
+sess.partnerIdentityId, add guard: if (d.identityId ===
+sess.ownerIdentityId) { addDiagLog('partner assign blocked — same as
+owner identity','warn'); return; }
+
+
+#2 — Upstream Redirect Before Join-Blocked Modal
+─────────────────────────────────────────────────
+
+What must change:
+The existing join-blocked modal correctly handles genuine third-party
+rejection. Upstream of it, when the joining identity matches the owner,
+the user should be silently redirected into owner-device mode with a
+toast, never seeing the blocked modal.
+
+What must be added:
+A check in the continueStartup() invite flow, after
+evaluateInviteAdmission returns, that detects the redirectToOwner flag
+from Item #1 and routes to openSession as owner instead of showing the
+join-blocked modal.
+
+Proof point:
+Open a partner-invite link where your identity is already the owner. You
+see a toast 'Opening on this device as you' and land in the session as
+owner. You never see the join-blocked modal.
+
+Codex instructions:
+In continueStartup(), after var admission =
+evaluateInviteAdmission(invite): add block: if
+(admission.redirectToOwner) { sess = hydrateSessionFromInvite(sess,
+Object.assign({}, invite, {side:'owner',
+joinOrigin:'share-owner-handoff'})); sess.localRole = 'owner';
+putSession(sess); toast('Opening on this device as you');
+openSession(invite.sessionId); return; } This must appear BEFORE the if
+(!admission.allowed) check.
+
+
+══════════════════════════════════════════════════════════════════════════
+RELIABILITY
+══════════════════════════════════════════════════════════════════════════
+
+#3 — Reduce Heartbeat Timeout to 45 Seconds
+────────────────────────────────────────────
+
+What must change:
+The constant PING_TIMEOUT_MS currently set to 120000 (2 minutes). Change
+to 45000 (45 seconds). Two strikes at 45-second intervals means dead
+connections are detected in ~90 seconds instead of ~4 minutes.
+
+Proof point:
+After deploying, simulate a dead connection (e.g., airplane mode on
+partner device). The diagnostic log should show HEARTBEAT timeout
+strike=1 within 45 seconds, and reconnect within 90 seconds.
+
+Codex instructions:
+Change: var PING_TIMEOUT_MS = 120000; to var PING_TIMEOUT_MS = 45000;
+— single constant change, no other logic affected.
+
+
+#4 — Surface Silent Send Failures
+──────────────────────────────────
+
+What must change:
+When 'reliable send blocked passive tab' occurs, the user currently sees
+nothing. Add a visible toast and mark the affected message bubble.
+
+What must be added:
+(a) A toast message when sendReliable or transportSend returns false due
+to passive tab: 'Message queued — switch to this tab to send'. (b) A
+visual indicator on the bubble — add an amber-colored queued badge or
+change the status dot to amber. (c) When the tab regains writer status
+and the queue flushes successfully, update the bubble status back to
+normal.
+
+Proof point:
+Open the app in two tabs. Send a message from the non-writer tab. You
+see a toast saying the message is queued, and the bubble shows an amber
+indicator. Switch to that tab (making it the writer). The message sends
+and the indicator turns to normal sent status.
+
+Codex instructions:
+In sendMessage(), after var ok = sendReliable(payload): if (!ok) {
+toast('Message queued — switch to this tab to send'); msg.status =
+'queued'; } — the existing queued-badge CSS class .queued-badge already
+exists. In updateMessageStatusUI, add handling for status==='queued'
+that shows the badge in amber. In flushOutQueue, after successful send
+of each item, find the corresponding message in state.messages and
+update its status to 'sent', then call updateMessageStatusUI.
+
+
+══════════════════════════════════════════════════════════════════════════
+DIAGNOSTICS
+══════════════════════════════════════════════════════════════════════════
+
+#5 — Per-Session Diagnostic Log
+────────────────────────────────
+
+What must change:
+The diagnostic log (var diagLog=[]) is currently global. All sessions
+share the same log buffer, so exports contain stale data from whichever
+session was last active. Change to per-session log storage.
+
+What must be added:
+A diagLogByConv object keyed by convId. When addDiagLog is called,
+append to both the global log and the active session's log. When
+exporting a chat, include only that session's diagnostic entries. When
+opening a session, set diagCurrentSess to that convId.
+
+What must be removed:
+Nothing removed. The global log remains for the diagnostics modal.
+Per-session log is additive for exports.
+
+Proof point:
+Create two sessions. Send messages in each. Export both. Each export's
+Diagnostics section contains ONLY log entries from that session
+(identifiable by the session ID prefix in CONNECTED lines and message
+IDs).
+
+Codex instructions:
+Add: var diagLogByConv = {}; Modify addDiagLog(msg, level): after
+pushing to diagLog array, also push to
+diagLogByConv[state.activeConvId || connectedConvId] (create array if
+missing). In exportSessionChat(cid): replace the line that reads
+diagLog.join('\n') with (diagLogByConv[cid] || []).join('\n'). Keep
+MAX_DIAG=400 per session log as well. In openSession and
+openInviteScreen, set diagCurrentSess = cid.
+
+
+══════════════════════════════════════════════════════════════════════════
+QR & INVITE LINKS
+══════════════════════════════════════════════════════════════════════════
+
+#6 — Validate Invite URL Base
+──────────────────────────────
+
+What must change:
+Before generating any invite URL (both partner-invite and
+owner-handoff), validate that location.href starts with https:// or
+http://. If running inside an iframe (about:srcdoc), blob: context, or
+file: protocol, do not generate the URL.
+
+What must be added:
+A validation check in buildInviteUrl. If the base URL fails validation,
+return empty string. In renderInviteCard and showShareQr, when URL is
+empty, show a message: 'Invite link unavailable — open this app directly
+in a browser tab' instead of a blank QR.
+
+Proof point:
+Load the app in an iframe or srcdoc context. The invite card shows the
+unavailability message instead of a blank QR box. No about:srcdoc URLs
+appear in session exports.
+
+Codex instructions:
+In buildInviteUrl, before the return statement, add: var baseUrl =
+location.href.split('?')[0].split('#')[0]; if
+(!/^https?:\/\//i.test(baseUrl)) { addDiagLog('invite URL blocked:
+invalid base ' + baseUrl.slice(0,30), 'warn'); return ''; } In
+renderInviteCard, where url is checked: if (!url) show a div with text
+'Invite link unavailable — open in a browser tab' styled with
+color:var(--ink-dim), font-size:13px, text-align:center, padding:20px.
+In showShareQr, if (!url) set qrState text to 'Share unavailable in
+this context'.
+
+
+#7 — Standardize QR Error Correction to Level M
+────────────────────────────────────────────────
+
+What must change:
+The in-chat invite card uses QRCode.CorrectLevel.H (highest error
+tolerance, lowest data capacity). The share overlay uses
+QRCode.CorrectLevel.M. Standardize both to M so that longer URLs in
+different repos don't silently fail.
+
+Proof point:
+Deploy to a repo with a longer base URL path. Both the partner QR
+(invite card) and the owner QR (share overlay) render successfully.
+
+Codex instructions:
+In renderInviteCard, find the QRCode constructor call that uses
+correctLevel:QRCode.CorrectLevel.H and change to
+correctLevel:QRCode.CorrectLevel.M. The share overlay in showShareQr
+already uses M — confirm and leave as-is.
+
+
+══════════════════════════════════════════════════════════════════════════
+ANNOUNCEMENTS
+══════════════════════════════════════════════════════════════════════════
+
+#8 — One Immutable Announcement Per Event, Identical Both Sides
+───────────────────────────────────────────────────────────────
+
+What must change:
+Currently, join/leave/name-change announcements can appear duplicated
+(same person 'joined' twice at the same timestamp), appear
+asymmetrically (owner sees partner joined but partner doesn't, or vice
+versa), or appear in different order on each side. The announcement
+system must produce exactly one system message per event, deduplicated
+by eventId, and displayed identically on both sides.
+
+What must be added:
+(a) In projectSystemAnnouncements, before rendering, deduplicate by
+eventId — if two canonical events have the same eventId, render only
+one. (b) Sort announcements strictly by seq number, then by eventId as
+tiebreaker. (c) The join event for a participant should be emitted
+exactly once by the joining participant's device when the WebSocket
+connects and the hello is acknowledged — not by each client
+independently guessing that the peer joined.
+
+What must be removed:
+Remove any duplicate join-event emission from markPeerSeen.
+markPeerSeen currently calls appendCanonicalEvent('join',...) when
+peerPresent transitions from false to true. This causes both sides to
+independently emit join events for the same participant. Instead, each
+device should only emit its OWN join event (in resetActivePresence),
+never the peer's.
+
+Proof point:
+Create a session, invite a partner. Both sides see exactly: '[Owner
+name] joined · [time]' then '[Partner name] joined · [time]'. No
+duplicates. Export both sides — the system messages are identical in
+content and count. Reconnect — no spurious 'joined' announcements
+appear.
+
+Codex instructions:
+1) In markPeerSeen: remove the block that calls
+appendCanonicalEvent(convId,'join',...) for the peer. markPeerSeen
+should only update presence state (rt.peerPresent, rt.peerLastSeenAt,
+etc), never emit canonical events for the peer. 2) In
+resetActivePresence: this already emits a join event for SELF — keep
+this as the sole join-event source. 3) In projectSystemAnnouncements:
+after collecting evs array, dedupe: var seen = {}; evs =
+evs.filter(function(ev){if(seen[ev.eventId])return false;
+seen[ev.eventId]=true; return true;}); 4) Ensure sort is strictly by seq
+then eventId: evs.sort(function(a,b){if(a.seq!==b.seq)return
+a.seq-b.seq; return
+String(a.eventId).localeCompare(String(b.eventId));}); 5) In
+handleRelayEvent for type==='hello': remove any
+appendCanonicalEvent('join') call for the peer — the peer's own device
+is responsible for emitting its join event via its own
+resetActivePresence.
+
+
+══════════════════════════════════════════════════════════════════════════
+READ / DELIVERY STATUS
+══════════════════════════════════════════════════════════════════════════
+
+#9 — Delivery = Blue Dot, Read = Blue Checkmark
+────────────────────────────────────────────────
+
+What must change:
+Replace the current single-dot status indicator with two distinct
+states: a blue dot for delivered, and a blue checkmark for read. A
+message is 'read' ONLY when all of: (a) the recipient's browser window
+is in focus, (b) the tab is in focus, (c) the session card for that
+conversation is the active session. If the session is already active and
+the tab regains focus, move cursor to the composer input and mark all
+previous unread messages as read at that moment.
+
+What must be added:
+(a) New status rendering: delivered shows a blue filled circle (Unicode
+U+25CF) in color #2E8B8B at 10px. Read shows a blue checkmark (Unicode
+U+2713) in color #2E8B8B at 12px. Undelivered shows a grey filled
+circle in var(--ink-dim) at 10px. (b) A visibility/focus listener that,
+on regaining focus with an active session, calls a new function
+markSessionRead(convId) which iterates unread messages, stamps readAt,
+updates UI, and sends read-receipt events to peer. (c) The composer
+input auto-focuses when the session becomes the active session AND the
+tab is focused.
+
+What must be removed:
+Remove the current logic that stamps readAt immediately upon message
+receipt in handleRelayEvent (the line:
+if(!existing.readAt){existing.readAt=Date.now();}). Read must only be
+set by the focus-based mechanism.
+
+Proof point:
+Send a message from Device A. Device B receives it — Device A shows a
+blue dot. Device B user focuses the tab and the correct session — Device
+A's dot changes to a blue checkmark. If Device B is in a different
+session or tab is unfocused, Device A stays on blue dot indefinitely.
+
+Codex instructions:
+1) In updateMessageStatusUI: replace dot rendering. Delivered = blue
+filled circle U+25CF in color #2E8B8B at 10px. Read = blue checkmark
+U+2713 in color #2E8B8B at 12px. Undelivered = grey filled circle in
+var(--ink-dim) at 10px. 2) In handleRelayEvent type===msg: REMOVE the
+line that sets existing.readAt or msg.readAt on receipt. Only set
+deliveredAt. 3) Add function markSessionRead(convId): iterate
+state.messages, for each msg where from===them and !msg.readAt, set
+msg.readAt=Date.now(), call updateMessageStatusUI(msg), and send
+read-receipt via transportSend with type:ack, ackType:read, id:msg.id.
+Save messages after loop. 4) Add focus listener on visibilitychange: if
+!document.hidden and state.activeConvId, call markSessionRead and focus
+msg-input. Also in window focus handler, same logic. 5) In openSession:
+after renderAllMessages, if !document.hidden call
+markSessionRead(cid) and focus composer. 6) In handleRelayEvent for
+type===ack where ackType===read: call
+markMessageDeliveryState(convId, d.id, read, d.timestamp).
+
+
+#10 — Unread Badge on Session Cards
+────────────────────────────────────
+
+What must change:
+Each session card in the left panel must show a count badge of unread
+messages — messages from the partner received since the last time that
+session was marked as read.
+
+What must be added:
+(a) A function getUnreadCount(convId) that counts messages where
+from==='them' and !msg.readAt. (b) In renderSessionList, for each
+session card, if unreadCount > 0, render the existing .sess-card-badge
+element with the count. (c) When markSessionRead runs, re-render the
+session list to clear the badge.
+
+Proof point:
+Receive 3 messages while viewing a different session. The session card
+for the receiving session shows a badge with '3'. Tap the card. Badge
+disappears.
+
+Codex instructions:
+Add function getUnreadCount(convId) that returns
+getMsgs(convId).filter(m => m.from==='them' && !m.readAt).length. In
+renderSessionList, in the sess-card HTML generation, after the
+sess-card-sub div: compute var unread = getUnreadCount(s.convId);
+generate statusBadge HTML using the existing .sess-card-badge class with
+the unread count, or empty string if zero. Insert statusBadge into the
+card HTML before the action buttons div. In markSessionRead, after
+saving messages, call renderSessionList() to refresh badges.
+
+
+══════════════════════════════════════════════════════════════════════════
+UI POLISH
+══════════════════════════════════════════════════════════════════════════
+
+#11 — Revamp Welcome / Empty State Screen
+──────────────────────────────────────────
+
+What must change:
+Replace the current empty state (large 'talk' logo, description text,
+'New Chat' button) with: flag.gif/flag.png/gradient fallback as
+background (same image progression as the onboarding modal), centered
+welcome text, no button.
+
+What must be removed:
+Remove the .shell-empty-logo div ('talk'). Remove the New Chat button
+from the empty state. Remove the descriptive text 'Select a conversation
+or start a new one'.
+
+What must be added:
+Background on .shell-empty matching the onboarding-title-wrap::before
+pattern: background-image with flags.gif, flags.png, and linear-gradient
+fallback, with a semi-transparent cream overlay. Centered text:
+'Welcome' (large, bold), then 'Please select a conversation on the
+left', then 'or tap the + icon to start a new chat' (smaller, subdued).
+
+Proof point:
+Load app with no active session. The welcome screen shows the flag
+mosaic background with the three-line centered welcome text. No button,
+no 'talk' logo.
+
+Codex instructions:
+Replace the #shell-empty inner HTML with two divs. First: an
+absolute-positioned background div with the same background-image
+cascade as .onboarding-title-wrap::before (flags.gif, flags.png,
+linear-gradient fallback with semi-transparent cream overlay, opacity
+.58, cover sizing). Second: a relative-positioned z-index:1 content div
+containing centered text: 'Welcome' in Lora serif 28px bold var(--ink),
+then 14px var(--ink-mid) text 'Please select a conversation on the left'
+line-break 'or tap the + icon to start a new chat' with + in bold.
+Update .shell-empty CSS to add position:relative; overflow:hidden;.
+Remove the .shell-empty-logo CSS rule. Remove the existing New Chat
+button and talk logo from the shell-empty div.
+
+
+#12 — Onboarding Modal Text
+────────────────────────────
+
+What must change:
+Confirm the onboarding modal text reads exactly: 'Hi, let's get ready to
+chat!' followed by a line break, then 'What's your name?'
+
+Proof point:
+Clear localStorage, reload. The onboarding modal shows the exact text on
+two lines with the flag background.
+
+Codex instructions:
+In the .onboarding-title div, set innerHTML to two lines: Line 1: Hi,
+let's get ready to chat! Line 2: What's your name? — separated by a
+line break tag. Verify the existing text matches. If it already says
+this, no change needed.
+
+
+#13 — Chat Header Redesign
+───────────────────────────
+
+What must change:
+The chat header with participant names must be redesigned for a cleaner,
+more professional look. Both names should appear in styled chip
+containers with connectivity indicators. Owner name is editable (tap to
+edit). Partner name is display-only. Each chip has a colored dot: green
+when connected, grey when disconnected.
+
+What must be added:
+Chip-style styling for .shell-participant: pill-shaped background (light
+teal or paper color), consistent padding, rounded corners, a clear
+inline dot indicator, and clean typography. The arrow between names
+should be subtle. The overall header should feel like a professional
+messaging app header, not a debug display.
+
+Proof point:
+Both names appear in clean pill-shaped chips. Green dot visible next to
+each name when connected. Owner chip shows a subtle edit affordance on
+hover. Tapping the partner chip shows join time tooltip. The header
+looks intentionally designed.
+
+Codex instructions:
+Update .shell-participant CSS: add background:var(--paper);
+border:1px solid var(--border); border-radius:20px; padding:4px 12px
+4px 8px; display:inline-flex; align-items:center; gap:6px;
+font-size:14px;. Update .shell-participant::before (the dot): width:8px;
+height:8px;. Update .shell-participant.editable:hover:
+background:var(--teal-light); border-color:var(--teal); cursor:text;.
+Update .shell-partner: gap:8px; padding:6px 16px 10px;. The arrow:
+font-size:12px; color:var(--ink-dim); opacity:0.5;.
+
+
+#14 — Confirm Partner Join Time in Header Tooltip
+──────────────────────────────────────────────────
+
+What must change:
+Verify that hovering or tapping the partner name chip correctly shows:
+'Joined [date/time]' when connected with a partnerJoinedAt value, 'Last
+seen [date/time]' when disconnected but previously seen, or 'Never seen'
+if no connection has occurred.
+
+Proof point:
+Hover over partner chip while connected — tooltip shows 'Joined Apr 01,
+2026 6:11 AM'. Disconnect partner — tooltip changes to 'Last seen
+[time]'. New session with no partner — shows 'Never seen'.
+
+Codex instructions:
+In updatePresenceIndicators, the peerEl.title logic already exists.
+Verify it reads: peerEl.title = (rt && rt.peerPresent) ? ('Joined ' +
+fmtPresenceTime(joinedAt || rt.peerLastSeenAt)) : ((rt &&
+rt.peerEverSeen) ? ('Last seen ' +
+fmtPresenceTime(rt.peerLastSeenAt)) : 'Never seen'); If this matches
+current code, mark as confirmed — no change needed.
+
+
+#15 — Confirm Chinese = Simplified Chinese
+───────────────────────────────────────────
+
+What must change:
+Verify that the language code 'zh' in the LANGS array and TTS_LOCALE map
+refers to Simplified Chinese (zh-CN), not Traditional Chinese (zh-TW).
+
+Proof point:
+In the code, LANGS entry for zh shows label 'Chinese' and flag CN.
+TTS_LOCALE shows zh:'zh-CN'. Translation API calls use 'zh' which
+MyMemory routes to Simplified.
+
+Codex instructions:
+Verify: LANGS array has {code:'zh',label:'Chinese',flag:'🇨🇳'} — if
+label does not specify 'Simplified', change to label:'Chinese
+(Simplified)'. Verify TTS_LOCALE has zh:'zh-CN'. If both correct, no
+change needed.
+
+
+══════════════════════════════════════════════════════════════════════════
+FRICTION REDUCTION
+══════════════════════════════════════════════════════════════════════════
+
+#16 — Auto-Focus Composer on Session Open
+──────────────────────────────────────────
+
+What must change:
+When the user taps a session card or a session becomes the active
+session, automatically place the cursor in the message input field. One
+fewer tap before typing.
+
+Proof point:
+Tap any session card. The composer input is focused and the keyboard
+appears on mobile. You can immediately start typing without tapping the
+input field.
+
+Codex instructions:
+In openSession, after scrollBottom(): add setTimeout(function(){ var ta
+= document.getElementById('msg-input'); if (ta && !document.hidden)
+ta.focus(); }, 100);. The setTimeout ensures the DOM has rendered. The
+!document.hidden check prevents unwanted focus when tab is backgrounded.
+
+
+#18 — Remove Instruction Text from New Chat Modal
+──────────────────────────────────────────────────
+
+What must change:
+Remove the text 'Press Enter for OK, or Cancel to go back.' from the
+new-chat modal. The Enter key and Cancel button behaviors are
+self-evident from the buttons.
+
+What must be removed:
+The div with class 'new-chat-sub' containing that instruction text.
+
+Proof point:
+Tap + to create a new chat. The modal shows language selectors and
+buttons directly — no instruction text above them.
+
+Codex instructions:
+In the new-chat-modal HTML, find the div with class new-chat-sub
+containing text 'Press Enter for OK, or Cancel to go back.' — remove
+this entire div element.
+
+
+#19 — Single-Tap Share from Active Session Header
+──────────────────────────────────────────────────
+
+What must change:
+Currently sharing requires: open hamburger menu, find the session card,
+tap the share icon. Add a share action directly accessible from the
+active session's chat header so you don't need to open the left panel.
+
+What must be added:
+A share button in the shell-ribbon bar (top bar of chat screen) that
+calls shareCurrentSession(). Use the existing share SVG icon. Place it
+after the phrasebook button and before the language button.
+
+Proof point:
+While in an active session, tap the share icon in the top ribbon. The
+share overlay opens with the QR code and copy link for the current
+session. No need to open the left panel.
+
+Codex instructions:
+In the .shell-ribbon div, after the phrasebook ribbon-btn and before the
+ribbon-lang-btn, add a new ribbon-btn button with
+onclick=shareCurrentSession() and title=Share session. Use the same
+share SVG icon already defined in the ICON_SHARE constant (the one with
+three circles and two connecting lines, viewBox 0 0 24 24). The
+shareCurrentSession function already exists in the codebase — no new JS
+needed.
+
+
+══════════════════════════════════════════════════════════════════════════
+SUMMARY CHECKLIST
+══════════════════════════════════════════════════════════════════════════
+
+#    Item                                              Category
+──── ────────────────────────────────────────────────── ─────────────────
+#1   Same-identity guard                               Identity & Security
+#2   Upstream redirect before join-blocked modal        Identity & Security
+#3   Heartbeat timeout 120s → 45s                      Reliability
+#4   Surface silent send failures with toast + amber    Reliability
+#5   Per-session diagnostic log                         Diagnostics
+#6   Validate invite URL base (block about:srcdoc)      QR & Invite
+#7   QR error correction H → M for invite card          QR & Invite
+#8   One immutable announcement per event, both sides   Announcements
+#9   Delivered = blue dot, Read = blue checkmark         Status
+#10  Unread badge count on session cards                 Status
+#11  Welcome screen with flag background, no button      UI Polish
+#12  Onboarding modal text confirmation                  UI Polish
+#13  Chat header chip redesign with presence dots        UI Polish
+#14  Partner join time tooltip confirmation               UI Polish
+#15  Chinese = Simplified Chinese confirmation            Language
+#16  Auto-focus composer on session open                  Friction
+#18  Remove instruction text from new chat modal          Friction
+#19  Share button in ribbon for active session            Friction
+
+Hard constraints: The relay worker
+(talk-signal.myacctfortracking.workers.dev) is off-limits. All changes
+are client-side in test.html. Feature branches required before merging
+to main.
+
+End of spec.

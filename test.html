@@ -2601,6 +2601,7 @@ function validateInvitePayload(payload){
       if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
       if(payload.ol!==undefined)mapped.ownerLastSentLang=payload.ol;
       if(payload.oe!==undefined)mapped.ownerEffectiveReplyLang=payload.oe;
+      if(payload.ar!==undefined)mapped.ownerAutoRead=payload.ar;
     }
     return mapped;
   }
@@ -2610,6 +2611,7 @@ function validateInvitePayload(payload){
     if(payload.joinOrigin!=='share-partner'&&payload.joinOrigin!=='share-owner-handoff')return null;
     if(payload.joinOrigin==='share-owner-handoff'&&payload.side!=='owner')return null;
     if(payload.joinOrigin==='share-partner'&&payload.side!=='partner')return null;
+    if(payload.ownerAutoRead!==undefined&&payload.ownerAutoRead!==1&&payload.ownerAutoRead!==0&&payload.ownerAutoRead!==true&&payload.ownerAutoRead!==false)return null;
     return payload;
   }
   return null;
@@ -2630,6 +2632,12 @@ function buildInvitePayload(sess,prefs,intent){
   if(mode==='owner-handoff'){
     // Preserve owner identity for role-correct owner handoff hydration.
     base.oi=sess.ownerIdentityId;
+    // Preserve owner language and accessibility preferences for seamless device handoff.
+    base.om=sess.ownerLangMode;
+    base.of=sess.ownerFixedLang;
+    base.ol=sess.ownerLastSentLang;
+    base.oe=getEffectiveReplyLang(sess,'owner','');
+    base.ar=state.autoSpeakIncoming?1:0;
   }
   return pruneInvitePayload(base);
 }
@@ -2653,6 +2661,7 @@ function hydrateSessionFromInvite(sess,invite){
     if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
     if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
     if(invite.ownerEffectiveReplyLang!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(invite.ownerEffectiveReplyLang)||'';
+    if(invite.ownerAutoRead!==undefined)sess.ownerAutoRead=!!invite.ownerAutoRead;
   }
   if(invite.partnerLangMode==='fixed'||invite.partnerLangMode==='auto')sess.partnerLangMode=invite.partnerLangMode;
   if(invite.partnerFixedLang!==undefined)sess.partnerFixedLang=normalizeLangSetting(invite.partnerFixedLang)||'';
@@ -4761,6 +4770,17 @@ document.addEventListener('DOMContentLoaded',function(){
           putSession(sess);
         }
         sess=hydrateSessionFromInvite(sess,invite);
+        if(invite.side==='owner'){
+          var ownerPrefs=getPrefs();
+          ownerPrefs.myLang=(sess.ownerLangMode==='fixed')?(normalizeLangSetting(sess.ownerFixedLang)||''):'';
+          if(invite.ownerAutoRead!==undefined){
+            ownerPrefs.autoSpeakIncoming=!!invite.ownerAutoRead;
+            state.autoSpeakIncoming=!!invite.ownerAutoRead;
+            updateAutoReadBtn();
+          }
+          savePrefs(ownerPrefs);
+          updateLangPill();
+        }
         sess.localRole=getSessionLocalRole(sess,invite);
         if(sess.localRole==='partner'&&!sess.partnerIdentityId)sess.partnerIdentityId=String(PART_ID||'');
         if(invite.side==='partner'&&!sess.partnerJoinedAt)sess.partnerJoinedAt=Date.now();

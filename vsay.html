@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vSay</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #111827; color: #e5e7eb; }
+    #ribbon { display: flex; gap: 8px; padding: 10px; background: #1f2937; align-items: center; }
+    button { border: 1px solid #4b5563; background: #374151; color: #e5e7eb; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+    #collapseBtn { width: 34px; }
+    #onAirBtn { width: 34px; color: #22c55e; }
+    #mediaFloat { position: fixed; left: 24px; top: 72px; width: 420px; height: 280px; border: 1px solid #4b5563; border-radius: 10px; overflow: hidden; background: #0b1220; }
+    #mediaFloat.hidden { display: none; }
+    #mediaHeader { display: flex; justify-content: space-between; align-items: center; padding: 6px; background: #1f2937; cursor: move; }
+    #mediaBody { position: relative; width: 100%; height: calc(100% - 44px); background: #000; }
+    .videoMain, .videoInset { position: absolute; object-fit: cover; background: #111; }
+    .videoMain { inset: 0; width: 100%; height: 100%; }
+    .videoInset { width: 34%; height: 34%; right: 8px; bottom: 8px; border: 2px solid #9ca3af; border-radius: 8px; cursor: pointer; z-index: 2; }
+    #mediaControls { display: flex; gap: 6px; }
+    .toggle.off { color: #ef4444; border-color: #ef4444; }
+    .toggle.off .slash { text-decoration: line-through; text-decoration-thickness: 2px; }
+    #ccLog { padding: 10px; font-size: 13px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div id="ribbon">
+    <button id="collapseBtn" aria-label="Collapse">›</button>
+    <button id="toggleMediaFloatBtn">Media</button>
+    <button id="onAirBtn" aria-label="On Air" title="On Air">●</button>
+  </div>
+
+  <div id="mediaFloat" class="hidden" aria-label="Media window">
+    <div id="mediaHeader">
+      <strong>Media</strong>
+      <div>
+        <button id="closeMediaBtn" aria-label="Close">X</button>
+      </div>
+    </div>
+    <div id="mediaBody">
+      <video id="remoteVideo" class="videoMain" autoplay playsinline muted></video>
+      <video id="localVideo" class="videoInset" autoplay playsinline muted></video>
+    </div>
+    <div id="mediaControls">
+      <button id="videoToggle" class="toggle off" aria-label="Video toggle"><span class="slash">📷</span></button>
+      <button id="micToggle" class="toggle off" aria-label="Mic toggle"><span class="slash">🎤</span></button>
+    </div>
+  </div>
+
+  <div id="ccLog" aria-live="polite"></div>
+
+  <script>
+    const DEFAULT_MEDIA_GEOMETRY = { left: 24, top: 72, width: 420, height: 280 };
+    const mediaFloat = document.getElementById('mediaFloat');
+    const mediaHeader = document.getElementById('mediaHeader');
+    const toggleMediaFloatBtn = document.getElementById('toggleMediaFloatBtn');
+    const closeMediaBtn = document.getElementById('closeMediaBtn');
+    const collapseBtn = document.getElementById('collapseBtn');
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const videoToggle = document.getElementById('videoToggle');
+    const micToggle = document.getElementById('micToggle');
+    const ccLog = document.getElementById('ccLog');
+
+    let ribbonCollapsed = false;
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let pipLocalInset = true;
+    let videoEnabled = false;
+    let micEnabled = false;
+
+    function applyDefaultMediaGeometry() {
+      mediaFloat.style.left = `${DEFAULT_MEDIA_GEOMETRY.left}px`;
+      mediaFloat.style.top = `${DEFAULT_MEDIA_GEOMETRY.top}px`;
+      mediaFloat.style.width = `${DEFAULT_MEDIA_GEOMETRY.width}px`;
+      mediaFloat.style.height = `${DEFAULT_MEDIA_GEOMETRY.height}px`;
+    }
+
+    function toggleMediaFloat() {
+      const opening = mediaFloat.classList.contains('hidden');
+      if (opening) {
+        applyDefaultMediaGeometry();
+      }
+      mediaFloat.classList.toggle('hidden');
+    }
+
+    function setPipLayout() {
+      if (pipLocalInset) {
+        remoteVideo.className = 'videoMain';
+        localVideo.className = 'videoInset';
+      } else {
+        localVideo.className = 'videoMain';
+        remoteVideo.className = 'videoInset';
+      }
+    }
+
+    function flipPip() {
+      pipLocalInset = !pipLocalInset;
+      setPipLayout();
+    }
+
+    function setToggleVisual(button, on, icon) {
+      button.classList.toggle('off', !on);
+      button.innerHTML = on ? `<span>${icon}</span>` : `<span class="slash">${icon}</span>`;
+    }
+
+    function renderCcLine(text) {
+      const row = document.createElement('div');
+      row.textContent = text;
+      ccLog.prepend(row);
+    }
+
+    // Sender STT -> relay -> receiver translate/TTS (CC remains independent of video visibility).
+    function senderStt(text) {
+      relayCcPayload({ text, ts: Date.now() });
+    }
+
+    function relayCcPayload(payload) {
+      receiverCc(payload);
+    }
+
+    function receiverCc(payload) {
+      const translated = `[translated] ${payload.text}`;
+      renderCcLine(translated);
+      receiverTts(translated);
+    }
+
+    function receiverTts(_translated) {
+      // TTS sink; intentionally independent from media rendering state.
+    }
+
+    toggleMediaFloatBtn.addEventListener('click', toggleMediaFloat);
+    closeMediaBtn.addEventListener('click', () => mediaFloat.classList.add('hidden'));
+
+    collapseBtn.addEventListener('click', () => {
+      ribbonCollapsed = !ribbonCollapsed;
+      toggleMediaFloatBtn.style.display = ribbonCollapsed ? 'none' : '';
+    });
+
+    localVideo.addEventListener('click', flipPip);
+    remoteVideo.addEventListener('click', flipPip);
+
+    videoToggle.addEventListener('click', () => {
+      videoEnabled = !videoEnabled;
+      setToggleVisual(videoToggle, videoEnabled, '📷');
+    });
+
+    micToggle.addEventListener('click', () => {
+      micEnabled = !micEnabled;
+      setToggleVisual(micToggle, micEnabled, '🎤');
+    });
+
+    mediaHeader.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      const rect = mediaFloat.getBoundingClientRect();
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      mediaFloat.style.left = `${e.clientX - dragOffsetX}px`;
+      mediaFloat.style.top = `${e.clientY - dragOffsetY}px`;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    setPipLayout();
+    setToggleVisual(videoToggle, videoEnabled, '📷');
+    setToggleVisual(micToggle, micEnabled, '🎤');
+    senderStt('CC transport check');
+  </script>
+</body>
+</html>

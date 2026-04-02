@@ -118,6 +118,11 @@ textarea.field-input{resize:none;}
 .shell-participant-label{display:inline-block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .shell-partner-arrow{font-size:12px;color:var(--ink-dim);opacity:.5;font-weight:500;flex-shrink:0;}
 .shell-empty{position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
+.shell-empty-hero{position:relative;z-index:1;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center;width:min(100%,360px);padding:18px 16px;border-radius:16px;background:rgba(253,250,247,.72);border:1px solid rgba(226,221,216,.9);box-shadow:0 1px 8px rgba(0,0,0,.05);}
+.shell-empty-title{font-family:'Lora',serif;font-size:28px;font-weight:700;color:var(--ink);}
+.shell-empty-copy{font-size:14px;color:var(--ink-mid);line-height:1.45;}
+.shell-empty-plus{background:none;border:none;padding:0;font:inherit;font-size:16px;font-weight:700;color:var(--teal);cursor:pointer;}
+.shell-empty-plus:hover{text-decoration:underline;}
 
 /* MESSAGES */
 #messages{flex:1;overflow-y:auto;padding:10px 12px 6px;display:flex;flex-direction:column;gap:6px;-webkit-overflow-scrolling:touch;}
@@ -354,9 +359,9 @@ textarea.field-input{resize:none;}
 .onboarding-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:260;padding:20px;}
 .onboarding-modal[hidden]{display:none!important;}
 .onboarding-card{width:min(100%,360px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px 16px;display:flex;flex-direction:column;gap:10px;}
-.onboarding-title-wrap{position:relative;border-radius:12px;overflow:hidden;min-height:108px;display:flex;align-items:center;}
+.onboarding-title-wrap{position:relative;border-radius:12px;overflow:hidden;min-height:108px;display:flex;align-items:center;justify-content:center;}
 .onboarding-title-wrap::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;}
-.onboarding-title{position:relative;font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);padding:14px;}
+.onboarding-title{position:relative;font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);padding:14px;text-align:center;width:100%;}
 .onboarding-error{font-size:12px;color:var(--red);min-height:16px;}
 .new-chat-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;}
 .new-chat-modal[hidden]{display:none!important;}
@@ -369,6 +374,12 @@ textarea.field-input{resize:none;}
 .helper-toast-msg{font-size:12px;color:var(--ink);line-height:1.4;}
 .helper-toast-links{margin-top:8px;display:flex;gap:10px;}
 .helper-toast-link{background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:0;}
+.single-tab-stop{position:fixed;inset:0;z-index:320;background:rgba(26,23,20,.58);display:flex;align-items:center;justify-content:center;padding:20px;}
+.single-tab-stop[hidden]{display:none!important;}
+.single-tab-stop-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px 16px;display:flex;flex-direction:column;gap:10px;text-align:center;}
+.single-tab-stop-title{font-family:'Lora',serif;font-size:20px;font-weight:600;color:var(--ink);}
+.single-tab-stop-copy{font-size:13px;line-height:1.45;color:var(--ink-mid);}
+.single-tab-stop-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:2px;}
 @keyframes fadeIn{from{opacity:0;}}
 .sheet{background:var(--cream);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;animation:slideUp .22s ease-out;}
 @keyframes slideUp{from{transform:translateY(36px);opacity:.7;}}
@@ -528,9 +539,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
     </button>
-    <button class="ribbon-btn" onclick="shareCurrentSession()" title="Share session">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-    </button>
     <button class="ribbon-btn" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
     <span class="ribbon-spacer"></span>
     <label class="toggle-switch" title="Auto-read">
@@ -543,10 +551,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
-    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;"></div>
-    <div style="position:relative;z-index:1;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center;">
-      <div style="font-family:'Lora',serif;font-size:28px;font-weight:700;color:var(--ink);">Welcome</div>
-      <div style="font-size:14px;color:var(--ink-mid);line-height:1.45;">Please select a conversation on the left<br>or tap the <strong>+</strong> icon to start a new chat</div>
+    <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.72),rgba(253,250,247,.72)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:56% auto,56% auto,56% auto,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.5;"></div>
+    <div class="shell-empty-hero">
+      <div class="shell-empty-title">Hello!</div>
+      <div class="shell-empty-copy">Please select a conversation on the left<br>or start a new one</div>
+      <button type="button" class="shell-empty-plus" onclick="openNewChatModal()" aria-label="Start a new conversation">[+]</button>
     </div>
   </div>
 
@@ -642,6 +651,17 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <div class="helper-toast-links">
     <button class="helper-toast-link" type="button" onclick="dismissAutoReadHelper()">Dismiss</button>
     <button class="helper-toast-link" type="button" onclick="disableAutoReadHelper()">Don’t show again</button>
+  </div>
+</div>
+
+<div class="single-tab-stop" id="single-tab-stop" hidden>
+  <div class="single-tab-stop-card">
+    <div class="single-tab-stop-title">Already active in another tab</div>
+    <div class="single-tab-stop-copy">This tab is in standby. Switch to your active tab, or take over here for testing.</div>
+    <div class="single-tab-stop-actions">
+      <button class="sheet-btn secondary" type="button" onclick="requestFocusActiveTab()">Switch to active tab</button>
+      <button class="sheet-btn primary" type="button" onclick="takeOverThisTab()">Take over here</button>
+    </div>
   </div>
 </div>
 
@@ -961,6 +981,8 @@ var tabBus=('BroadcastChannel' in window)?new BroadcastChannel('ts3-tab-coord'):
 var tabWriterLeaseMs=12000;
 var isActiveTabWriter=false;
 var writerEpoch=0;
+var activeWriterTabId='';
+var tabIsStandby=false;
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -1961,7 +1983,7 @@ function transportDisconnect(opts){
 function transportSend(ev){
   if(!connectedConvId)return false;
   var isEphemeral=['ping','pong','typing','reattach','hello','ack'].indexOf(ev.type)>=0||ev.transient===true;
-  if(!isEphemeral&&!isActiveTabWriter){addDiagLog('durable send blocked passive tab','warn');toast('Message queued — switch to this tab to send');return false;}
+  if(!isEphemeral&&!isActiveTabWriter){addDiagLog('durable send blocked passive tab','warn');toast('Standby mode in this tab — switch to active tab or take over here');return false;}
   if(!isEphemeral&&writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('durable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
@@ -1973,7 +1995,7 @@ function transportSend(ev){
 }
 
 function sendReliable(ev){
-  if(!isActiveTabWriter){addDiagLog('reliable send blocked passive tab','warn');toast('Message queued — switch to this tab to send');return false;}
+  if(!isActiveTabWriter){addDiagLog('reliable send blocked passive tab','warn');toast('Standby mode in this tab — switch to active tab or take over here');return false;}
   if(writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('reliable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
@@ -2022,7 +2044,7 @@ function markSessionRead(convId){
 function scheduleMarkSessionRead(convId){
   if(_readDebounceTimer){clearTimeout(_readDebounceTimer);_readDebounceTimer=null;}
   if(!convId||document.hidden)return;
-  _readDebounceTimer=setTimeout(function(){if(document.hidden)return;markSessionRead(convId);var ta=document.getElementById('msg-input');if(ta)ta.focus();},500);
+  _readDebounceTimer=setTimeout(function(){if(document.hidden)return;markSessionRead(convId);},500);
 }
 
 // ── Visibility / focus ────────────────────────────────────
@@ -2259,7 +2281,6 @@ function openInviteScreen(cid){
   transportConnect(cid);
   renderAllMessages();
   scrollBottom();
-  setTimeout(function(){var ta=document.getElementById('msg-input');if(ta&&!document.hidden)ta.focus();},100);
   if(!document.hidden)scheduleMarkSessionRead(cid);
   showScreen('chat-screen');
   refreshActiveSessionChrome(cid);
@@ -2333,7 +2354,6 @@ function openSession(cid){
   addInviteMessage(cid);
   renderAllMessages();
   scrollBottom();
-  setTimeout(function(){var ta=document.getElementById('msg-input');if(ta&&!document.hidden)ta.focus();},100);
   if(!document.hidden)scheduleMarkSessionRead(cid);
   showScreen('chat-screen');
   refreshActiveSessionChrome(cid);
@@ -3816,7 +3836,7 @@ async function sendMessage(){
 
   var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
   var ok=sendReliable(payload);
-  if(!ok){msg.status='queued';toast('Message queued — switch to this tab to send');addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
+  if(!ok){msg.status='queued';toast('Standby mode in this tab — switch to active tab or take over here');addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}
   saveMsgs(sess.convId,state.messages);
   updateMessageStatusUI(msg);
@@ -4627,6 +4647,7 @@ function refreshTabWriterLease(){
     lease={tabId:TAB_ID,expiresAt:now+tabWriterLeaseMs,epoch:(Number(lease.epoch)||0)+(lease.tabId===TAB_ID?0:1)};
     lsW(SK.writer,JSON.stringify(lease));
   }
+  activeWriterTabId=String(lease.tabId||'');
   isActiveTabWriter=(lease.tabId===TAB_ID);
   writerEpoch=Number(lease.epoch)||0;
 }
@@ -4635,7 +4656,9 @@ function setupTabCoordination(){
   setInterval(refreshTabWriterLease,4000);
   if(tabBus){
     tabBus.onmessage=function(ev){
-      if(ev&&ev.data&&ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID)refreshTabWriterLease();
+      if(!ev||!ev.data)return;
+      if(ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID){refreshTabWriterLease();return;}
+      if(ev.data.type==='focus-request'&&ev.data.targetTabId===TAB_ID){try{window.focus();}catch(_){}return;}
     };
     setInterval(function(){try{tabBus.postMessage({type:'writer-ping',tabId:TAB_ID,ts:Date.now()});}catch(_){}},5000);
   }else{
@@ -4643,11 +4666,35 @@ function setupTabCoordination(){
   }
 }
 
+function showSingleTabStop(){
+  tabIsStandby=true;
+  var stop=document.getElementById('single-tab-stop');if(stop)stop.hidden=false;
+}
+function hideSingleTabStop(){
+  tabIsStandby=false;
+  var stop=document.getElementById('single-tab-stop');if(stop)stop.hidden=true;
+}
+function requestFocusActiveTab(){
+  var target=activeWriterTabId||String((lsJSON(SK.writer,{})||{}).tabId||'');
+  if(!target||target===TAB_ID){toast('This tab is already active');return;}
+  if(tabBus){try{tabBus.postMessage({type:'focus-request',targetTabId:target,fromTabId:TAB_ID,ts:Date.now()});}catch(_){}}
+  toast('Tried to switch to active tab');
+}
+function takeOverThisTab(){
+  var prev=lsJSON(SK.writer,{});
+  var lease={tabId:TAB_ID,expiresAt:Date.now()+tabWriterLeaseMs,epoch:(Number(prev.epoch)||0)+1};
+  lsW(SK.writer,JSON.stringify(lease));
+  refreshTabWriterLease();
+  hideSingleTabStop();
+  location.reload();
+}
+
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setupTabCoordination();
+  if(!isActiveTabWriter){showSingleTabStop();return;}
   loadCanonicalLedger();
   seedStarterData();
   document.addEventListener('keydown',function(e){
@@ -4684,6 +4731,8 @@ document.addEventListener('DOMContentLoaded',function(){
   updateDot();
 
   function continueStartup(){
+    if(tabIsStandby&&!isActiveTabWriter){showSingleTabStop();return;}
+    hideSingleTabStop();
     // Deep link — share-origin invite only
     var up=new URLSearchParams(location.search);
     var hp=new URLSearchParams((location.hash||'').replace(/^#/,''));

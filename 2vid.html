@@ -221,9 +221,20 @@ textarea.field-input{resize:none;}
   display:flex;align-items:center;justify-content:center;
   min-height:220px;
 }
-#vsay-remote-video,#vsay-local-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-/* MOD 5: Mirror local camera */
-#vsay-local-video{transform:scaleX(-1);}
+#vsay-remote-video,#vsay-local-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
+#vsay-remote-video{z-index:1;}
+/* Picture-in-picture local preview */
+#vsay-local-video{
+  z-index:3;
+  inset:auto 10px 10px auto;
+  width:min(34%,160px);
+  height:auto;
+  aspect-ratio:16/9;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.4);
+  box-shadow:0 4px 14px rgba(0,0,0,.45);
+  transform:scaleX(-1);
+}
 
 .vsay-audio-chip{font-size:13px;color:#fff;opacity:.9;background:rgba(0,0,0,.45);padding:6px 12px;border-radius:999px;z-index:2;}
 
@@ -460,6 +471,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="vsay-float-actions">
       <button class="vsay-float-btn" id="vsay-share-video-btn" onclick="toggleSessionMediaShare('video')" title="Toggle camera"><span class="vsay-icon-wrap" id="vsay-video-icon"></span></button>
       <button class="vsay-float-btn" id="vsay-share-audio-btn" onclick="toggleSessionMediaShare('audio')" title="Toggle mic"><span class="vsay-icon-wrap" id="vsay-mic-icon"></span></button>
+      <button class="vsay-float-btn" id="vsay-pip-btn" onclick="togglePictureInPictureMode()" title="Picture in Picture">⧉</button>
     </div>
   </div>
 
@@ -595,7 +607,7 @@ var uid=function(){return Date.now().toString(36)+Math.random().toString(36).sli
 // STATE
 // ════════════════════════════════════════════════════════
 var state={activeConvId:null,messages:[],connected:false,autoSpeakIncoming:false,participants:{},
-  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false},
+  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false},
   ccTranscript:{entries:[],visible:true,collapsed:false}};
 var ws=null,connectedConvId=null,socketState='closed',intentionalClose=false;
 var rcTimer=null,rcAttempts=0,hbTimer=null,lastPongAt=0,lastRxAt=0,_hiddenAt=0;
@@ -958,6 +970,7 @@ function renderMediaShareUI(){
   var vBtn=document.getElementById('vsay-share-video-btn');
   var aBtn=document.getElementById('vsay-share-audio-btn');
   var localVideo=document.getElementById('vsay-local-video');
+  var remoteVideo=document.getElementById('vsay-remote-video');
   var audioChip=document.getElementById('vsay-audio-chip');
   var ccBtn=document.getElementById('vsay-cc-btn');
   var chevron=document.getElementById('vsay-chevron');
@@ -978,12 +991,16 @@ function renderMediaShareUI(){
   if(chevron)chevron.className='vsay-chevron'+(state.mediaRuntime.collapsed?'':' expanded');
   win.classList.toggle('collapsed',!!state.mediaRuntime.collapsed);
 
-  // Show/hide local video
+  // Show/hide local and remote video (two-way + PiP)
   if(localVideo){
     if(state.mediaRuntime.stream&&videoOn){localVideo.hidden=false;localVideo.srcObject=state.mediaRuntime.stream}
     else{localVideo.hidden=true;localVideo.srcObject=null}
   }
-  if(audioChip)audioChip.hidden=!(!videoOn&&micOn&&state.mediaRuntime.stream);
+  if(remoteVideo){
+    if(state.mediaRuntime.remoteStream&&state.mediaRuntime.remoteVideoEnabled){remoteVideo.hidden=false;remoteVideo.srcObject=state.mediaRuntime.remoteStream}
+    else{remoteVideo.hidden=true;remoteVideo.srcObject=null}
+  }
+  if(audioChip)audioChip.hidden=!((!videoOn&&micOn&&state.mediaRuntime.stream)||(!state.mediaRuntime.remoteVideoEnabled&&state.mediaRuntime.remoteMicEnabled&&state.mediaRuntime.remoteStream));
 
   // Show/hide float
   if(state.activeConvId&&state.mediaRuntime.floatVisible)win.classList.add('show');
@@ -1002,15 +1019,131 @@ async function toggleSessionMediaShare(kind){
     if(!state.mediaRuntime.stream){state.mediaRuntime.stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});state.mediaRuntime.activeSessionId=state.activeConvId}
     state.mediaRuntime.stream.getVideoTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.videoEnabled});
     state.mediaRuntime.stream.getAudioTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.micEnabled});
-    transportSend({type:'media-share',transient:true,mediaAction:'share',kind:state.mediaRuntime.videoEnabled?'video':'audio'});
-    renderMediaShareUI()
+    syncLocalTracksToPeer();
+    transportSend({type:'media-share',transient:true,mediaAction:'share',kind:state.mediaRuntime.videoEnabled?'video':'audio',videoEnabled:!!state.mediaRuntime.videoEnabled,micEnabled:!!state.mediaRuntime.micEnabled});
+    renderMediaShareUI();
+    maybeStartOffer();
   }catch(_){toast('Camera/mic permission blocked')}
 }
 function stopSessionMediaShare(){
   if(state.mediaRuntime.stream){state.mediaRuntime.stream.getTracks().forEach(function(t){try{t.stop()}catch(_){}})}
   state.mediaRuntime.stream=null;state.mediaRuntime.videoEnabled=false;state.mediaRuntime.micEnabled=false;
-  if(connectedConvId)transportSend({type:'media-share',transient:true,mediaAction:'unshare'});
+  syncLocalTracksToPeer();
+  if(connectedConvId)transportSend({type:'media-share',transient:true,mediaAction:'unshare',videoEnabled:false,micEnabled:false});
   renderMediaShareUI()
+}
+
+async function togglePictureInPictureMode(){
+  var target=document.getElementById('vsay-remote-video')||document.getElementById('vsay-local-video');
+  if(!target)return;
+  if(!document.pictureInPictureEnabled){toast('Picture-in-Picture not supported');return}
+  try{
+    if(document.pictureInPictureElement){await document.exitPictureInPicture();return}
+    if(target.hidden||!target.srcObject){toast('No active video for PiP');return}
+    await target.requestPictureInPicture();
+  }catch(_){toast('Unable to open Picture-in-Picture')}
+}
+
+function ensurePeerConnection(){
+  if(state.mediaRuntime.pc)return state.mediaRuntime.pc;
+  var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  state.mediaRuntime.pc=pc;
+  pc.onicecandidate=function(e){
+    if(e.candidate)transportSend({type:'webrtc-signal',transient:true,signal:{candidate:e.candidate}});
+  };
+  pc.ontrack=function(e){
+    var stream=(e.streams&&e.streams[0])?e.streams[0]:null;
+    if(!stream){
+      stream=new MediaStream();
+      stream.addTrack(e.track);
+    }
+    state.mediaRuntime.remoteStream=stream;
+    state.mediaRuntime.remoteVideoEnabled=stream.getVideoTracks().some(function(t){return t.readyState==='live'&&t.enabled!==false});
+    state.mediaRuntime.remoteMicEnabled=stream.getAudioTracks().some(function(t){return t.readyState==='live'&&t.enabled!==false});
+    renderMediaShareUI();
+  };
+  pc.onconnectionstatechange=function(){
+    if(pc.connectionState==='failed'||pc.connectionState==='closed'||pc.connectionState==='disconnected'){
+      if(pc.connectionState!=='connected'){state.mediaRuntime.remoteStream=null;state.mediaRuntime.remoteVideoEnabled=false;state.mediaRuntime.remoteMicEnabled=false;renderMediaShareUI()}
+    }
+  };
+  syncLocalTracksToPeer();
+  return pc;
+}
+
+function syncLocalTracksToPeer(){
+  var pc=state.mediaRuntime.pc;if(!pc)return;
+  var stream=state.mediaRuntime.stream;
+  var senders=pc.getSenders();
+  senders.forEach(function(sender){
+    if(sender.track&&(!stream||stream.getTracks().indexOf(sender.track)===-1)){
+      try{pc.removeTrack(sender)}catch(_){ }
+    }
+  });
+  if(stream){
+    stream.getTracks().forEach(function(track){
+      var exists=pc.getSenders().some(function(s){return s.track===track});
+      if(!exists)try{pc.addTrack(track,stream)}catch(_){ }
+    });
+  }
+}
+
+async function maybeStartOffer(){
+  if(!state.activeConvId||!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled))return;
+  var pc=ensurePeerConnection();
+  if(state.mediaRuntime.makingOffer)return;
+  state.mediaRuntime.makingOffer=true;
+  try{
+    var offer=await pc.createOffer();
+    if(pc.signalingState!=='stable')return;
+    await pc.setLocalDescription(offer);
+    transportSend({type:'webrtc-signal',transient:true,signal:{description:pc.localDescription}});
+  }catch(_){}
+  finally{state.mediaRuntime.makingOffer=false}
+}
+
+function handleRemoteMediaShare(d){
+  if(!d)return;
+  if(d.mediaAction==='unshare'){
+    state.mediaRuntime.remoteVideoEnabled=false;
+    state.mediaRuntime.remoteMicEnabled=false;
+    state.mediaRuntime.remoteStream=null;
+    renderMediaShareUI();
+    return;
+  }
+  if(hasOwn(d,'videoEnabled'))state.mediaRuntime.remoteVideoEnabled=!!d.videoEnabled;
+  else state.mediaRuntime.remoteVideoEnabled=d.kind==='video';
+  if(hasOwn(d,'micEnabled'))state.mediaRuntime.remoteMicEnabled=!!d.micEnabled;
+  else state.mediaRuntime.remoteMicEnabled=true;
+  if(state.mediaRuntime.remoteVideoEnabled||state.mediaRuntime.remoteMicEnabled)ensurePeerConnection();
+  renderMediaShareUI();
+}
+
+async function handleWebrtcSignal(d){
+  if(!d||!d.signal)return;
+  if(!state.activeConvId||d.session!==state.activeConvId)return;
+  if(d.from)state.mediaRuntime.remotePeerId=d.from;
+  var pc=ensurePeerConnection();
+  var signal=d.signal;
+  try{
+    if(signal.description){
+      var description=signal.description;
+      var polite=String(DEVICE_ID)>String(d.from||'');
+      var readyForOffer=!state.mediaRuntime.makingOffer&&(pc.signalingState==='stable'||state.mediaRuntime.ignoreOffer);
+      var offerCollision=description.type==='offer'&&!readyForOffer;
+      state.mediaRuntime.ignoreOffer=!polite&&offerCollision;
+      if(state.mediaRuntime.ignoreOffer)return;
+      await pc.setRemoteDescription(description);
+      if(description.type==='offer'){
+        syncLocalTracksToPeer();
+        await pc.setLocalDescription(await pc.createAnswer());
+        transportSend({type:'webrtc-signal',transient:true,signal:{description:pc.localDescription}});
+      }
+    }else if(signal.candidate){
+      try{await pc.addIceCandidate(signal.candidate)}catch(err){if(!state.mediaRuntime.ignoreOffer)throw err}
+    }
+  }catch(_){toast('Video signaling interrupted')}
+  renderMediaShareUI();
 }
 
 // MOD 9: Draggable float with position persistence
@@ -1123,7 +1256,8 @@ function handleRelayEvent(d){
     updatePartnerHeader(sess);renderSessionList();if(!d._fromBackfill){resendUnacked();renderAllMessages();scrollBottom()}return
   }
   if(d.type==='pong'||d.type==='ping'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});return}
-  if(d.type==='media-share'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});renderMediaShareUI();return}
+  if(d.type==='media-share'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteMediaShare(d);return}
+  if(d.type==='webrtc-signal'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleWebrtcSignal(d);return}
   if(d.type==='cc-transcript'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteCcTranscript(d,sess);return}
   if(d.type==='typing'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});showTyping(d.name||sess.partnerHandle,d.typing);return}
 

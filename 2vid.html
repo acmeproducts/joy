@@ -1306,7 +1306,7 @@ var INVITE_SCHEMA_VERSION=2;
 function encodeInvitePayload(p){try{return btoa(unescape(encodeURIComponent(JSON.stringify(p)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}catch(_){return''}}
 function decodeInvitePayload(e){if(!e)return null;try{var s=String(e).replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return JSON.parse(decodeURIComponent(escape(atob(s))))}catch(_){return null}}
 function buildInviteUrl(sess,prefs,intent){
-  var s=normalizeSession(sess||{});var payload={schemaVersion:INVITE_SCHEMA_VERSION,s:s.convId,d:PART_ID,n:s.myName||prefs.userName,o:'p',t:'pt_'+String(s.convId||'').slice(0,8)};
+  var s=normalizeSession(sess||{});var payload={schemaVersion:INVITE_SCHEMA_VERSION,s:s.convId,d:PART_ID,n:s.myName||prefs.userName,o:'p',t:'pt_'+String(s.convId||'').slice(0,8),pm:s.partnerLangMode,pf:s.partnerFixedLang,pr:s.partnerAutoRead?1:0};
   var enc=encodeInvitePayload(payload);return enc?(location.href.split('?')[0].split('#')[0]+'#i='+enc):''
 }
 function addInviteMessage(cid){
@@ -1333,7 +1333,8 @@ function createNewSession(opts){
     var cid=uid();var p=getPrefs();var now=Date.now();
     var myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
     var peerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,ownerLangMode:myLang?'fixed':'auto',ownerFixedLang:myLang||'',partnerLangMode:peerLang?'fixed':'auto',partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now,ownerAutoRead:(opts.autoRead!==undefined)?!!opts.autoRead:!!p.autoSpeakIncoming});
+    var autoRead=(opts.autoRead!==undefined)?!!opts.autoRead:!!p.autoSpeakIncoming;
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,ownerLangMode:myLang?'fixed':'auto',ownerFixedLang:myLang||'',partnerLangMode:peerLang?'fixed':'auto',partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now,ownerAutoRead:autoRead,partnerAutoRead:autoRead});
     state.autoSpeakIncoming=getSessionAutoRead(sess);document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming;
     putSession(sess);var order=getSessionOrder();order.unshift(cid);saveSessionOrder(order);
     closeLeftPanel();openSession(cid)
@@ -1463,6 +1464,9 @@ document.addEventListener('DOMContentLoaded',function(){
         if(payload.oe!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(payload.oe)||'';
         if(payload.ar!==undefined)sess.ownerAutoRead=!!payload.ar;
       }
+      if(payload.pm==='fixed'||payload.pm==='auto')sess.partnerLangMode=payload.pm;
+      if(payload.pf!==undefined)sess.partnerFixedLang=normalizeLangSetting(payload.pf)||'';
+      if(payload.pr!==undefined)sess.partnerAutoRead=!!payload.pr;
       if(payload.n){sess.partnerHandle=payload.n;sess.peerName=payload.n;putSession(sess)}
       if(sess.localRole==='owner'){
         var ownerPrefs=getPrefs();

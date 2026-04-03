@@ -192,6 +192,11 @@ textarea.field-input{resize:none;}
 .status-popup-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--ink);}
 .status-popup-close{border:none;background:none;color:var(--ink-dim);font-size:14px;cursor:pointer;line-height:1;}
 .status-popup-row{font-size:12px;color:var(--ink-mid);margin-top:6px;}
+.presence-popup{position:fixed;z-index:240;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;min-width:210px;}
+.presence-popup[hidden]{display:none!important;}
+.presence-popup-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--ink);}
+.presence-popup-close{border:none;background:none;color:var(--ink-dim);font-size:14px;cursor:pointer;line-height:1;}
+.presence-popup-row{font-size:12px;color:var(--ink-mid);margin-top:6px;line-height:1.4;}
 
 /* Bubble body — two equal columns */
 .bbl-body{display:grid;grid-template-columns:1fr 1px 1fr;}
@@ -556,7 +561,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </label>
   </div>
   <!-- Partner name -->
-  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name for this chat" onfocus="this.dataset.editing='1'" onblur="this.dataset.editing='0';saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Never seen" hidden><span class="shell-participant-label">?</span></span></div>
+  <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name for this chat" onfocus="this.dataset.editing='1'" onblur="this.dataset.editing='0';saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Never seen" hidden role="button" tabindex="0" onclick="togglePresencePopup(event,this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePresencePopup(event,this);}"><span class="shell-participant-label">?</span></span></div>
 
   <!-- Empty state -->
   <div class="shell-empty" id="shell-empty">
@@ -897,6 +902,15 @@ Owner</div>
   <div class="status-popup-row" id="status-popup-delivered"></div>
   <div class="status-popup-row" id="status-popup-read"></div>
 </div>
+<div id="presence-popup" class="presence-popup" hidden>
+  <div class="presence-popup-head">
+    <span>Partner presence</span>
+    <button class="presence-popup-close" onclick="closePresencePopup()">×</button>
+  </div>
+  <div class="presence-popup-row" id="presence-popup-state"></div>
+  <div class="presence-popup-row" id="presence-popup-joined"></div>
+  <div class="presence-popup-row" id="presence-popup-lastseen"></div>
+</div>
 
 <div class="overlay" id="join-blocked-overlay" hidden onclick="if(event.target===this)closeJoinBlockedModal()">
   <div style="background:var(--cream);border-radius:14px;padding:22px;width:calc(100% - 44px);max-width:360px;margin:auto;align-self:center;">
@@ -1025,6 +1039,10 @@ var typingStopTimer=null;
 var localTypingActive=false;
 var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
 var recognition=null,sttActive=false;
+var readVisibilityObserver=null;
+var visibleIncomingReadTargets={};
+var supportsReadObserver=('IntersectionObserver' in window);
+var readObserverThreshold=0.6;
 
 // ════════════════════════════════════════════════════════
 // STORAGE HELPERS
@@ -1392,7 +1410,7 @@ function nextSeq(convId){
   lsW(SK.seq,JSON.stringify(seqs));
   return n;
 }
-function isAnnouncementEventType(t){return ['join','leave','name_change','device_change','handoff'].indexOf(t)>=0;}
+function isAnnouncementEventType(t){return ['join','leave','name_change','device_change','handoff','reconnect','language_change','invite_accepted'].indexOf(t)>=0;}
 function stableStringify(v){
   if(!v||typeof v!=='object')return JSON.stringify(v);
   if(Array.isArray(v))return '['+v.map(stableStringify).join(',')+']';
@@ -1401,16 +1419,19 @@ function stableStringify(v){
 }
 function dedupeAnnouncementKey(ev){
   var base=[ev.convId,ev.identityId,ev.type].join('|');
-  if(ev.type==='name_change'||ev.type==='device_change')base+='|'+stableStringify(ev.payload||{});
+  if(['name_change','device_change','language_change','invite_accepted','reconnect'].indexOf(ev.type)>=0)base+='|'+stableStringify(ev.payload||{});
   return base;
 }
 function shouldDedupAnnouncement(ev){
   if(!isAnnouncementEventType(ev.type))return false;
-  if(['join','name_change','device_change'].indexOf(ev.type)<0)return false;
-  var key=dedupeAnnouncementKey(ev);var now=Date.now();var ttl=6000;
-  Object.keys(announcementDedup||{}).forEach(function(k){if(Number(announcementDedup[k])<=now)delete announcementDedup[k];});
-  if(announcementDedup[key]&&announcementDedup[key]>now)return true;
-  announcementDedup[key]=now+ttl;
+  var key=dedupeAnnouncementKey(ev);
+  var existing=(canonicalLedger.eventsByConv[ev.convId]||[]).find(function(prev){
+    if(!prev||!isAnnouncementEventType(prev.type))return false;
+    if(dedupeAnnouncementKey(prev)!==key)return false;
+    return Math.abs((Number(prev.ts)||0)-(Number(ev.ts)||0))<=8000;
+  });
+  if(existing)return true;
+  announcementDedup[key]=Number(ev.ts)||Date.now();
   return false;
 }
 function projectAnnouncementText(ev){
@@ -1420,6 +1441,9 @@ function projectAnnouncementText(ev){
   if(ev.type==='name_change')return (p.prevName||'Participant')+' is now '+(p.nextName||'Participant');
   if(ev.type==='device_change')return (p.name||'Participant')+' switched device';
   if(ev.type==='handoff')return (p.name||'Participant')+' handoff complete';
+  if(ev.type==='reconnect')return (p.name||'Participant')+' reconnected · '+fmtAnnouncementTime(ev.ts);
+  if(ev.type==='language_change')return (p.name||'Participant')+' language changed: '+(p.prevLabel||'Auto')+' → '+(p.nextLabel||'Auto');
+  if(ev.type==='invite_accepted')return (p.name||'Participant')+' attached to this chat';
   return '';
 }
 function projectSystemAnnouncements(convId){
@@ -1427,6 +1451,7 @@ function projectSystemAnnouncements(convId){
   var evs=(canonicalLedger.eventsByConv[convId]||[]).filter(function(ev){return ev.visibility==='chat'&&isAnnouncementEventType(ev.type);});
   var seen={};evs=evs.filter(function(ev){if(seen[ev.eventId])return false;seen[ev.eventId]=true;return true;});
   evs.sort(function(a,b){if(a.seq!==b.seq)return a.seq-b.seq;return String(a.eventId).localeCompare(String(b.eventId));});
+  addDiagLog('ANN project conv='+String(convId||'').slice(0,8)+' events='+evs.length);
   evs.forEach(function(ev){
     msgs.push({id:'sys-'+ev.eventId,from:'system',text:projectAnnouncementText(ev),timestamp:ev.ts,eventId:ev.eventId});
   });
@@ -1469,6 +1494,7 @@ function ingestCanonicalEvent(ev,opts){
   canonicalLedger.byEventId[ev.eventId]=true;
   if(!canonicalLedger.eventsByConv[ev.convId])canonicalLedger.eventsByConv[ev.convId]=[];
   canonicalLedger.eventsByConv[ev.convId].push(Object.freeze(Object.assign({},ev)));
+  addDiagLog('canonical accept type='+ev.type+' seq='+ev.seq+' eventId='+String(ev.eventId||'').slice(0,12));
   if(Number(ev.seq)>(Number(canonicalLedger.seqByConv[ev.convId])||0))canonicalLedger.seqByConv[ev.convId]=Number(ev.seq);
   if(!opts.skipProjection&&isAnnouncementEventType(ev.type))projectSystemAnnouncements(ev.convId);
   if(opts.persist!==false)persistCanonicalLedger();
@@ -1497,6 +1523,38 @@ function fmtTime(t){return new Date(t).toLocaleTimeString([],{hour:'2-digit',min
 function fmtDateTime(t){if(!t)return'';return new Date(t).toLocaleString([],{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 var statusPopupState={msgId:null,anchorKey:''};
 function closeStatusPopup(){var pop=document.getElementById('status-popup');if(pop)pop.hidden=true;statusPopupState.msgId=null;statusPopupState.anchorKey='';}
+function closePresencePopup(){var pop=document.getElementById('presence-popup');if(pop)pop.hidden=true;}
+function openPresencePopup(anchorEl){
+  var pop=document.getElementById('presence-popup');
+  var stateEl=document.getElementById('presence-popup-state');
+  var joinedEl=document.getElementById('presence-popup-joined');
+  var seenEl=document.getElementById('presence-popup-lastseen');
+  if(!pop||!anchorEl||!stateEl||!joinedEl||!seenEl)return;
+  var cid=state.activeConvId||connectedConvId;
+  var sess=cid?getSession(cid):null;
+  var rt=getRoomRuntime(cid);
+  var joinedAt=sess&&Number(sess.partnerJoinedAt)||0;
+  var isOnline=!!(rt&&rt.peerPresent);
+  stateEl.textContent='Status: '+(isOnline?'Online':'Offline');
+  joinedEl.textContent='Joined: '+(joinedAt?fmtPresenceTime(joinedAt):'Unknown');
+  seenEl.textContent='Last seen: '+((rt&&rt.peerEverSeen)?fmtPresenceTime(rt.peerLastSeenAt):'Never seen');
+  pop.hidden=false;
+  var r=anchorEl.getBoundingClientRect();
+  var pr=pop.getBoundingClientRect();
+  var left=r.left+(r.width/2)-(pr.width/2);
+  var top=r.bottom+8;
+  var maxLeft=window.innerWidth-pr.width-8;
+  var maxTop=window.innerHeight-pr.height-8;
+  pop.style.left=Math.max(8,Math.min(left,maxLeft))+'px';
+  pop.style.top=Math.max(8,Math.min(top,maxTop))+'px';
+}
+function togglePresencePopup(e,anchorEl){
+  if(e)e.stopPropagation();
+  var pop=document.getElementById('presence-popup');
+  if(!pop)return;
+  if(!pop.hidden){closePresencePopup();return;}
+  openPresencePopup(anchorEl||document.getElementById('shell-peer-name'));
+}
 function openStatusPopup(msgId,anchorEl){
   var msg=findMsg(msgId);
   var deliveredEl=document.getElementById('status-popup-delivered');
@@ -1525,6 +1583,13 @@ document.addEventListener('click',function(e){
   if(e.target.closest('#status-popup'))return;
   if(e.target.closest('.msg-status-dot'))return;
   closeStatusPopup();
+});
+document.addEventListener('click',function(e){
+  var pop=document.getElementById('presence-popup');
+  if(!pop||pop.hidden)return;
+  if(e.target.closest('#presence-popup'))return;
+  if(e.target.closest('#shell-peer-name'))return;
+  closePresencePopup();
 });
 function langLabel(c){return LANG_MAP[c]||c||'?';}
 function langFlag(c){var l=LANGS.find(function(x){return x.code===c;});return l?l.flag:'';}
@@ -1917,7 +1982,15 @@ function transportConnect(convId,opts){
     if(rcTimer){clearTimeout(rcTimer);rcTimer=null;}
     setSocketState('open');lastRxAt=lastPongAt=Date.now();
     var rt=getRoomRuntime(connectedConvId);
-    if(rt){rt.selfPresent=true;if(rt.connectedOnce)addDiagLog('RECONNECTED (silent)');rt.connectedOnce=true;}
+    if(rt){
+      rt.selfPresent=true;
+      if(rt.connectedOnce){
+        addDiagLog('RECONNECTED (silent)');
+        var rsess=getSession(connectedConvId);
+        appendCanonicalEvent(connectedConvId,'reconnect',{name:firstRealName(rsess&&rsess.myHandle,rsess&&rsess.myName,getPreferredOwnerName())||'Participant'},buildLocalEnvelope(rsess,{}));
+      }
+      rt.connectedOnce=true;
+    }
     startHeartbeatLoop();
     var sess=getSession(connectedConvId);
     var localMeta=buildLocalEnvelope(sess,{});
@@ -2028,15 +2101,64 @@ function markMessageDeliveryState(convId,msgId,status,stamp){
 }
 
 var _readDebounceTimer=null;
+function clearVisibleReadTargets(convId){
+  if(convId&&visibleIncomingReadTargets[convId])delete visibleIncomingReadTargets[convId];
+  if(!convId)visibleIncomingReadTargets={};
+}
+function recordVisibleIncomingMessage(msgId){
+  var cid=state.activeConvId;
+  if(!cid||!msgId)return;
+  if(!visibleIncomingReadTargets[cid])visibleIncomingReadTargets[cid]={};
+  visibleIncomingReadTargets[cid][msgId]=1;
+}
+function setupReadVisibilityObserver(){
+  if(!supportsReadObserver||!window.IntersectionObserver)return false;
+  teardownReadVisibilityObserver();
+  var root=document.getElementById('messages');
+  if(!root)return false;
+  readVisibilityObserver=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(!entry||!entry.target||!entry.isIntersecting)return;
+      if((entry.intersectionRatio||0)<readObserverThreshold)return;
+      var msgId=entry.target.dataset&&entry.target.dataset.msgId||'';
+      if(msgId){recordVisibleIncomingMessage(msgId);scheduleMarkSessionRead(state.activeConvId);}
+    });
+  },{root:root,threshold:[readObserverThreshold]});
+  return true;
+}
+function teardownReadVisibilityObserver(){
+  if(readVisibilityObserver){try{readVisibilityObserver.disconnect();}catch(_){}}
+  readVisibilityObserver=null;
+}
+function observeIncomingMessageForRead(row,msg){
+  if(!row||!msg||msg.from!=='them')return;
+  if(!supportsReadObserver||!readVisibilityObserver)return;
+  try{readVisibilityObserver.observe(row);}catch(_){}
+}
+function getVisibleUnreadMessageIds(convId,msgs){
+  var bucket=visibleIncomingReadTargets[convId]||{};
+  var ids=Object.keys(bucket||{});
+  if(!ids.length)return [];
+  var out=[];
+  ids.forEach(function(id){
+    var hit=(msgs||[]).find(function(m){return m&&m.id===id&&m.from==='them'&&!m.readAt;});
+    if(hit)out.push(id);
+  });
+  return out;
+}
 function markSessionRead(convId){
   if(!convId||document.hidden)return;
   var msgs=(convId===state.activeConvId)?state.messages:getMsgs(convId);
   var changed=false;var now=Date.now();
+  var onlyVisible=(supportsReadObserver&&convId===state.activeConvId);
+  var visibleIds=onlyVisible?getVisibleUnreadMessageIds(convId,msgs):[];
   for(var i=0;i<msgs.length;i++){
     var msg=msgs[i];
     if(msg&&msg.from==='them'&&!msg.readAt){
+      if(onlyVisible&&visibleIds.indexOf(msg.id)<0)continue;
       msg.readAt=now;msg.status='read';changed=true;
       transportSend({type:'ack',ackType:'read',id:msg.id,timestamp:now});
+      addDiagLog('READ ack emitted msg='+String(msg.id||'').slice(0,8)+' conv='+String(convId||'').slice(0,8));
       if(convId===state.activeConvId)updateMessageStatusUI(msg);
     }
   }
@@ -2045,7 +2167,7 @@ function markSessionRead(convId){
 function scheduleMarkSessionRead(convId){
   if(_readDebounceTimer){clearTimeout(_readDebounceTimer);_readDebounceTimer=null;}
   if(!convId||document.hidden)return;
-  _readDebounceTimer=setTimeout(function(){if(document.hidden)return;markSessionRead(convId);},500);
+  _readDebounceTimer=setTimeout(function(){if(document.hidden)return;markSessionRead(convId);},supportsReadObserver?140:500);
 }
 
 // ── Visibility / focus ────────────────────────────────────
@@ -2154,7 +2276,7 @@ function openLanguagePanel(){
   if(ov)ov.hidden=false;
 }
 function setMyLang(code){
-  var p=getPrefs();p.myLang=code;p._langDetected=true;savePrefs(p);
+  var p=getPrefs();var prevCode=normalizeLangSetting(p.myLang)||'';p.myLang=code;p._langDetected=true;savePrefs(p);
   var all=getAllSessions();
   all.forEach(function(s){
     s.ownerLangMode=code?'fixed':'auto';
@@ -2174,6 +2296,11 @@ function setMyLang(code){
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess),side:helloMeta.side,identityId:helloMeta.identityId,ts:Date.now(),seq:++msgSeq};
     try{ws.send(JSON.stringify(hello));}catch(_){}
+    if(prevCode!==code){
+      var prevLabel=prevCode?getLangEntry(prevCode).label:'Auto-detect';
+      var nextLabel=code?getLangEntry(code).label:'Auto-detect';
+      appendCanonicalEvent(connectedConvId,'language_change',{name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'Participant',prev:prevCode,next:code||'',prevLabel:prevLabel,nextLabel:nextLabel},buildLocalEnvelope(sess,{}));
+    }
   }
   if(!code){toast('🌐 Language set to Auto-detect');}
   else{toast(getLangEntry(code).flag+' Language set to '+getLangEntry(code).label);}
@@ -2270,7 +2397,7 @@ function openInviteScreen(cid){
   projectSystemAnnouncements(cid);
   state.messages=getMsgs(cid);
   setActiveConvId(cid);markViewed(cid);
-  // Add invite system message if not already present
+  // Add invite system message if session is still pre-join
   addInviteMessage(cid);
   document.getElementById('shell-empty').style.display='none';
   document.getElementById('messages').style.display='flex';
@@ -2291,6 +2418,12 @@ function openInviteScreen(cid){
 
 function addInviteMessage(cid){
   var sess=getSession(cid)||{};
+  var canInsert=shouldInsertInviteMessage(cid,state.messages,sess);
+  if(!canInsert){
+    removeInviteMessage(cid);
+    addDiagLog('INVITE card suppressed conv='+String(cid||'').slice(0,8));
+    return;
+  }
   var url=buildInviteUrl(sess,getPrefs(),'partner-invite');
   var existing=state.messages.find(function(m){return m.from==='invite'&&m.convId===cid;});
   if(existing){
@@ -2303,6 +2436,19 @@ function addInviteMessage(cid){
   var msg={id:'inv-'+cid,from:'invite',convId:cid,inviteUrl:url,text:'Session created',timestamp:Date.now()};
   state.messages.push(msg);
   saveMsgs(cid,state.messages);
+}
+function removeInviteMessage(cid){
+  var before=(state.messages||[]).length;
+  state.messages=(state.messages||[]).filter(function(m){return !(m&&m.from==='invite'&&m.convId===cid);});
+  if(state.messages.length!==before)saveMsgs(cid,state.messages);
+}
+function shouldInsertInviteMessage(cid,msgs,sess){
+  var list=Array.isArray(msgs)?msgs:getMsgs(cid);
+  var hasRealChat=list.some(function(m){return m&&m.from!=='system'&&m.from!=='invite';});
+  var hasPartnerIdentity=!!String(sess&&sess.partnerIdentityId||'').trim();
+  var joinedAt=Number(sess&&sess.partnerJoinedAt)||0;
+  if(hasRealChat||hasPartnerIdentity||joinedAt)return false;
+  return true;
 }
 
 function injectInviteCard(cid){/* Now handled by addInviteMessage + renderInviteCard */}
@@ -2351,8 +2497,13 @@ function openSession(cid){
   
   resetActivePresence(cid);
   transportConnect(cid);
-  state.pendingInviteId=cid;
-  addInviteMessage(cid);
+  if(shouldInsertInviteMessage(cid,state.messages,sess)){
+    state.pendingInviteId=cid;
+    addInviteMessage(cid);
+  }else{
+    state.pendingInviteId=null;
+    removeInviteMessage(cid);
+  }
   renderAllMessages();
   scrollBottom();
   if(!document.hidden)scheduleMarkSessionRead(cid);
@@ -2382,6 +2533,8 @@ function updatePartnerHeader(sess){
 
 function showEmptyShell(){
   state.activeConvId=null;
+  teardownReadVisibilityObserver();
+  clearVisibleReadTargets();
   document.getElementById('shell-empty').style.display='flex';
   document.getElementById('messages').style.display='none';
   document.getElementById('composer').style.display='none';
@@ -2962,6 +3115,9 @@ function handleRelayEvent(d){
       resendUnacked();
       sendHistorySync(sess.convId);
       renderAllMessages();scrollBottom();
+      if(!wasEverSeen){
+        appendCanonicalEvent(sess.convId,'invite_accepted',{name:firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner'},buildLocalEnvelope(sess,{side:'partner',identityId:String(sess.partnerIdentityId||d.identityId||'')}));
+      }
       if(nameUpdate&&nameUpdate.prevName&&nameUpdate.nextName&&nameUpdate.prevName!==nameUpdate.nextName){
         appendCanonicalEvent(sess.convId,'name_change',{prevName:nameUpdate.prevName,nextName:nameUpdate.nextName},buildLocalEnvelope(sess,{side:'partner',identityId:String(sess.partnerIdentityId||'')}));
       }
@@ -3062,7 +3218,7 @@ function handleRelayEvent(d){
     if(m2){
       normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
       applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
-      markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
+      markMessageDeliveryState(sess.convId,m2.id,'translated',Date.now());
       updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);
     }
     return;
@@ -3072,10 +3228,10 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     if(d.ackType==='msg'){
       clearAck(d.id);
-      markMessageDeliveryState(state.activeConvId,d.id,'delivered',Date.now());
+      markMessageDeliveryState(sess.convId,d.id,'delivered',Date.now());
     }
     else if(d.ackType==='tr'){clearAck(d.id);}
-    else if(d.ackType==='read'){markMessageDeliveryState(state.activeConvId,d.id,'read',d.timestamp||Date.now());}
+    else if(d.ackType==='read'){markMessageDeliveryState(sess.convId,d.id,'read',d.timestamp||Date.now());addDiagLog('READ ack applied msg='+String(d.id||'').slice(0,8)+' conv='+String(sess.convId||'').slice(0,8));}
     return;
   }
 
@@ -3295,8 +3451,10 @@ function renderMsg(msg){
   var el=document.createElement('div');
   el.className='msg-row'+(isMine?' mine':' theirs');
   el.id='row-'+msg.id;
+  el.dataset.msgId=msg.id;
   el.innerHTML='<div class="bubble-card">'+inner+'</div>';
   document.getElementById('messages').appendChild(el);
+  observeIncomingMessageForRead(el,msg);
 
   // Restore open state for clarify/backtrans panels
   if(thread.length){updateBblClarify(msg,'chat');}
@@ -3324,6 +3482,8 @@ function updateMessageStatusUI(msg){
 
 function renderAllMessages(){
   var c=document.getElementById('messages');c.innerHTML='';
+  clearVisibleReadTargets(state.activeConvId);
+  setupReadVisibilityObserver();
   state.messages.forEach(function(m){
     renderMsg(m);
   });

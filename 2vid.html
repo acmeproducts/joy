@@ -1451,11 +1451,28 @@ document.addEventListener('DOMContentLoaded',function(){
       sess.localRole=(payload.o==='o')?'owner':'partner';
       if(payload.t&&sess.localRole==='partner'){
         var localMeta=getLocalIdentityForRole(sess,'partner');
-        var claim=claimInviteToken(payload.s,payload.t,localMeta.identityId);
-        if(!claim.ok){toast('Invite already active on another tab/device');return}
+        var claim=claimInviteToken(payload.s,payload.t,PART_ID);
+        if(!claim.ok)addDiagLog('invite token already claimed; continuing local open session='+String(payload.s||'').slice(0,8),'warn');
         if(!sess.partnerIdentityId)sess.partnerIdentityId=localMeta.identityId;
       }
+      if(payload.o==='o'){
+        if(payload.oi!==undefined)sess.ownerIdentityId=String(payload.oi||'');
+        if(payload.om==='fixed'||payload.om==='auto')sess.ownerLangMode=payload.om;
+        if(payload.of!==undefined)sess.ownerFixedLang=normalizeLangSetting(payload.of)||'';
+        if(payload.ol!==undefined)sess.ownerLastSentLang=normalizeLangSetting(payload.ol)||'';
+        if(payload.oe!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(payload.oe)||'';
+        if(payload.ar!==undefined)sess.ownerAutoRead=!!payload.ar;
+      }
       if(payload.n){sess.partnerHandle=payload.n;sess.peerName=payload.n;putSession(sess)}
+      if(sess.localRole==='owner'){
+        var ownerPrefs=getPrefs();
+        ownerPrefs.myLang=(sess.ownerLangMode==='fixed')?(normalizeLangSetting(sess.ownerFixedLang)||''):'';
+        ownerPrefs.autoSpeakIncoming=!!sess.ownerAutoRead;
+        savePrefs(ownerPrefs);
+        updateLangPill();
+      }
+      state.autoSpeakIncoming=getSessionAutoRead(sess);
+      document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming;
       putSession(sess);
       ensureUserName(function(){openSession(payload.s)});return
     }

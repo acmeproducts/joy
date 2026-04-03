@@ -2736,18 +2736,18 @@ function evaluateInviteAdmission(invite){
   var sess=invite.sessionId&&getSession(invite.sessionId);
   if(!sess)return {allowed:true};
   if(invite.initiatorDeviceId===PART_ID||(sess.ownerIdentityId&&sess.ownerIdentityId===PART_ID))return {allowed:true,redirectToOwner:true};
-  if(Number(sess.partnerJoinedAt)&&Date.now()>Number(sess.partnerJoinedAt))return {allowed:false,reason:'partner-joined-at-locked'};
+  var tokenClaim=null;
+  if(invite.partnerInviteToken){
+    tokenClaim=claimInviteToken(invite.sessionId,invite.partnerInviteToken,PART_ID);
+    if(!tokenClaim.ok)return {allowed:false,reason:tokenClaim.reason||'invite-token-in-use'};
+  }
+  if(!invite.partnerInviteToken&&Number(sess.partnerJoinedAt)&&Date.now()>Number(sess.partnerJoinedAt))return {allowed:false,reason:'partner-joined-at-locked'};
   var rt=getRoomRuntime(invite.sessionId);
   var hasPartnerIdentity=!!String(sess.partnerIdentityId||'').trim();
   var activePeer=!!(rt&&rt.peerEverSeen&&((Date.now()-(rt.peerLastSeenAt||0))<180000));
   var hasMessages=(getMsgs(invite.sessionId)||[]).some(function(m){return m&&m.from==='me';});
-  if(hasPartnerIdentity&&(activePeer||hasMessages)){
+  if(!invite.partnerInviteToken&&hasPartnerIdentity&&(activePeer||hasMessages)){
     return {allowed:false,reason:'two-party-lock'};
-  }
-  if(invite.partnerInviteToken){
-    var roleMeta=getLocalIdentityForRole(sess,'partner');
-    var claim=claimInviteToken(invite.sessionId,invite.partnerInviteToken,roleMeta.identityId);
-    if(!claim.ok)return {allowed:false,reason:claim.reason||'invite-token-in-use'};
   }
   return {allowed:true};
 }
@@ -4941,6 +4941,13 @@ document.addEventListener('DOMContentLoaded',function(){
           var os=getSession(invite.sessionId)||normalizeSession({convId:invite.sessionId,createdAt:Date.now(),lastActivity:Date.now()});
           os=hydrateSessionFromInvite(os,Object.assign({},invite,{side:'owner',joinOrigin:'share-owner-handoff'}));
           os.localRole='owner';
+          var ownerRedirectPrefs=getPrefs();
+          ownerRedirectPrefs.myLang=(os.ownerLangMode==='fixed')?(normalizeLangSetting(os.ownerFixedLang)||''):'';
+          ownerRedirectPrefs.autoSpeakIncoming=!!os.ownerAutoRead;
+          savePrefs(ownerRedirectPrefs);
+          updateLangPill();
+          state.autoSpeakIncoming=getSessionAutoRead(os);
+          updateAutoReadBtn();
           putSession(os);
           toast('Opening on this device as you');
           openSession(invite.sessionId);
@@ -4966,9 +4973,7 @@ document.addEventListener('DOMContentLoaded',function(){
         if(invite.side==='owner'){
           var ownerPrefs=getPrefs();
           ownerPrefs.myLang=(sess.ownerLangMode==='fixed')?(normalizeLangSetting(sess.ownerFixedLang)||''):'';
-          if(invite.ownerAutoRead!==undefined){
-            sess.ownerAutoRead=!!invite.ownerAutoRead;
-          }
+          ownerPrefs.autoSpeakIncoming=!!sess.ownerAutoRead;
           savePrefs(ownerPrefs);
           updateLangPill();
         }

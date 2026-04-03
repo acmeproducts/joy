@@ -608,6 +608,9 @@ var MAX_SESSIONS_STORED=50,MAX_MSGS_PER_SESSION=300;
 var tEngine='cloud',ttsActive=null,typingTimer=null,typingStopTimer=null,localTypingActive=false;
 var SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
 var recognition=null,sttActive=false;
+var sttIdleTimer=null,sttHardTimer=null;
+var sttBaseText='';
+var STT_IDLE_MS=4000,STT_HARD_MS=45000;
 var pendingOnboardingFlow=null;
 var synth=window.speechSynthesis,canSpeak='speechSynthesis' in window;
 var trCache=new Map();
@@ -798,15 +801,31 @@ function speak(text,lang,btn){
   synth.cancel();synth.speak(utt)
 }
 function toggleSTT(){
-  if(!SpeechRec){toast('Voice not available');return}if(sttActive){if(recognition)recognition.stop();return}
+  function clearSttTimers(){if(sttIdleTimer){clearTimeout(sttIdleTimer);sttIdleTimer=null}if(sttHardTimer){clearTimeout(sttHardTimer);sttHardTimer=null}}
+  function resetSttIdleTimer(){if(sttIdleTimer)clearTimeout(sttIdleTimer);sttIdleTimer=setTimeout(function(){if(recognition&&sttActive)recognition.stop()},STT_IDLE_MS)}
+  if(!SpeechRec){toast('Voice not available');return}if(sttActive){clearSttTimers();if(recognition)recognition.stop();return}
   var sess=getSession(state.activeConvId);recognition=new SpeechRec();
-  recognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||'en']||'en';recognition.interimResults=true;recognition.continuous=false;
+  recognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||'en']||'en';recognition.interimResults=true;recognition.continuous=true;
   var btn=document.getElementById('stt-btn');
-  recognition.onstart=function(){sttActive=true;if(btn)btn.classList.add('active')};
-  recognition.onresult=function(e){var f='',i='';for(var r of e.results){if(r.isFinal)f+=r[0].transcript;else i+=r[0].transcript}document.getElementById('msg-input').value=f||i;autoResize();updateSendBtn()};
-  recognition.onend=function(){sttActive=false;if(btn)btn.classList.remove('active')};
-  recognition.onerror=function(){sttActive=false;if(btn)btn.classList.remove('active')};
-  try{recognition.start()}catch(e){}
+  recognition.onstart=function(){
+    sttActive=true;if(btn)btn.classList.add('active');
+    var ta=document.getElementById('msg-input');sttBaseText=(ta&&ta.value)||'';
+    resetSttIdleTimer();
+    sttHardTimer=setTimeout(function(){if(recognition&&sttActive)recognition.stop()},STT_HARD_MS)
+  };
+  recognition.onresult=function(e){
+    var f='',i='';for(var r of e.results){if(r.isFinal)f+=r[0].transcript;else i+=r[0].transcript}
+    var ta=document.getElementById('msg-input');
+    if(ta){
+      var spoken=(f||i||'').trim();
+      ta.value=spoken?(sttBaseText?(sttBaseText.replace(/\s+$/,'')+' '+spoken):spoken):sttBaseText;
+      ta.selectionStart=ta.selectionEnd=ta.value.length;
+    }
+    autoResize();updateSendBtn();resetSttIdleTimer()
+  };
+  recognition.onend=function(){clearSttTimers();sttActive=false;if(btn)btn.classList.remove('active')};
+  recognition.onerror=function(){clearSttTimers();sttActive=false;if(btn)btn.classList.remove('active')};
+  try{recognition.start()}catch(e){clearSttTimers()}
 }
 
 // ════════════════════════════════════════════════════════

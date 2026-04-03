@@ -993,7 +993,7 @@ var PART_ID=getPartId();
 var TAB_ID=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14));
 var tabBus=('BroadcastChannel' in window)?new BroadcastChannel('ts3-tab-coord'):null;
 var tabWriterLeaseMs=12000;
-var isActiveTabWriter=false;
+var isActiveTabWriter=true;
 var writerEpoch=0;
 var activeWriterTabId='';
 var tabIsStandby=false;
@@ -1501,7 +1501,6 @@ function ingestCanonicalEvent(ev,opts){
   return true;
 }
 function appendCanonicalEvent(convId,type,payload,identity){
-  if(!isActiveTabWriter)return null;
   var sess=getSession(convId);if(!sess)return null;
   var local=identity||buildLocalEnvelope(sess,{});
   var ev={eventId:'evt_'+uid(),seq:nextSeq(convId),ts:Date.now(),convId:convId,identityId:local.identityId,deviceId:DEVICE_ID,role:local.side,type:type,visibility:'chat',payload:payload||{},writerEpoch:writerEpoch};
@@ -1874,9 +1873,10 @@ function setSocketState(s){
 
 // ── Dedup ─────────────────────────────────────────────────
 function shouldDrop(d){
-  if(!d||!d.id)return false;
+  if(!d)return false;
   if(['msg','tr','clarify-note'].indexOf(d.type)<0)return false;
-  var now=Date.now();var key=d.type+'::'+d.id+'::'+String(d.from||'')+'::'+String(d.identityId||d.participant||'');
+  var stableId=String(d.id||d.eventId||[d.type,d.session||'',d.convId||'',d.seq||'',d.from||'',d.timestamp||d.ts||'',d.sourceText||d.targetText||''].join('|'));
+  var now=Date.now();var key=d.type+'::'+stableId+'::'+String(d.from||'')+'::'+String(d.identityId||d.participant||'');
   if(inboundSeen[key]&&inboundSeen[key]>now)return true;
   inboundSeen[key]=now+DEDUP_TTL_MS;
   if(Math.random()<0.05){Object.keys(inboundSeen).forEach(function(k){if(inboundSeen[k]<=now)delete inboundSeen[k];});}
@@ -2056,24 +2056,22 @@ function transportDisconnect(opts){
 function transportSend(ev){
   if(!connectedConvId)return false;
   var isEphemeral=['ping','pong','typing','reattach','hello','ack'].indexOf(ev.type)>=0||ev.transient===true;
-  if(!isEphemeral&&!isActiveTabWriter){addDiagLog('durable send blocked passive tab','warn');toast('Standby mode in this tab — switch to active tab or take over here');return false;}
-  if(!isEphemeral&&writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('durable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
   if(!isEphemeral&&(!connectedConvId||!localMeta.identityId||!DEVICE_ID||!localMeta.side)){addDiagLog('durable send rejected missing envelope','warn');return false;}
   var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,deviceId:DEVICE_ID,role:localMeta.side,ts:Date.now(),seq:++msgSeq});
+  if(!isEphemeral&&!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));return true;}catch(_){}}
   if(!isEphemeral)queueOutMsg(m);
   return false;
 }
 
 function sendReliable(ev){
-  if(!isActiveTabWriter){addDiagLog('reliable send blocked passive tab','warn');toast('Standby mode in this tab — switch to active tab or take over here');return false;}
-  if(writerEpoch!==(Number((lsJSON(SK.writer,{})||{}).epoch)||0)){addDiagLog('reliable send blocked stale-writer-epoch','warn');return false;}
   var sess=getSession(connectedConvId)||{};
   var localMeta=buildLocalEnvelope(sess,ev);
   if(!connectedConvId||!localMeta.identityId||!DEVICE_ID||!localMeta.side){addDiagLog('reliable send rejected missing envelope','warn');return false;}
   var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,deviceId:DEVICE_ID,role:localMeta.side,ts:Date.now(),seq:++msgSeq});
+  if(!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true;}catch(_){}}
   queueOutMsg(m);return false;
 }
@@ -3985,7 +3983,7 @@ async function sendMessage(){
 
   var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
   var ok=sendReliable(payload);
-  if(!ok){msg.status='queued';toast('Standby mode in this tab — switch to active tab or take over here');addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
+  if(!ok){msg.status='queued';toast('Queued — will retry when connected');addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}
   saveMsgs(sess.convId,state.messages);
   updateMessageStatusUI(msg);
@@ -4792,23 +4790,18 @@ function seedStarterData(){
 (function(){var s=document.createElement('style');s.textContent='.tags-wrap{display:flex;flex-wrap:wrap;gap:5px;align-items:center;}.tag-pill{background:var(--tag-bg);color:var(--tag-text);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:3px;}.tag-remove{background:none;border:none;font-size:11px;color:inherit;cursor:pointer;padding:0;line-height:1;opacity:.65;}.tag-remove:hover{opacity:1;}.add-tag-btn{background:none;border:1.5px dashed var(--ink-dim);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--ink-dim);cursor:pointer;font-family:"DM Sans",sans-serif;}';document.head.appendChild(s);})();
 
 function refreshTabWriterLease(){
-  var now=Date.now();
-  var lease=lsJSON(SK.writer,{});
-  if(!lease.tabId||Number(lease.expiresAt||0)<=now||lease.tabId===TAB_ID){
-    lease={tabId:TAB_ID,expiresAt:now+tabWriterLeaseMs,epoch:(Number(lease.epoch)||0)+(lease.tabId===TAB_ID?0:1)};
-    lsW(SK.writer,JSON.stringify(lease));
-  }
+  var lease=lsJSON(SK.writer,{})||{};
   activeWriterTabId=String(lease.tabId||'');
-  isActiveTabWriter=(lease.tabId===TAB_ID);
+  isActiveTabWriter=true;
   writerEpoch=Number(lease.epoch)||0;
 }
 function setupTabCoordination(){
   refreshTabWriterLease();
-  setInterval(refreshTabWriterLease,4000);
+  setInterval(refreshTabWriterLease,5000);
   if(tabBus){
     tabBus.onmessage=function(ev){
       if(!ev||!ev.data)return;
-      if(ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID){refreshTabWriterLease();return;}
+      if(ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID){refreshTabWriterLease();setCoordinationStatus('another tab is active',false);return;}
       if(ev.data.type==='focus-request'&&ev.data.targetTabId===TAB_ID){try{window.focus();}catch(_){}return;}
     };
     setInterval(function(){try{tabBus.postMessage({type:'writer-ping',tabId:TAB_ID,ts:Date.now()});}catch(_){}},5000);
@@ -4816,37 +4809,30 @@ function setupTabCoordination(){
     window.addEventListener('storage',function(e){if(e&&e.key===SK.writer)refreshTabWriterLease();});
   }
 }
+function setCoordinationStatus(msg,warnOnly){
+  tabIsStandby=false;
+  var stop=document.getElementById('single-tab-stop');if(stop)stop.hidden=true;
+  addDiagLog('tab coordination '+msg,warnOnly?'warn':'info');
+  if(warnOnly)toast('Tab coordination degraded — continuing in this tab');
+}
 
 function showSingleTabStop(){
-  tabIsStandby=true;
-  var stop=document.getElementById('single-tab-stop');if(stop)stop.hidden=false;
+  setCoordinationStatus('non-blocking mode enabled',false);
 }
 function hideSingleTabStop(){
   tabIsStandby=false;
   var stop=document.getElementById('single-tab-stop');if(stop)stop.hidden=true;
 }
 function requestFocusActiveTab(){
-  var lease=lsJSON(SK.writer,{})||{};
-  var target=activeWriterTabId||String(lease.tabId||'');
-  var leaseExpired=Number(lease.expiresAt||0)<=Date.now();
-  if(!target||target===TAB_ID||leaseExpired){
-    takeOverThisTab();
-    return;
-  }
+  var target=activeWriterTabId;
+  if(!target||target===TAB_ID){setCoordinationStatus('no remote active tab found',true);return;}
   if(tabBus){try{tabBus.postMessage({type:'focus-request',targetTabId:target,fromTabId:TAB_ID,ts:Date.now()});}catch(_){}}
-  setTimeout(function(){
-    refreshTabWriterLease();
-    if(!isActiveTabWriter&&Number((lsJSON(SK.writer,{})||{}).expiresAt||0)<=Date.now())takeOverThisTab();
-  },700);
-  toast('Tried to switch to active tab');
+  setCoordinationStatus('focus request sent',false);
 }
 function takeOverThisTab(){
-  var prev=lsJSON(SK.writer,{});
-  var lease={tabId:TAB_ID,expiresAt:Date.now()+tabWriterLeaseMs,epoch:(Number(prev.epoch)||0)+1};
-  lsW(SK.writer,JSON.stringify(lease));
+  lsW(SK.writer,JSON.stringify({tabId:TAB_ID,expiresAt:Date.now()+tabWriterLeaseMs,epoch:(writerEpoch||0)+1}));
   refreshTabWriterLease();
-  hideSingleTabStop();
-  location.reload();
+  setCoordinationStatus('local tab marked active',false);
 }
 
 // ════════════════════════════════════════════════════════
@@ -4854,7 +4840,6 @@ function takeOverThisTab(){
 // ════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setupTabCoordination();
-  if(!isActiveTabWriter){showSingleTabStop();return;}
   loadCanonicalLedger();
   seedStarterData();
   document.addEventListener('keydown',function(e){
@@ -4891,7 +4876,6 @@ document.addEventListener('DOMContentLoaded',function(){
   updateDot();
 
   function continueStartup(){
-    if(tabIsStandby&&!isActiveTabWriter){showSingleTabStop();return;}
     hideSingleTabStop();
     // Deep link — share-origin invite only
     var up=new URLSearchParams(location.search);

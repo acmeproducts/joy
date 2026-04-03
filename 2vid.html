@@ -475,9 +475,9 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 <input id="settings-import-file" type="file" accept=".json" style="display:none">
 
 <!-- New chat modal (from test.html) -->
-<div style="position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal()">
-  <div style="width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;">
-    <div style="font-family:'Lora',serif;font-size:20px;font-weight:600;">Start new chat</div>
+<div class="overlay" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal()">
+  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
+    <div class="sheet-title">Start new chat</div>
     <label class="field-label" style="margin-top:2px;">Your language</label>
     <select class="field-select" id="new-chat-my-lang"></select>
     <label class="field-label">Partner language</label>
@@ -485,11 +485,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;">Auto-read
       <label class="toggle-switch"><input type="checkbox" id="new-chat-autoread" checked><span class="toggle-slider"></span></label>
     </label>
-    <div style="display:flex;gap:8px;margin-top:6px;">
+    <div class="sheet-btn-row">
       <button class="sheet-btn secondary" type="button" onclick="closeNewChatModal()">Cancel</button>
       <button class="sheet-btn primary" type="button" onclick="submitNewChatModal()">OK</button>
     </div>
-  </div>
+  </div></div>
 </div>
 
 <div class="onboarding-modal" id="onboarding-modal" hidden>

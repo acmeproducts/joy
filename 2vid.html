@@ -311,6 +311,12 @@ textarea.field-input{resize:none;}
 .onboarding-card{width:min(100%,360px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px 16px;display:flex;flex-direction:column;gap:10px;}
 .onboarding-title{font-size:16px;font-weight:700;line-height:1.35;color:var(--ink);padding:14px;text-align:center;}
 .onboarding-error{font-size:12px;color:var(--red);min-height:16px;}
+.new-chat-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;}
+.new-chat-modal[hidden]{display:none!important;}
+.new-chat-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
+.new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;}
+.new-chat-sub{font-size:12px;color:var(--ink-dim);}
+.new-chat-actions{display:flex;gap:8px;margin-top:6px;}
 @keyframes fadeIn{from{opacity:0;}}
 .sheet{background:var(--cream);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;animation:slideUp .22s ease-out;}
 @keyframes slideUp{from{transform:translateY(36px);opacity:.7;}}
@@ -475,21 +481,25 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 <input id="settings-import-file" type="file" accept=".json" style="display:none">
 
 <!-- New chat modal (from test.html) -->
-<div class="overlay" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal()">
-  <div class="sheet"><div class="sheet-handle"></div><div class="sheet-body">
-    <div class="sheet-title">Start new chat</div>
+<div class="new-chat-modal" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal(true)">
+  <div class="new-chat-card">
+    <div class="new-chat-title">Start new chat</div>
+    <div class="new-chat-sub">Set defaults for this conversation. You can change them later.</div>
     <label class="field-label" style="margin-top:2px;">Your language</label>
     <select class="field-select" id="new-chat-my-lang"></select>
     <label class="field-label">Partner language</label>
     <select class="field-select" id="new-chat-partner-lang"></select>
-    <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;">Auto-read
-      <label class="toggle-switch"><input type="checkbox" id="new-chat-autoread" checked><span class="toggle-slider"></span></label>
+    <label class="field-label" style="display:flex;align-items:center;justify-content:space-between;">
+      Auto-read incoming translations
+      <label class="toggle-switch" title="Auto-read for this chat launch">
+        <input type="checkbox" id="new-chat-autoread" checked><span class="toggle-slider"></span>
+      </label>
     </label>
-    <div class="sheet-btn-row">
-      <button class="sheet-btn secondary" type="button" onclick="closeNewChatModal()">Cancel</button>
-      <button class="sheet-btn primary" type="button" onclick="submitNewChatModal()">OK</button>
+    <div class="new-chat-actions">
+      <button class="sheet-btn secondary" type="button" onclick="closeNewChatModal(true)">Cancel</button>
+      <button class="sheet-btn primary" type="button" onclick="submitNewChatModal()">Start</button>
     </div>
-  </div></div>
+  </div>
 </div>
 
 <div class="onboarding-modal" id="onboarding-modal" hidden>
@@ -1407,14 +1417,19 @@ function openNewChatModal(){
   populateNewChatLangSelect('new-chat-my-lang');populateNewChatLangSelect('new-chat-partner-lang');
   var my=document.getElementById('new-chat-my-lang');if(my)my.value='auto';
   var peer=document.getElementById('new-chat-partner-lang');if(peer)peer.value='auto';
-  document.getElementById('new-chat-modal').hidden=false
+  var ar=document.getElementById('new-chat-autoread');if(ar)ar.checked=true;
+  document.getElementById('new-chat-modal').hidden=false;
+  setTimeout(function(){if(my)my.focus()},30)
 }
-function closeNewChatModal(){document.getElementById('new-chat-modal').hidden=true}
+function closeNewChatModal(cancelled){
+  document.getElementById('new-chat-modal').hidden=true;
+  if(cancelled)return;
+}
 function submitNewChatModal(){
   var mySel=document.getElementById('new-chat-my-lang');var peerSel=document.getElementById('new-chat-partner-lang');
   var ar=document.getElementById('new-chat-autoread');
   var opts={myLang:(mySel&&mySel.value)||'auto',partnerLang:(peerSel&&peerSel.value)||'auto',autoRead:!(ar&&!ar.checked)};
-  closeNewChatModal();createNewSession(opts)
+  closeNewChatModal(false);createNewSession(opts)
 }
 
 // ═══ READ RECEIPTS (from test.html) ═══

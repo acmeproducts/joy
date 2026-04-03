@@ -2615,7 +2615,7 @@ function validateInvitePayload(payload){
       schemaVersion:INVITE_SCHEMA_VERSION,
       sessionId:payload.s,
       initiatorDeviceId:payload.d,
-      initiatorParticipantId:payload.pid||payload.pi||'',
+      initiatorParticipantId:payload.p||payload.pid||payload.pi||'',
       initiatorGlobalName:payload.n||'',
       initiatorLang:payload.l||'',
       initiatorAnnouncedAt:payload.a,
@@ -2659,7 +2659,7 @@ function pruneInvitePayload(payload){
 function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
   var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
-  var base={schemaVersion:INVITE_SCHEMA_VERSION,s:sess.convId,d:DEVICE_ID,pid:PART_ID,n:sess.myName||prefs.userName||'yournamehere',o:(mode==='owner-handoff'?'o':'p')};
+  var base={schemaVersion:INVITE_SCHEMA_VERSION,s:sess.convId,d:DEVICE_ID,p:PART_ID,n:sess.myName||prefs.userName||'yournamehere',o:(mode==='owner-handoff'?'o':'p')};
   if(mode==='owner-handoff'){
     // Preserve owner identity for role-correct owner handoff hydration.
     base.oi=sess.ownerIdentityId;
@@ -2919,13 +2919,15 @@ function syncAutoReadState(){
   if(rib)rib.checked=!!state.autoSpeakIncoming;
 }
 function setAutoReadFromSettings(checked){
-  if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
+  var current=getEffectiveAutoRead(getSession(state.activeConvId));
+  if(!!checked!==!!current)toggleAutoRead();
 }
 function setAutoReadFromRibbon(checked){
-  if(!!checked!==!!state.autoSpeakIncoming)toggleAutoRead();
+  var current=getEffectiveAutoRead(getSession(state.activeConvId));
+  if(!!checked!==!!current)toggleAutoRead();
 }
 function muteAutoRead(){if(canSpeak)synth.cancel();}
-function dismissAutoRead(){if(canSpeak)synth.cancel();if(state.autoSpeakIncoming)toggleAutoRead();}
+function dismissAutoRead(){if(canSpeak)synth.cancel();if(getEffectiveAutoRead(getSession(state.activeConvId)))toggleAutoRead();}
 function showAutoReadHelperIfNeeded(){
   var p=getPrefs();
   if(!getEffectiveAutoRead(getSession(state.activeConvId))||p.autoReadHelperDisabled)return;

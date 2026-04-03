@@ -581,7 +581,7 @@ var ICON_BACK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" strok
 var ICON_DELETE='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 var ICON_SHARE='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
 
-var SK={sessions:'ts3_sessions',activeConv:'ts3_active',prefs:'ts3_prefs',devId:'ts3_dev',partId:'ts3_part',order:'ts3_order',recycled:'ts3_recycled',notes:'ts3_notes',media:'ts3_media_share',mediaUi:'ts3_media_ui',ccUi:'ts3_cc_ui'};
+var SK={sessions:'ts3_sessions',activeConv:'ts3_active',prefs:'ts3_prefs',devId:'ts3_dev',partId:'ts3_part',order:'ts3_order',recycled:'ts3_recycled',notes:'ts3_notes',media:'ts3_media_share',mediaUi:'ts3_media_ui',ccUi:'ts3_cc_ui',inviteClaims:'ts3_invite_claims'};
 
 function ls(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsW(k,v){try{localStorage.setItem(k,v)}catch(e){toast('Storage full')}}
@@ -590,6 +590,7 @@ function lsJSON(k,def){try{var v=ls(k);return v?JSON.parse(v):def}catch(e){retur
 function getDeviceId(){var id=ls(SK.devId);if(!id){id=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14);lsW(SK.devId,id)}return id}
 function getPartId(){var id=ls(SK.partId);if(!id){id=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14);lsW(SK.partId,id)}return id}
 var DEVICE_ID=getDeviceId(),PART_ID=getPartId();
+var runtimeRoleIdentityCache={};
 var uid=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)};
 
 // ════════════════════════════════════════════════════════
@@ -658,16 +659,52 @@ function normalizeSession(sess){
   var raw=(sess&&typeof sess==='object')?sess:{};var p=getPrefs();var now=Date.now();
   var myHandle=firstRealName(raw.myHandle,raw.myName,p.globalName,p.userName)||p.userName||'yournamehere';
   var partnerHandle=firstRealName(raw.partnerHandle,raw.peerName)||'';
-  return{convId:raw.convId||uid(),myHandle:myHandle,partnerHandle:partnerHandle,myName:myHandle,peerName:partnerHandle,
+  var out={convId:raw.convId||uid(),myHandle:myHandle,partnerHandle:partnerHandle,myName:myHandle,peerName:partnerHandle,
     createdAt:Number(raw.createdAt)||now,lastActivity:Number(raw.lastActivity)||now,
     ownerIdentityId:String(raw.ownerIdentityId||PART_ID),partnerIdentityId:String(raw.partnerIdentityId||''),
+    localRole:(raw.localRole==='partner')?'partner':'owner',
     ownerLangMode:(raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto'),
     ownerFixedLang:normalizeLangSetting(raw.ownerFixedLang!==undefined?raw.ownerFixedLang:p.myLang)||'',
     ownerLastSentLang:normalizeLangSetting(raw.ownerLastSentLang)||'',ownerEffectiveReplyLang:normalizeLangSetting(raw.ownerEffectiveReplyLang)||'',
     partnerLangMode:(raw.partnerLangMode==='fixed'||raw.partnerLangMode==='auto')?raw.partnerLangMode:'auto',
     partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
     partnerEffectiveReplyLang:normalizeLangSetting(raw.partnerEffectiveReplyLang)||'',peerLastSeenAt:Number(raw.peerLastSeenAt)||0,
-    inviterDeviceId:raw.inviterDeviceId||'',lastViewedAt:Number(raw.lastViewedAt)||0}
+    inviterDeviceId:raw.inviterDeviceId||'',lastViewedAt:Number(raw.lastViewedAt)||0,
+    ownerAutoRead:(raw.ownerAutoRead!==undefined)?!!raw.ownerAutoRead:!!p.autoSpeakIncoming,
+    partnerAutoRead:(raw.partnerAutoRead!==undefined)?!!raw.partnerAutoRead:false}
+  if(out.ownerIdentityId&&out.partnerIdentityId&&out.ownerIdentityId===out.partnerIdentityId)out.partnerIdentityId='';
+  return out
+}
+function getSessionLocalRole(sess){return (sess&&sess.localRole==='partner')?'partner':'owner'}
+function getLocalIdentityForRole(sess,role){
+  var s=normalizeSession(sess||{}),convId=String(s.convId||'global');
+  function runtimeIdFor(targetRole){
+    var key=convId+'|'+targetRole;if(runtimeRoleIdentityCache[key])return runtimeRoleIdentityCache[key];
+    var storageKey='ts3_2vid_rt_ident_'+key,id='';try{id=sessionStorage.getItem(storageKey)||''}catch(_){}
+    if(!id)id=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14);
+    var other='';try{other=sessionStorage.getItem('ts3_2vid_rt_ident_'+convId+'|'+(targetRole==='owner'?'partner':'owner'))||''}catch(_){}
+    if(other&&id===other)id=crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2,14);
+    try{sessionStorage.setItem(storageKey,id)}catch(_){}
+    runtimeRoleIdentityCache[key]=id;return id
+  }
+  if(role==='partner'){
+    s.partnerIdentityId=String(s.partnerIdentityId||runtimeIdFor('partner')||'');
+    if(s.ownerIdentityId&&s.partnerIdentityId===s.ownerIdentityId)s.partnerIdentityId=runtimeIdFor('partner');
+    return{side:'partner',identityId:s.partnerIdentityId}
+  }
+  s.ownerIdentityId=String(s.ownerIdentityId||runtimeIdFor('owner')||'');
+  if(s.partnerIdentityId&&s.ownerIdentityId===s.partnerIdentityId)s.ownerIdentityId=runtimeIdFor('owner');
+  return{side:'owner',identityId:s.ownerIdentityId}
+}
+function getSessionAutoRead(sess){var s=normalizeSession(sess||{});return getSessionLocalRole(s)==='partner'?!!s.partnerAutoRead:!!s.ownerAutoRead}
+function setSessionAutoRead(sess,on){if(!sess)return;if(getSessionLocalRole(sess)==='partner')sess.partnerAutoRead=!!on;else sess.ownerAutoRead=!!on}
+function getInviteClaims(){return lsJSON(SK.inviteClaims,{})||{}}
+function saveInviteClaims(v){lsW(SK.inviteClaims,JSON.stringify(v||{}))}
+function claimInviteToken(sessionId,token,identityId){
+  if(!sessionId||!token||!identityId)return{ok:true}
+  var claims=getInviteClaims(),key=String(sessionId)+'|'+String(token),prev=claims[key];
+  if(prev&&prev.identityId&&prev.identityId!==identityId)return{ok:false,reason:'invite-token-in-use'}
+  claims[key]={identityId:identityId,updatedAt:Date.now()};saveInviteClaims(claims);return{ok:true}
 }
 function getAllSessions(){return lsJSON(SK.sessions,[]).map(normalizeSession).filter(function(s){return !!s.convId})}
 function saveSessions(l){lsW(SK.sessions,JSON.stringify((l||[]).map(normalizeSession).slice(0,MAX_SESSIONS_STORED)))}
@@ -759,9 +796,10 @@ function transportConnect(convId,opts){
   ws.onopen=function(){if(ws!==ref)return;clearTimeout(ct);if(rcTimer){clearTimeout(rcTimer);rcTimer=null}
     setSocketState('open');lastRxAt=lastPongAt=Date.now();var rt=getRoomRuntime(connectedConvId);if(rt){rt.selfPresent=true;rt.connectedOnce=true}
     startHeartbeatLoop();var sess=getSession(connectedConvId);
+    var localMeta=getLocalIdentityForRole(sess,getSessionLocalRole(sess));
     try{ws.send(JSON.stringify({type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
       name:firstRealName(sess&&sess.myHandle,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),
-      effectiveTargetLang:getEffectiveTargetLang(sess),side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}
+      effectiveTargetLang:getEffectiveTargetLang(sess),side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}
     fetchBackfill();flushOutQueue();resendUnacked()};
   ws.onmessage=function(e){if(ws!==ref)return;lastRxAt=Date.now();try{var m=JSON.parse(e.data);
     if(m.type==='ping'){lastPongAt=Date.now();markPeerSeen(connectedConvId,Date.now(),{suppressJoinNote:true});try{ws.send(JSON.stringify({type:'pong',session:connectedConvId,from:DEVICE_ID,ts:Date.now(),transient:true}))}catch(_){}return}
@@ -774,8 +812,8 @@ function transportConnect(convId,opts){
 }
 function scheduleReconnect(){if(rcTimer||!connectedConvId)return;rcAttempts++;var delay=Math.round(Math.min(RECONNECT_MAX_MS,RECONNECT_BASE_MS*Math.pow(2,rcAttempts-1))*(1+(Math.random()*0.6-0.3)));if(rcAttempts===1)delay=Math.round(Math.random()*300);var target=connectedConvId;rcTimer=setTimeout(function(){rcTimer=null;if(state.activeConvId!==target)return;transportConnect(target,{preserveQueue:true})},delay)}
 function transportDisconnect(opts){opts=opts||{};intentionalClose=true;if(ws){try{ws.close()}catch(_){}ws=null}if(rcTimer){clearTimeout(rcTimer);rcTimer=null}stopHeartbeatLoop();if(!opts.preserveQueue){outQ=[];pendingAcks={}}connectedConvId=null;setSocketState('closed')}
-function transportSend(ev){if(!connectedConvId)return false;var sess=getSession(connectedConvId)||{};var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:'owner',identityId:sess.ownerIdentityId||PART_ID,ts:Date.now(),seq:++msgSeq});var isEph=['ping','pong','typing','hello','ack'].indexOf(ev.type)>=0||ev.transient;if(!isEph&&!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));return true}catch(_){}}if(!isEph)queueOutMsg(m);return false}
-function sendReliable(ev){var sess=getSession(connectedConvId)||{};var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:'owner',identityId:sess.ownerIdentityId||PART_ID,ts:Date.now(),seq:++msgSeq});if(!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true}catch(_){}}queueOutMsg(m);return false}
+function transportSend(ev){if(!connectedConvId)return false;var sess=getSession(connectedConvId)||{};var localMeta=getLocalIdentityForRole(sess,getSessionLocalRole(sess));var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq});var isEph=['ping','pong','typing','hello','ack'].indexOf(ev.type)>=0||ev.transient;if(!isEph&&!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));return true}catch(_){}}if(!isEph)queueOutMsg(m);return false}
+function sendReliable(ev){var sess=getSession(connectedConvId)||{};var localMeta=getLocalIdentityForRole(sess,getSessionLocalRole(sess));var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq});if(!m.id)m.id='tx_'+DEVICE_ID.slice(0,8)+'_'+connectedConvId.slice(0,8)+'_'+m.seq;if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true}catch(_){}}queueOutMsg(m);return false}
 function onTransportEvent(h){transportHandlers.push(h)}
 
 document.addEventListener('visibilitychange',function(){if(document.hidden){_hiddenAt=Date.now();return}if(state.activeConvId){if((Date.now()-_hiddenAt)>20000||!ws||ws.readyState!==1){rcAttempts=0;transportConnect(state.activeConvId,{preserveQueue:true})}else fetchBackfill()}});
@@ -1176,7 +1214,7 @@ function saveOwnerName(el){
   if(!state.activeConvId)return;var sess=getSession(state.activeConvId);if(!sess)return;
   var v=(el.textContent||'').trim();if(!v)return;
   sess.myHandle=v;sess.myName=v;putSession(sess);updatePartnerHeader(sess);renderSessionList();
-  if(connectedConvId&&ws&&ws.readyState===1){try{ws.send(JSON.stringify({type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,name:v,lang:effectiveLangFromSession(sess),side:'owner',identityId:sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}}
+  if(connectedConvId&&ws&&ws.readyState===1){var localMeta=getLocalIdentityForRole(sess,getSessionLocalRole(sess));try{ws.send(JSON.stringify({type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,name:v,lang:effectiveLangFromSession(sess),side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}}
 }
 
 function openSession(cid){
@@ -1184,6 +1222,7 @@ function openSession(cid){
   if(state.mediaRuntime.stream&&state.mediaRuntime.activeSessionId&&state.mediaRuntime.activeSessionId!==cid)stopSessionMediaShare();
   sess=putSession(sess);if(connectedConvId&&connectedConvId!==cid)transportDisconnect({preserveQueue:false});
   state.activeConvId=cid;state.messages=getMsgs(cid);setActiveConvId(cid);markViewed(cid);
+  state.autoSpeakIncoming=getSessionAutoRead(sess);
   document.getElementById('shell-empty').style.display='none';document.getElementById('messages').style.display='flex';document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   var rt=getRoomRuntime(cid);if(rt)rt.selfPresent=true;
@@ -1194,7 +1233,7 @@ var INVITE_SCHEMA_VERSION=2;
 function encodeInvitePayload(p){try{return btoa(unescape(encodeURIComponent(JSON.stringify(p)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}catch(_){return''}}
 function decodeInvitePayload(e){if(!e)return null;try{var s=String(e).replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return JSON.parse(decodeURIComponent(escape(atob(s))))}catch(_){return null}}
 function buildInviteUrl(sess,prefs,intent){
-  var s=normalizeSession(sess||{});var payload={schemaVersion:INVITE_SCHEMA_VERSION,s:s.convId,d:PART_ID,n:s.myName||prefs.userName,o:'p'};
+  var s=normalizeSession(sess||{});var payload={schemaVersion:INVITE_SCHEMA_VERSION,s:s.convId,d:PART_ID,n:s.myName||prefs.userName,o:'p',t:'pt_'+String(s.convId||'').slice(0,8)};
   var enc=encodeInvitePayload(payload);return enc?(location.href.split('?')[0].split('#')[0]+'#i='+enc):''
 }
 function addInviteMessage(cid){
@@ -1221,8 +1260,8 @@ function createNewSession(opts){
     var cid=uid();var p=getPrefs();var now=Date.now();
     var myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
     var peerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,ownerLangMode:myLang?'fixed':'auto',ownerFixedLang:myLang||'',partnerLangMode:peerLang?'fixed':'auto',partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
-    if(opts.autoRead!==undefined){p.autoSpeakIncoming=!!opts.autoRead;state.autoSpeakIncoming=!!opts.autoRead;savePrefs(p);document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming}
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,ownerLangMode:myLang?'fixed':'auto',ownerFixedLang:myLang||'',partnerLangMode:peerLang?'fixed':'auto',partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now,ownerAutoRead:(opts.autoRead!==undefined)?!!opts.autoRead:!!p.autoSpeakIncoming});
+    state.autoSpeakIncoming=getSessionAutoRead(sess);document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming;
     putSession(sess);var order=getSessionOrder();order.unshift(cid);saveSessionOrder(order);
     closeLeftPanel();openSession(cid)
   })
@@ -1241,13 +1280,19 @@ function setMyLang(code){
   var p=getPrefs();p.myLang=code;savePrefs(p);
   getAllSessions().forEach(function(s){s.ownerLangMode=code?'fixed':'auto';s.ownerFixedLang=code||'';if(code)setEffectiveReplyLang(s,'owner',code);putSession(s)});
   updateLangPill();document.getElementById('language-overlay').hidden=true;
-  if(connectedConvId&&ws&&ws.readyState===1){var sess=getSession(connectedConvId);try{ws.send(JSON.stringify({type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,name:firstRealName(sess&&sess.myHandle,getPreferredOwnerName()),lang:code||detectBrowserLang()||'en',side:'owner',identityId:sess&&sess.ownerIdentityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}}
+  if(connectedConvId&&ws&&ws.readyState===1){var sess=getSession(connectedConvId);var localMeta=getLocalIdentityForRole(sess,getSessionLocalRole(sess));try{ws.send(JSON.stringify({type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,name:firstRealName(sess&&sess.myHandle,getPreferredOwnerName()),lang:code||detectBrowserLang()||'en',side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq}))}catch(_){}}
   toast(code?((LANGS.find(function(l){return l.code===code})||{}).flag||'')+' '+langLabel(code):'🌐 Auto-detect')
 }
 
 function applyGlobalSize(v){/* stub */}
 function applyTargetSize(v){/* stub */}
-function toggleAutoRead(){state.autoSpeakIncoming=!state.autoSpeakIncoming;var p=getPrefs();p.autoSpeakIncoming=state.autoSpeakIncoming;savePrefs(p);document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming;toast('Auto-read '+(state.autoSpeakIncoming?'on':'off'))}
+function toggleAutoRead(){
+  state.autoSpeakIncoming=!state.autoSpeakIncoming;
+  var sess=getSession(state.activeConvId);
+  if(sess){setSessionAutoRead(sess,state.autoSpeakIncoming);putSession(sess);}
+  else{var p=getPrefs();p.autoSpeakIncoming=state.autoSpeakIncoming;savePrefs(p);}
+  document.getElementById('ribbon-autoread').checked=state.autoSpeakIncoming;toast('Auto-read '+(state.autoSpeakIncoming?'on':'off'))
+}
 var statusPopupState={};
 function closeStatusPopup(){var p=document.getElementById('status-popup');if(p)p.hidden=true}
 
@@ -1332,7 +1377,15 @@ document.addEventListener('DOMContentLoaded',function(){
     if(payload&&payload.s){
       var sess=getSession(payload.s);
       if(!sess){sess=normalizeSession({convId:payload.s,myHandle:getPreferredOwnerName(),createdAt:Date.now(),lastActivity:Date.now()});putSession(sess);var order=getSessionOrder();order.unshift(payload.s);saveSessionOrder(order)}
+      sess.localRole=(payload.o==='o')?'owner':'partner';
+      if(payload.t&&sess.localRole==='partner'){
+        var localMeta=getLocalIdentityForRole(sess,'partner');
+        var claim=claimInviteToken(payload.s,payload.t,localMeta.identityId);
+        if(!claim.ok){toast('Invite already active on another tab/device');return}
+        if(!sess.partnerIdentityId)sess.partnerIdentityId=localMeta.identityId;
+      }
       if(payload.n){sess.partnerHandle=payload.n;sess.peerName=payload.n;putSession(sess)}
+      putSession(sess);
       ensureUserName(function(){openSession(payload.s)});return
     }
   }

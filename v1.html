@@ -2369,13 +2369,25 @@ function createNewSession(silent,opts){
   opts=opts||{};
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
-    var peerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(myLang?'fixed':'auto'),ownerFixedLang:myLang||'',partnerLangMode:(peerLang?'fixed':'auto'),partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    p.myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
+    p.partnerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
     p.autoSpeakIncoming=opts.autoRead!==false;
     savePrefs(p);
     state.autoSpeakIncoming=!!p.autoSpeakIncoming;
     updateAutoReadBtn();
+    updateLangPill();
+    if(connectedConvId&&ws&&ws.readyState===1){
+      var activeSess=getSession(connectedConvId);
+      if(activeSess){
+        var helloMeta=buildLocalEnvelope(activeSess,{});
+        var hello={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,
+          name:firstRealName(activeSess.myHandle,activeSess.myName,getPreferredOwnerName())||'yournamehere',
+          myHandle:firstRealName(activeSess.myHandle,activeSess.myName,getPreferredOwnerName())||'yournamehere',
+          lang:effectiveLangFromSession(activeSess),effectiveTargetLang:getEffectiveTargetLang(activeSess),side:helloMeta.side,identityId:helloMeta.identityId,ts:Date.now(),seq:++msgSeq};
+        try{ws.send(JSON.stringify(hello));}catch(_){}
+      }
+    }
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(cid);saveSessionOrder(normalizeSessionOrder(order));
     closeLeftPanel();

@@ -615,7 +615,7 @@ var uid=function(){return Date.now().toString(36)+Math.random().toString(36).sli
 // STATE
 // ════════════════════════════════════════════════════════
 var state={activeConvId:null,messages:[],connected:false,autoSpeakIncoming:false,participants:{},
-  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false,callState:'idle',pendingKind:'',incomingKind:'',incomingFrom:'',callAccepted:false},
+  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false},
   ccTranscript:{entries:[],visible:true,collapsed:false}};
 var ws=null,connectedConvId=null,socketState='closed',intentionalClose=false;
 var rcTimer=null,rcAttempts=0,hbTimer=null,lastPongAt=0,lastRxAt=0,_hiddenAt=0;
@@ -1083,7 +1083,7 @@ async function toggleSessionMediaShare(kind){
     syncLocalTracksToPeer();
     transportSend({type:'media-share',transient:true,mediaAction:'share',kind:state.mediaRuntime.videoEnabled?'video':'audio',videoEnabled:!!state.mediaRuntime.videoEnabled,micEnabled:!!state.mediaRuntime.micEnabled});
     renderMediaShareUI();
-    if(state.mediaRuntime.callAccepted||state.mediaRuntime.callState==='active')maybeStartOffer();
+    maybeStartOffer();
   }catch(_){toast('Camera/mic permission blocked')}
 }
 function stopSessionMediaShare(){
@@ -1151,7 +1151,6 @@ function syncLocalTracksToPeer(){
 
 async function maybeStartOffer(){
   if(!state.activeConvId||!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled))return;
-  if(!(state.mediaRuntime.callAccepted||state.mediaRuntime.callState==='active'))return;
   var pc=ensurePeerConnection();
   if(state.mediaRuntime.makingOffer)return;
   state.mediaRuntime.makingOffer=true;
@@ -1321,10 +1320,6 @@ function handleRelayEvent(d){
     updatePartnerHeader(sess);renderSessionList();if(!d._fromBackfill){resendUnacked();renderAllMessages();scrollBottom()}return
   }
   if(d.type==='pong'||d.type==='ping'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});return}
-  if(d.type==='call-invite'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});state.mediaRuntime.incomingKind=d.kind||'audio';state.mediaRuntime.callState='incoming';state.mediaRuntime.callAccepted=false;setCallNotice((firstRealName(sess.partnerHandle)||'Partner')+' is calling…', 'incoming');toggleMediaFloat(true);return}
-  if(d.type==='call-accept'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});state.mediaRuntime.callState='active';state.mediaRuntime.callAccepted=true;setCallNotice('In call', 'active');if(state.mediaRuntime.pendingKind==='video')toggleSessionMediaShare('video');else toggleSessionMediaShare('audio');return}
-  if(d.type==='call-decline'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;setCallNotice('Call declined', '');toast('Call declined');setTimeout(function(){setCallNotice('', '')},1500);return}
-  if(d.type==='call-end'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;setCallNotice('', '');stopSessionMediaShare();return}
   if(d.type==='media-share'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteMediaShare(d);return}
   if(d.type==='webrtc-signal'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleWebrtcSignal(d);return}
   if(d.type==='cc-transcript'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteCcTranscript(d,sess);return}

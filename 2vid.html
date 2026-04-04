@@ -615,7 +615,7 @@ var uid=function(){return Date.now().toString(36)+Math.random().toString(36).sli
 // STATE
 // ════════════════════════════════════════════════════════
 var state={activeConvId:null,messages:[],connected:false,autoSpeakIncoming:false,participants:{},
-  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false},
+  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false,callState:'idle',callAccepted:false,pendingKind:'',incomingKind:'',callOpInFlight:false,mediaOpInFlight:false,ccOpInFlight:false,lastSignalHash:'',lastRemoteMediaHash:''},
   ccTranscript:{entries:[],visible:true,collapsed:false}};
 var ws=null,connectedConvId=null,socketState='closed',intentionalClose=false;
 var rcTimer=null,rcAttempts=0,hbTimer=null,lastPongAt=0,lastRxAt=0,_hiddenAt=0;
@@ -1031,32 +1031,130 @@ function setCallNotice(msg,mode){
   if(decline)decline.style.display=mode==='incoming'?'':'none';
 }
 
-function startOutgoingCall(kind){
-  if(!state.activeConvId){toast('No active session');return}
-  state.mediaRuntime.pendingKind=kind==='video'?'video':'audio';
-  state.mediaRuntime.callState='calling';state.mediaRuntime.callAccepted=false;
-  toggleMediaFloat(true);
-  setCallNotice('Ringing…', 'outgoing');
-  transportSend({type:'call-invite',transient:true,kind:state.mediaRuntime.pendingKind});
-}
-function acceptIncomingCall(){
-  if(!state.activeConvId)return;
-  state.mediaRuntime.callState='active';state.mediaRuntime.callAccepted=true;
-  transportSend({type:'call-accept',transient:true,kind:state.mediaRuntime.incomingKind||'audio'});
-  setCallNotice('In call', 'active');toggleMediaFloat(true);
-  if((state.mediaRuntime.incomingKind||'audio')==='video')toggleSessionMediaShare('video');
-  else toggleSessionMediaShare('audio');
-}
-function declineIncomingCall(){
-  if(!state.activeConvId)return;
-  transportSend({type:'call-decline',transient:true,kind:state.mediaRuntime.incomingKind||'audio'});
-  state.mediaRuntime.callState='idle';state.mediaRuntime.incomingKind='';setCallNotice('', '');
-}
-function endCall(){
-  transportSend({type:'call-end',transient:true});
-  state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;state.mediaRuntime.pendingKind='';setCallNotice('', '');
-  stopSessionMediaShare();
-}
+// v1 integration: v1 can call window.VideoSurfaceModule.mount(...), startCall/acceptCall/endCall,
+// then consume exportTranscriptPayload() for phrasebook import while keeping chat as source of truth.
+var VideoSurfaceModule=(function(){
+  function setCallState(next){
+    var m=state.mediaRuntime;
+    if(m.callState===next)return false;
+    m.callState=next;return true
+  }
+  function hashPayload(v){try{return JSON.stringify(v||{})}catch(_){return String(Date.now())}}
+  async function setSessionMediaShare(kind,enabled){
+    if(!state.activeConvId){toast('No active session');return}
+    var m=state.mediaRuntime;
+    if(m.mediaOpInFlight)return;
+    m.mediaOpInFlight=true;
+    if(kind==='video')m.videoEnabled=!!enabled;
+    if(kind==='audio')m.micEnabled=!!enabled;
+    if(!(m.videoEnabled||m.micEnabled)){stopSessionMediaShare();m.mediaOpInFlight=false;renderMediaShareUI();return}
+    try{
+      m.stream=await ensureLocalMedia({video:!!m.videoEnabled,audio:!!m.micEnabled});m.activeSessionId=state.activeConvId;
+      m.stream.getVideoTracks().forEach(function(t){t.enabled=!!m.videoEnabled;if(!m.videoEnabled){try{t.stop()}catch(_){}}});
+      m.stream.getAudioTracks().forEach(function(t){t.enabled=!!m.micEnabled});
+      syncLocalTracksToPeer();
+      transportSend({type:'media-share',transient:true,mediaAction:'share',kind:m.videoEnabled?'video':'audio',videoEnabled:!!m.videoEnabled,micEnabled:!!m.micEnabled});
+      renderMediaShareUI();
+      maybeStartOffer();
+    }catch(_){toast('Camera/mic permission blocked')}
+    m.mediaOpInFlight=false
+  }
+  return{
+    mount:function(containerOrIds,options){renderMediaShareUI();renderTranscriptUI();return{ok:true,container:containerOrIds||null,options:options||{}}},
+    startCall:function(payload){
+      var kind=(payload&&payload.mode)==='video'?'video':'audio',m=state.mediaRuntime;
+      if(!state.activeConvId||m.callOpInFlight||((m.callState==='calling'||m.callState==='active')&&m.pendingKind===kind))return;
+      m.callOpInFlight=true;m.pendingKind=kind;m.incomingKind='';m.callAccepted=false;setCallState('calling');
+      toggleMediaFloat(true);setCallNotice('Ringing…','outgoing');
+      transportSend({type:'call-invite',transient:true,kind:kind});
+      m.callOpInFlight=false
+    },
+    acceptCall:async function(){
+      var m=state.mediaRuntime,kind=m.incomingKind||m.pendingKind||'audio';
+      if(!state.activeConvId||m.callOpInFlight||m.callState==='active')return;
+      m.callOpInFlight=true;m.callAccepted=true;m.pendingKind=kind;setCallState('active');
+      transportSend({type:'call-accept',transient:true,kind:kind});
+      setCallNotice('In call','active');toggleMediaFloat(true);
+      await setSessionMediaShare('audio',true);
+      if(kind==='video')await setSessionMediaShare('video',true);
+      m.incomingKind='';m.callOpInFlight=false
+    },
+    declineCall:function(){
+      var m=state.mediaRuntime;
+      if(!state.activeConvId||m.callOpInFlight||m.callState!=='incoming')return;
+      m.callOpInFlight=true;transportSend({type:'call-decline',transient:true,kind:m.incomingKind||'audio'});
+      m.callAccepted=false;m.pendingKind='';m.incomingKind='';setCallState('idle');setCallNotice('','');
+      m.callOpInFlight=false
+    },
+    endCall:function(){
+      var m=state.mediaRuntime;
+      if(m.callOpInFlight)return;
+      m.callOpInFlight=true;transportSend({type:'call-end',transient:true});
+      m.callAccepted=false;m.pendingKind='';m.incomingKind='';setCallState('idle');setCallNotice('','');
+      stopSessionMediaShare();m.callOpInFlight=false
+    },
+    toggleCC:function(enabled){
+      var shouldEnable=(typeof enabled==='boolean')?enabled:!state.mediaRuntime.ccEnabled;
+      if(shouldEnable===state.mediaRuntime.ccEnabled)return state.mediaRuntime.ccEnabled;
+      state.mediaRuntime.ccEnabled=shouldEnable;
+      if(shouldEnable){startCCCapture();state.ccTranscript.visible=true}else stopCCCapture();
+      renderMediaShareUI();updateComposerMicState();return state.mediaRuntime.ccEnabled
+    },
+    getTranscriptEntries:function(){
+      return state.ccTranscript.entries.filter(function(e){return e.origin==='video_surface'}).slice()
+    },
+    exportTranscriptPayload:function(){
+      var m=state.mediaRuntime;
+      return{source:'video_surface',sessionId:state.activeConvId||'',callId:(m.activeSessionId||state.activeConvId||'')+':'+(m.pendingKind||'audio'),entries:this.getTranscriptEntries().map(function(e){
+        return{dir:e.dir,sourceText:e.sourceText,targetText:e.targetText,ts:e.ts,sourceLang:e.sourceLang||'',targetLang:e.targetLang||''}
+      })}
+    },
+    destroy:function(){this.endCall();state.ccTranscript.visible=false;renderTranscriptUI()},
+    setSessionMediaShare:setSessionMediaShare,
+    handleRemoteMediaShare:function(d){
+      if(!d)return;
+      var m=state.mediaRuntime,h=hashPayload([d.mediaAction,d.kind,d.videoEnabled,d.micEnabled,d.session,d.timestamp||'']);
+      if(h===m.lastRemoteMediaHash)return;
+      m.lastRemoteMediaHash=h;
+      if(d.mediaAction==='unshare'){m.remoteVideoEnabled=false;m.remoteMicEnabled=false;m.remoteStream=null;renderMediaShareUI();return}
+      if(hasOwn(d,'videoEnabled'))m.remoteVideoEnabled=!!d.videoEnabled;else m.remoteVideoEnabled=d.kind==='video';
+      if(hasOwn(d,'micEnabled'))m.remoteMicEnabled=!!d.micEnabled;else m.remoteMicEnabled=true;
+      if(m.remoteVideoEnabled||m.remoteMicEnabled)ensurePeerConnection();
+      renderMediaShareUI()
+    },
+    handleWebrtcSignal:async function(d){
+      if(!d||!d.signal||!state.activeConvId||d.session!==state.activeConvId)return;
+      var m=state.mediaRuntime,h=hashPayload([d.from||'',d.signal.description&&d.signal.description.type,d.signal.description&&d.signal.description.sdp,d.signal.candidate&&d.signal.candidate.candidate]);
+      if(h===m.lastSignalHash)return;
+      m.lastSignalHash=h;
+      if(d.from)m.remotePeerId=d.from;
+      var pc=ensurePeerConnection(),signal=d.signal;
+      try{
+        if(signal.description){
+          var description=signal.description,polite=String(DEVICE_ID)>String(d.from||'');
+          var readyForOffer=!m.makingOffer&&(pc.signalingState==='stable'||m.ignoreOffer);
+          var offerCollision=description.type==='offer'&&!readyForOffer;
+          m.ignoreOffer=!polite&&offerCollision;if(m.ignoreOffer)return;
+          await pc.setRemoteDescription(description);
+          if(description.type==='offer'){
+            syncLocalTracksToPeer();
+            await pc.setLocalDescription(await pc.createAnswer());
+            transportSend({type:'webrtc-signal',transient:true,signal:{description:pc.localDescription}});
+            setCallState('active');setCallNotice('In call','active')
+          }
+        }else if(signal.candidate){
+          try{await pc.addIceCandidate(signal.candidate)}catch(err){if(!m.ignoreOffer)throw err}
+        }
+      }catch(_){toast('Video signaling interrupted')}
+      renderMediaShareUI()
+    }
+  }
+})();
+window.VideoSurfaceModule=VideoSurfaceModule;
+function startOutgoingCall(kind){VideoSurfaceModule.startCall({mode:kind})}
+function acceptIncomingCall(){VideoSurfaceModule.acceptCall()}
+function declineIncomingCall(){VideoSurfaceModule.declineCall()}
+function endCall(){VideoSurfaceModule.endCall()}
 
 async function ensureLocalMedia(opts){
   opts=opts||{};
@@ -1073,18 +1171,8 @@ async function ensureLocalMedia(opts){
 
 async function toggleSessionMediaShare(kind){
   if(!state.activeConvId){toast('No active session');return}
-  if(kind==='video')state.mediaRuntime.videoEnabled=!state.mediaRuntime.videoEnabled;
-  else if(kind==='audio')state.mediaRuntime.micEnabled=!state.mediaRuntime.micEnabled;
-  if(!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled)){stopSessionMediaShare();renderMediaShareUI();return}
-  try{
-    state.mediaRuntime.stream=await ensureLocalMedia({video:!!state.mediaRuntime.videoEnabled,audio:!!state.mediaRuntime.micEnabled});state.mediaRuntime.activeSessionId=state.activeConvId;
-    state.mediaRuntime.stream.getVideoTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.videoEnabled;if(!state.mediaRuntime.videoEnabled){try{t.stop()}catch(_){}}});
-    state.mediaRuntime.stream.getAudioTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.micEnabled});
-    syncLocalTracksToPeer();
-    transportSend({type:'media-share',transient:true,mediaAction:'share',kind:state.mediaRuntime.videoEnabled?'video':'audio',videoEnabled:!!state.mediaRuntime.videoEnabled,micEnabled:!!state.mediaRuntime.micEnabled});
-    renderMediaShareUI();
-    maybeStartOffer();
-  }catch(_){toast('Camera/mic permission blocked')}
+  var enabled=kind==='video'?!state.mediaRuntime.videoEnabled:!state.mediaRuntime.micEnabled;
+  return VideoSurfaceModule.setSessionMediaShare(kind,enabled);
 }
 function stopSessionMediaShare(){
   if(state.mediaRuntime.stream){state.mediaRuntime.stream.getTracks().forEach(function(t){try{t.stop()}catch(_){}})}
@@ -1095,12 +1183,13 @@ function stopSessionMediaShare(){
 }
 
 async function togglePictureInPictureMode(){
-  var target=document.getElementById('vsay-remote-video')||document.getElementById('vsay-local-video');
-  if(!target)return;
+  var remote=document.getElementById('vsay-remote-video');
+  var local=document.getElementById('vsay-local-video');
+  var target=(remote&&!remote.hidden&&remote.srcObject)?remote:((local&&!local.hidden&&local.srcObject)?local:null);
+  if(!target){toast('No active video for PiP');return}
   if(!document.pictureInPictureEnabled){toast('Picture-in-Picture not supported');return}
   try{
     if(document.pictureInPictureElement){await document.exitPictureInPicture();return}
-    if(target.hidden||!target.srcObject){toast('No active video for PiP');return}
     await target.requestPictureInPicture();
   }catch(_){toast('Unable to open Picture-in-Picture')}
 }
@@ -1150,7 +1239,7 @@ function syncLocalTracksToPeer(){
 }
 
 async function maybeStartOffer(){
-  if(!state.activeConvId||!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled))return;
+  if(!state.activeConvId||!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled)||state.mediaRuntime.callState==='idle')return;
   var pc=ensurePeerConnection();
   if(state.mediaRuntime.makingOffer)return;
   state.mediaRuntime.makingOffer=true;
@@ -1164,47 +1253,11 @@ async function maybeStartOffer(){
 }
 
 function handleRemoteMediaShare(d){
-  if(!d)return;
-  if(d.mediaAction==='unshare'){
-    state.mediaRuntime.remoteVideoEnabled=false;
-    state.mediaRuntime.remoteMicEnabled=false;
-    state.mediaRuntime.remoteStream=null;
-    renderMediaShareUI();
-    return;
-  }
-  if(hasOwn(d,'videoEnabled'))state.mediaRuntime.remoteVideoEnabled=!!d.videoEnabled;
-  else state.mediaRuntime.remoteVideoEnabled=d.kind==='video';
-  if(hasOwn(d,'micEnabled'))state.mediaRuntime.remoteMicEnabled=!!d.micEnabled;
-  else state.mediaRuntime.remoteMicEnabled=true;
-  if(state.mediaRuntime.remoteVideoEnabled||state.mediaRuntime.remoteMicEnabled)ensurePeerConnection();
-  renderMediaShareUI();
+  return VideoSurfaceModule.handleRemoteMediaShare(d);
 }
 
 async function handleWebrtcSignal(d){
-  if(!d||!d.signal)return;
-  if(!state.activeConvId||d.session!==state.activeConvId)return;
-  if(d.from)state.mediaRuntime.remotePeerId=d.from;
-  var pc=ensurePeerConnection();
-  var signal=d.signal;
-  try{
-    if(signal.description){
-      var description=signal.description;
-      var polite=String(DEVICE_ID)>String(d.from||'');
-      var readyForOffer=!state.mediaRuntime.makingOffer&&(pc.signalingState==='stable'||state.mediaRuntime.ignoreOffer);
-      var offerCollision=description.type==='offer'&&!readyForOffer;
-      state.mediaRuntime.ignoreOffer=!polite&&offerCollision;
-      if(state.mediaRuntime.ignoreOffer)return;
-      await pc.setRemoteDescription(description);
-      if(description.type==='offer'){
-        syncLocalTracksToPeer();
-        await pc.setLocalDescription(await pc.createAnswer());
-        transportSend({type:'webrtc-signal',transient:true,signal:{description:pc.localDescription}});
-      }
-    }else if(signal.candidate){
-      try{await pc.addIceCandidate(signal.candidate)}catch(err){if(!state.mediaRuntime.ignoreOffer)throw err}
-    }
-  }catch(_){toast('Video signaling interrupted')}
-  renderMediaShareUI();
+  return VideoSurfaceModule.handleWebrtcSignal(d);
 }
 
 // MOD 9: Draggable float with position persistence
@@ -1254,7 +1307,7 @@ function renderTranscriptUI(){
 function toggleTranscriptCollapse(){state.ccTranscript.collapsed=!state.ccTranscript.collapsed;renderTranscriptUI();var ui=getCcUiState();ui.collapsed=state.ccTranscript.collapsed;saveCcUiState(ui)}
 function closeTranscriptWindow(){state.ccTranscript.visible=false;renderTranscriptUI()}
 function addCcTranscriptEntry(p){
-  state.ccTranscript.entries.push({ts:p.ts||Date.now(),convId:p.convId||state.activeConvId||'',dir:p.dir||'local',sourceText:p.sourceText||'',targetText:p.targetText||''});
+  state.ccTranscript.entries.push({ts:p.ts||Date.now(),convId:p.convId||state.activeConvId||'',dir:p.dir||'local',sourceText:p.sourceText||'',targetText:p.targetText||'',sourceLang:p.sourceLang||'',targetLang:p.targetLang||'',origin:'video_surface'});
   if(state.ccTranscript.entries.length>120)state.ccTranscript.entries=state.ccTranscript.entries.slice(-120);
   if(state.ccTranscript.visible===false)state.ccTranscript.visible=true;renderTranscriptUI()
 }
@@ -1266,35 +1319,35 @@ function updateComposerMicState(){
   else{btn.style.opacity='';btn.title='Voice input'}
 }
 function toggleCCMode(){
-  state.mediaRuntime.ccEnabled=!state.mediaRuntime.ccEnabled;
-  if(state.mediaRuntime.ccEnabled){startCCCapture();state.ccTranscript.visible=true}else stopCCCapture();
-  renderMediaShareUI();updateComposerMicState()
+  VideoSurfaceModule.toggleCC()
 }
 function startCCCapture(){
+  if(state.mediaRuntime.ccOpInFlight||ccActive)return;
+  state.mediaRuntime.ccOpInFlight=true;
   if(ccRestartTimer){clearTimeout(ccRestartTimer);ccRestartTimer=null}
   if(recognitionMode==='stt'&&recognition){clearSttTimers();sttActive=false;try{recognition.stop()}catch(_){}var sttBtn=document.getElementById('stt-btn');if(sttBtn)sttBtn.classList.remove('active')}
-  if(recognitionMode==='cc'&&ccRecognition)return;
-  if(!SpeechRec){toast('Voice not available');state.mediaRuntime.ccEnabled=false;recognitionMode='none';return}
+  if(recognitionMode==='cc'&&ccRecognition){state.mediaRuntime.ccOpInFlight=false;return}
+  if(!SpeechRec){toast('Voice not available');state.mediaRuntime.ccEnabled=false;recognitionMode='none';state.mediaRuntime.ccOpInFlight=false;return}
   var sess=getSession(state.activeConvId||'');ccRecognition=new SpeechRec();
   ccRecognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||'en']||'en';ccRecognition.interimResults=true;ccRecognition.continuous=true;
-  ccRecognition.onstart=function(){ccActive=true;recognitionMode='cc';updateComposerMicState()};
+  ccRecognition.onstart=function(){ccActive=true;recognitionMode='cc';state.mediaRuntime.ccOpInFlight=false;updateComposerMicState()};
   ccRecognition.onresult=function(e){var finalText='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript}if(finalText.trim())emitCcTranscript(finalText.trim())};
   ccRecognition.onend=function(){ccActive=false;recognitionMode='none';updateComposerMicState();if(state.mediaRuntime.ccEnabled){if(ccRestartTimer)clearTimeout(ccRestartTimer);ccRestartTimer=setTimeout(function(){if(state.mediaRuntime.ccEnabled)startCCCapture()},450)}};
-  try{ccRecognition.start()}catch(_){}
+  try{ccRecognition.start()}catch(_){state.mediaRuntime.ccOpInFlight=false}
 }
-function stopCCCapture(){state.mediaRuntime.ccEnabled=false;if(ccRestartTimer){clearTimeout(ccRestartTimer);ccRestartTimer=null}if(ccRecognition){try{ccRecognition.stop()}catch(_){}}ccRecognition=null;ccActive=false;recognitionMode='none';updateComposerMicState()}
+function stopCCCapture(){if(state.mediaRuntime.ccOpInFlight)return;state.mediaRuntime.ccOpInFlight=true;state.mediaRuntime.ccEnabled=false;if(ccRestartTimer){clearTimeout(ccRestartTimer);ccRestartTimer=null}if(ccRecognition){try{ccRecognition.stop()}catch(_){}}ccRecognition=null;ccActive=false;recognitionMode='none';state.mediaRuntime.ccOpInFlight=false;updateComposerMicState()}
 function emitCcTranscript(text){
   var sess=getSession(state.activeConvId||'');if(!sess||!text)return;
   var srcLang=detectLang(text,resolveEffectiveLang(sess,'owner')||'en');
   var tgtLang=resolveEffectiveLang(sess,'partner','en');var stamp=Date.now();
   transportSend({type:'cc-transcript',transient:true,sourceText:text,sourceLang:srcLang,targetLang:tgtLang,timestamp:stamp});
-  translate(text,srcLang,tgtLang).then(function(out){addCcTranscriptEntry({ts:stamp,convId:sess.convId,dir:'local',sourceText:text,targetText:out||text})})
+  translate(text,srcLang,tgtLang).then(function(out){addCcTranscriptEntry({ts:stamp,convId:sess.convId,dir:'local',sourceText:text,targetText:out||text,sourceLang:srcLang,targetLang:tgtLang})})
 }
 function handleRemoteCcTranscript(d,sess){
   var src=(d.sourceText||'').trim();if(!src)return;
   var srcLang=normalizeLangSetting(d.sourceLang)||detectLang(src,'en');
   var tgtLang=resolveEffectiveLang(sess,'owner','en');var stamp=Number(d.timestamp)||Date.now();
-  translate(src,srcLang,tgtLang).then(function(out){addCcTranscriptEntry({ts:stamp,convId:sess.convId,dir:'remote',sourceText:src,targetText:out||src});if(state.autoSpeakIncoming)speak(out||src,tgtLang,null)})
+  translate(src,srcLang,tgtLang).then(function(out){addCcTranscriptEntry({ts:stamp,convId:sess.convId,dir:'remote',sourceText:src,targetText:out||src,sourceLang:srcLang,targetLang:tgtLang});if(state.autoSpeakIncoming)speak(out||src,tgtLang,null)})
 }
 
 // ════════════════════════════════════════════════════════
@@ -1320,6 +1373,33 @@ function handleRelayEvent(d){
     updatePartnerHeader(sess);renderSessionList();if(!d._fromBackfill){resendUnacked();renderAllMessages();scrollBottom()}return
   }
   if(d.type==='pong'||d.type==='ping'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});return}
+  if(d.type==='call-invite'){
+    markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});
+    if(state.mediaRuntime.callState==='idle'||state.mediaRuntime.callState==='calling'){
+      state.mediaRuntime.incomingKind=(d.kind==='video')?'video':'audio';
+      state.mediaRuntime.pendingKind=state.mediaRuntime.incomingKind;
+      state.mediaRuntime.callAccepted=false;
+      state.mediaRuntime.callState='incoming';
+      setCallNotice('Incoming '+(state.mediaRuntime.incomingKind==='video'?'video':'audio')+' call…','incoming');
+      toggleMediaFloat(true);
+    }
+    return
+  }
+  if(d.type==='call-accept'){
+    markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});
+    if(state.mediaRuntime.callState!=='active'){
+      state.mediaRuntime.callState='active';state.mediaRuntime.callAccepted=true;
+      setCallNotice('In call','active');
+    }
+    return
+  }
+  if(d.type==='call-decline'||d.type==='call-end'){
+    markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});
+    if(state.mediaRuntime.callState!=='idle'){setCallNotice(d.type==='call-decline'?'Call declined':'Call ended','active');setTimeout(function(){if(state.mediaRuntime.callState==='idle')setCallNotice('','')},900)}
+    state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;state.mediaRuntime.pendingKind='';state.mediaRuntime.incomingKind='';
+    stopSessionMediaShare();
+    return
+  }
   if(d.type==='media-share'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteMediaShare(d);return}
   if(d.type==='webrtc-signal'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleWebrtcSignal(d);return}
   if(d.type==='cc-transcript'){markPeerSeen(sess.convId,Date.now(),{suppressJoinNote:true});handleRemoteCcTranscript(d,sess);return}

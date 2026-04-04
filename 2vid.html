@@ -407,10 +407,18 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name" onfocus="this.dataset.editing='1'" onblur="this.dataset.editing='0';saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span>
     <span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span>
     <span class="shell-participant" id="shell-peer-name" title="Not seen yet" hidden><span class="shell-participant-label">?</span></span>
-    <button class="vsay-call-btn" id="vsay-call-btn" onclick="toggleMediaFloat()" title="Video call">
+    <button class="vsay-call-btn" id="vsay-video-call-btn" onclick="startOutgoingCall('video')" title="Start video call">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+    </button>
+    <button class="vsay-call-btn" id="vsay-audio-call-btn" onclick="startOutgoingCall('audio')" title="Start audio call">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
     </button>
+  </div>
+
+  <div id="vsay-call-notice" style="display:none;padding:4px 12px 8px;gap:8px;align-items:center;justify-content:center;font-size:12px;color:var(--ink-mid);">
+    <span id="vsay-call-status">Incoming call…</span>
+    <button class="vsay-ctrl-btn" onclick="acceptIncomingCall()" title="Accept">Accept</button>
+    <button class="vsay-ctrl-btn" onclick="declineIncomingCall()" title="Decline">Decline</button>
   </div>
 
   <!-- Empty state -->
@@ -459,7 +467,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
       <div class="vsay-float-head-right">
         <button class="vsay-ctrl-btn" id="vsay-cc-btn" onclick="toggleCCMode()" title="Closed captions">CC</button>
         <!-- MOD 6: X dismisses the entire video box -->
-        <button class="vsay-ctrl-btn" onclick="toggleMediaFloat(false)" title="Close" style="font-size:15px;font-weight:700;">✕</button>
+        <button class="vsay-ctrl-btn" onclick="if(state.mediaRuntime.callState==='active'||state.mediaRuntime.callState==='calling')endCall();toggleMediaFloat(false)" title="Close" style="font-size:15px;font-weight:700;">✕</button>
       </div>
     </div>
     <div class="vsay-float-body">
@@ -480,7 +488,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="vsay-transcript-header">
       <div class="vsay-float-head-left">
         <button class="vsay-ctrl-btn" id="vsay-transcript-collapse-btn" onclick="toggleTranscriptCollapse()" title="Collapse"><span class="vsay-chevron" id="vsay-cc-chevron">▶</span></button>
-        <span>CC Transcript</span>
+        <span>CC Transcript <small style="opacity:.7;font-weight:500;">(Local mic unless peer CC is on)</small></span>
       </div>
       <button class="vsay-ctrl-btn" onclick="closeTranscriptWindow()" title="Close">✕</button>
     </div>
@@ -838,6 +846,7 @@ function speak(text,lang,btn){
   synth.cancel();synth.speak(utt)
 }
 var ccPausedForSTT=false;
+var recognitionMode='none',ccRestartTimer=null;
 function clearSttTimers() {
   if (sttIdleTimer) { clearTimeout(sttIdleTimer); sttIdleTimer = null; }
   if (sttHardTimer) { clearTimeout(sttHardTimer); sttHardTimer = null; }
@@ -862,7 +871,8 @@ function resumeCCAfterSTT() {
 
 function toggleSTT() {
   if (!SpeechRec) { toast('Voice not available'); return; }
-  if (sttActive) { clearSttTimers(); if (recognition) recognition.stop(); return; }
+  if (recognitionMode==='cc') stopCCCapture();
+  if (sttActive||recognitionMode==='stt') { clearSttTimers(); if (recognition) recognition.stop(); recognitionMode='none'; return; }
 
   var sess = getSession(state.activeConvId);
   recognition = new SpeechRec();
@@ -877,7 +887,7 @@ function toggleSTT() {
   sttFinalText = '';
 
   recognition.onstart = function() {
-    sttActive = true;
+    sttActive = true; recognitionMode='stt';
     if (btn) btn.classList.add('active');
     resetSttIdleTimer();
     sttHardTimer = setTimeout(function() {
@@ -907,7 +917,7 @@ function toggleSTT() {
 
   recognition.onend = function() {
     clearSttTimers();
-    sttActive = false;
+    sttActive = false; recognitionMode='none';
     if (btn) btn.classList.remove('active');
     resumeCCAfterSTT();
     updateComposerMicState();
@@ -916,7 +926,7 @@ function toggleSTT() {
   recognition.onerror = function(e) {
     clearSttTimers();
     if (e.error === 'not-allowed') toast('Mic permission needed');
-    sttActive = false;
+    sttActive = false; recognitionMode='none';
     if (btn) btn.classList.remove('active');
     resumeCCAfterSTT();
     updateComposerMicState();
@@ -1010,14 +1020,65 @@ function renderMediaShareUI(){
   updateComposerMicState()
 }
 
+function setCallNotice(msg,mode){
+  var notice=document.getElementById('vsay-call-notice'),status=document.getElementById('vsay-call-status');
+  if(status)status.textContent=msg||'';
+  if(!notice)return;
+  notice.style.display=msg?'flex':'none';
+  var accept=notice.querySelector('button[onclick="acceptIncomingCall()"]');
+  var decline=notice.querySelector('button[onclick="declineIncomingCall()"]');
+  if(accept)accept.style.display=mode==='incoming'?'':'none';
+  if(decline)decline.style.display=mode==='incoming'?'':'none';
+}
+
+function startOutgoingCall(kind){
+  if(!state.activeConvId){toast('No active session');return}
+  state.mediaRuntime.pendingKind=kind==='video'?'video':'audio';
+  state.mediaRuntime.callState='calling';state.mediaRuntime.callAccepted=false;
+  toggleMediaFloat(true);
+  setCallNotice('Ringing…', 'outgoing');
+  transportSend({type:'call-invite',transient:true,kind:state.mediaRuntime.pendingKind});
+}
+function acceptIncomingCall(){
+  if(!state.activeConvId)return;
+  state.mediaRuntime.callState='active';state.mediaRuntime.callAccepted=true;
+  transportSend({type:'call-accept',transient:true,kind:state.mediaRuntime.incomingKind||'audio'});
+  setCallNotice('In call', 'active');toggleMediaFloat(true);
+  if((state.mediaRuntime.incomingKind||'audio')==='video')toggleSessionMediaShare('video');
+  else toggleSessionMediaShare('audio');
+}
+function declineIncomingCall(){
+  if(!state.activeConvId)return;
+  transportSend({type:'call-decline',transient:true,kind:state.mediaRuntime.incomingKind||'audio'});
+  state.mediaRuntime.callState='idle';state.mediaRuntime.incomingKind='';setCallNotice('', '');
+}
+function endCall(){
+  transportSend({type:'call-end',transient:true});
+  state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;state.mediaRuntime.pendingKind='';setCallNotice('', '');
+  stopSessionMediaShare();
+}
+
+async function ensureLocalMedia(opts){
+  opts=opts||{};
+  var needAudio=!!opts.audio,needVideo=!!opts.video;
+  var stream=state.mediaRuntime.stream;
+  if(!stream){state.mediaRuntime.stream=await navigator.mediaDevices.getUserMedia({audio:needAudio,video:needVideo});return state.mediaRuntime.stream}
+  var hasA=stream.getAudioTracks().some(function(t){return t.readyState==='live'}),hasV=stream.getVideoTracks().some(function(t){return t.readyState==='live'});
+  if((needAudio&&!hasA)||(needVideo&&!hasV)){
+    var extra=await navigator.mediaDevices.getUserMedia({audio:needAudio&&!hasA,video:needVideo&&!hasV});
+    extra.getTracks().forEach(function(t){stream.addTrack(t)});
+  }
+  return stream;
+}
+
 async function toggleSessionMediaShare(kind){
   if(!state.activeConvId){toast('No active session');return}
   if(kind==='video')state.mediaRuntime.videoEnabled=!state.mediaRuntime.videoEnabled;
   else if(kind==='audio')state.mediaRuntime.micEnabled=!state.mediaRuntime.micEnabled;
   if(!(state.mediaRuntime.videoEnabled||state.mediaRuntime.micEnabled)){stopSessionMediaShare();renderMediaShareUI();return}
   try{
-    if(!state.mediaRuntime.stream){state.mediaRuntime.stream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});state.mediaRuntime.activeSessionId=state.activeConvId}
-    state.mediaRuntime.stream.getVideoTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.videoEnabled});
+    state.mediaRuntime.stream=await ensureLocalMedia({video:!!state.mediaRuntime.videoEnabled,audio:!!state.mediaRuntime.micEnabled});state.mediaRuntime.activeSessionId=state.activeConvId;
+    state.mediaRuntime.stream.getVideoTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.videoEnabled;if(!state.mediaRuntime.videoEnabled){try{t.stop()}catch(_){}}});
     state.mediaRuntime.stream.getAudioTracks().forEach(function(t){t.enabled=!!state.mediaRuntime.micEnabled});
     syncLocalTracksToPeer();
     transportSend({type:'media-share',transient:true,mediaAction:'share',kind:state.mediaRuntime.videoEnabled?'video':'audio',videoEnabled:!!state.mediaRuntime.videoEnabled,micEnabled:!!state.mediaRuntime.micEnabled});
@@ -1187,7 +1248,7 @@ function renderTranscriptUI(){
   win.classList.toggle('collapsed',!!state.ccTranscript.collapsed);
   if(chevron)chevron.className='vsay-chevron'+(state.ccTranscript.collapsed?'':' expanded');
   body.innerHTML=entries.map(function(e){
-    return '<div class="vsay-transcript-row '+(e.dir==='local'?'mine':'theirs')+'"><div class="vsay-transcript-col"><b>Original</b>'+escHtml(e.sourceText||'')+'</div><div class="vsay-transcript-col"><b>Translated</b>'+escHtml(e.targetText||'')+'</div></div>'
+    return '<div class="vsay-transcript-row '+(e.dir==='local'?'mine':'theirs')+'"><div class="vsay-transcript-col"><b>'+((e.dir==='local')?'Local mic (Original)':'Peer CC (Original)')+'</b>'+escHtml(e.sourceText||'')+'</div><div class="vsay-transcript-col"><b>'+((e.dir==='local')?'To partner (Translated)':'To you (Translated)')+'</b>'+escHtml(e.targetText||'')+'</div></div>'
   }).join('');body.scrollTop=body.scrollHeight
 }
 function toggleTranscriptCollapse(){state.ccTranscript.collapsed=!state.ccTranscript.collapsed;renderTranscriptUI();var ui=getCcUiState();ui.collapsed=state.ccTranscript.collapsed;saveCcUiState(ui)}
@@ -1200,7 +1261,8 @@ function addCcTranscriptEntry(p){
 var ccRecognition=null,ccActive=false;
 function updateComposerMicState(){
   var btn=document.getElementById('stt-btn');if(!btn)return;
-  if(ccActive||state.mediaRuntime.ccEnabled){btn.style.opacity='0.5';btn.title='will pause CC'}
+  if(recognitionMode==='cc'){btn.style.opacity='0.6';btn.title='CC mic active'}
+  else if(recognitionMode==='stt'){btn.style.opacity='';btn.title='Voice input active'}
   else{btn.style.opacity='';btn.title='Voice input'}
 }
 function toggleCCMode(){
@@ -1209,16 +1271,18 @@ function toggleCCMode(){
   renderMediaShareUI();updateComposerMicState()
 }
 function startCCCapture(){
-  if(sttActive&&recognition){clearSttTimers();sttActive=false;try{recognition.stop()}catch(_){}var sttBtn=document.getElementById('stt-btn');if(sttBtn)sttBtn.classList.remove('active')}
-  if(!SpeechRec){toast('Voice not available');state.mediaRuntime.ccEnabled=false;return}
+  if(ccRestartTimer){clearTimeout(ccRestartTimer);ccRestartTimer=null}
+  if(recognitionMode==='stt'&&recognition){clearSttTimers();sttActive=false;try{recognition.stop()}catch(_){}var sttBtn=document.getElementById('stt-btn');if(sttBtn)sttBtn.classList.remove('active')}
+  if(recognitionMode==='cc'&&ccRecognition)return;
+  if(!SpeechRec){toast('Voice not available');state.mediaRuntime.ccEnabled=false;recognitionMode='none';return}
   var sess=getSession(state.activeConvId||'');ccRecognition=new SpeechRec();
   ccRecognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||'en']||'en';ccRecognition.interimResults=true;ccRecognition.continuous=true;
-  ccRecognition.onstart=function(){ccActive=true;updateComposerMicState()};
+  ccRecognition.onstart=function(){ccActive=true;recognitionMode='cc';updateComposerMicState()};
   ccRecognition.onresult=function(e){var finalText='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript}if(finalText.trim())emitCcTranscript(finalText.trim())};
-  ccRecognition.onend=function(){ccActive=false;updateComposerMicState();if(state.mediaRuntime.ccEnabled)try{ccRecognition.start()}catch(_){}};
+  ccRecognition.onend=function(){ccActive=false;recognitionMode='none';updateComposerMicState();if(state.mediaRuntime.ccEnabled){if(ccRestartTimer)clearTimeout(ccRestartTimer);ccRestartTimer=setTimeout(function(){if(state.mediaRuntime.ccEnabled)startCCCapture()},450)}};
   try{ccRecognition.start()}catch(_){}
 }
-function stopCCCapture(){state.mediaRuntime.ccEnabled=false;if(ccRecognition){try{ccRecognition.stop()}catch(_){}}ccRecognition=null;ccActive=false;updateComposerMicState()}
+function stopCCCapture(){state.mediaRuntime.ccEnabled=false;if(ccRestartTimer){clearTimeout(ccRestartTimer);ccRestartTimer=null}if(ccRecognition){try{ccRecognition.stop()}catch(_){}}ccRecognition=null;ccActive=false;recognitionMode='none';updateComposerMicState()}
 function emitCcTranscript(text){
   var sess=getSession(state.activeConvId||'');if(!sess||!text)return;
   var srcLang=detectLang(text,resolveEffectiveLang(sess,'owner')||'en');

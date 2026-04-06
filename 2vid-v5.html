@@ -1033,6 +1033,7 @@ function setCallNotice(msg,mode){
 
 function startOutgoingCall(kind){
   if(!state.activeConvId){toast('No active session');return}
+  armInCallBackNavTrap();
   state.mediaRuntime.pendingKind=kind==='video'?'video':'audio';
   state.mediaRuntime.callState='calling';state.mediaRuntime.callAccepted=false;
   toggleMediaFloat(true);
@@ -1041,6 +1042,7 @@ function startOutgoingCall(kind){
 }
 function acceptIncomingCall(){
   if(!state.activeConvId)return;
+  armInCallBackNavTrap();
   state.mediaRuntime.callState='active';state.mediaRuntime.callAccepted=true;
   transportSend({type:'call-accept',transient:true,kind:state.mediaRuntime.incomingKind||'audio'});
   setCallNotice('In call', 'active');toggleMediaFloat(true);
@@ -1056,6 +1058,39 @@ function endCall(){
   transportSend({type:'call-end',transient:true});
   state.mediaRuntime.callState='idle';state.mediaRuntime.callAccepted=false;state.mediaRuntime.pendingKind='';setCallNotice('', '');
   stopSessionMediaShare();
+}
+function isCallActiveForBackNav(){
+  return !!(state.mediaRuntime&&(
+    state.mediaRuntime.callState==='calling'||
+    state.mediaRuntime.callState==='active'||
+    state.mediaRuntime.callState==='incoming'||
+    state.mediaRuntime.ccEnabled
+  ));
+}
+function armInCallBackNavTrap(){
+  try{history.pushState({inCall:true},'',location.href)}catch(_){}
+}
+function leaveCallToLobby(opts){
+  opts=opts||{};
+  if(state.mediaRuntime.callState==='active'||state.mediaRuntime.callState==='calling')endCall();
+  else{
+    if(state.mediaRuntime.callState==='incoming')declineIncomingCall();
+    stopSessionMediaShare();
+  }
+  stopCCCapture();
+  transportDisconnect({preserveQueue:true});
+  state.mediaRuntime.callState='idle';
+  state.mediaRuntime.callAccepted=false;
+  state.mediaRuntime.incomingKind='';
+  state.mediaRuntime.pendingKind='';
+  setCallNotice('', '');
+  toggleMediaFloat(false);
+  closeTranscriptWindow();
+  setActiveConvId('');
+  showEmptyShell();
+  showScreen('chat-screen');
+  renderSessionList();
+  if(!opts.silent)toast('Call ended — back in lobby');
 }
 
 async function ensureLocalMedia(opts){
@@ -1279,6 +1314,7 @@ function startCCCapture(){
   ccRecognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||'en']||'en';ccRecognition.interimResults=true;ccRecognition.continuous=true;
   ccRecognition.onstart=function(){ccActive=true;recognitionMode='cc';updateComposerMicState()};
   ccRecognition.onresult=function(e){var finalText='';for(var i=e.resultIndex;i<e.results.length;i++){if(e.results[i].isFinal)finalText+=e.results[i][0].transcript}if(finalText.trim())emitCcTranscript(finalText.trim())};
+  ccRecognition.onerror=function(){ccActive=false;recognitionMode='none';updateComposerMicState();if(state.mediaRuntime.ccEnabled){if(ccRestartTimer)clearTimeout(ccRestartTimer);ccRecognition=null;ccRestartTimer=setTimeout(function(){if(state.mediaRuntime.ccEnabled)startCCCapture()},250)}};
   ccRecognition.onend=function(){ccActive=false;recognitionMode='none';updateComposerMicState();if(state.mediaRuntime.ccEnabled){if(ccRestartTimer)clearTimeout(ccRestartTimer);ccRestartTimer=setTimeout(function(){if(state.mediaRuntime.ccEnabled)startCCCapture()},450)}};
   try{ccRecognition.start()}catch(_){}
 }
@@ -1563,6 +1599,12 @@ function copyShareLink(){var el=document.getElementById('share-link-text');var u
 function ensureUserName(cb){var p=getPrefs();var name=firstRealName(p.globalName,p.userName);if(name){if(cb)cb(name);return}openOnboardingModal(function(n){if(cb)cb(n)})}
 function openOnboardingModal(onDone){pendingOnboardingFlow=onDone;document.getElementById('onboarding-modal').hidden=false;setTimeout(function(){document.getElementById('onboarding-name').focus()},30)}
 function submitOnboardingName(){var input=document.getElementById('onboarding-name');var name=(input&&input.value||'').trim();if(!name){document.getElementById('onboarding-error').textContent='Please enter your name.';return}var p=getPrefs();p.globalName=name;p.userName=name;savePrefs(p);document.getElementById('onboarding-modal').hidden=true;var resume=pendingOnboardingFlow;pendingOnboardingFlow=null;if(typeof resume==='function')resume(name)}
+
+window.addEventListener('popstate',function(){
+  if(!isCallActiveForBackNav())return;
+  history.pushState({inCall:true},'',location.href);
+  leaveCallToLobby({silent:true});
+});
 function createNewSession(opts){
   opts=opts||{};
   ensureUserName(function(name){

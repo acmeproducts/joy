@@ -117,7 +117,8 @@ textarea.field-input{resize:none;}
 .shell-participant.editable:focus{background:var(--teal-light);border-color:var(--teal);color:var(--teal);}
 .shell-participant-label{display:inline-block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .shell-partner-arrow{color:var(--ink-dim);font-weight:500;flex-shrink:0;}
-.shell-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
+.shell-empty{position:relative;isolation:isolate;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--ink-dim);font-size:14px;padding:40px;}
+.shell-empty::before{content:'';position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(253,250,247,.62),rgba(253,250,247,.62)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.62;}
 .shell-empty-logo{font-family:"Lora",serif;font-size:48px;font-weight:600;color:var(--teal);opacity:.25;}
 
 /* MESSAGES */
@@ -360,7 +361,8 @@ textarea.field-input{resize:none;}
 .onboarding-error{font-size:12px;color:var(--red);min-height:16px;}
 .new-chat-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;}
 .new-chat-modal[hidden]{display:none!important;}
-.new-chat-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
+.new-chat-card{position:relative;isolation:isolate;overflow:hidden;width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
+.new-chat-card::before{content:'';position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(253,250,247,.64),rgba(253,250,247,.64)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.64;}
 .new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;}
 .new-chat-sub{font-size:12px;color:var(--ink-dim);}
 .new-chat-actions{display:flex;gap:8px;margin-top:6px;}
@@ -3656,10 +3658,6 @@ function renderInviteCard(msg){
   var card=document.createElement('div');
   card.id='invite-card-'+msg.id;
   card.style.cssText='background:#D9D9D9;border:1px solid #cfcfcf;border-radius:0;padding:16px;margin:8px 0;display:flex;flex-direction:column;align-items:center;gap:8px;';
-  var title=document.createElement('div');
-  title.style.cssText='font-size:34px;line-height:1;font-weight:700;color:#000;letter-spacing:.03em;';
-  title.textContent='PARTNER';
-  card.appendChild(title);
   // QR code
   var qrWrap=document.createElement('div');
   qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:flex;align-items:center;justify-content:center;overflow:hidden;';

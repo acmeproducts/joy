@@ -759,12 +759,10 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     <div class="share-qr-card owner">
       <div class="share-qr-frame square">
         <div id="share-owner-qr" class="share-qr-canvas"></div>
-        <div id="share-owner-label" class="share-qr-label">To Join as owner</div>
       </div>
     </div>
-    <div style="text-align:center;margin-top:-4px;display:flex;gap:8px;justify-content:center;">
-      <button class="sheet-btn secondary" onclick="copyShareLink()">Copy Link</button>
-      <button class="sheet-btn primary" onclick="showShareQr()">Show QR</button>
+    <div style="text-align:center;margin-top:-4px;">
+      <button class="sheet-btn primary" onclick="copyShareLink()">Copy Link</button>
     </div>
     <div id="share-qr-state" class="share-qr-note" style="text-align:center;">QR: loading</div>
   </div></div>
@@ -2154,7 +2152,10 @@ function populateNewChatLangSelect(id){
   var sel=document.getElementById(id);if(!sel)return;
   var cur=sel.value||'auto';
   var rows=['<option value="auto">🌐 Auto</option>'];
-  LANGS.forEach(function(l){rows.push('<option value="'+l.code+'">'+l.flag+' '+escHtml(l.label)+'</option>');});
+  LANGS.forEach(function(l){
+    var flag=langFlag(l.code)||l.flag||'🌐';
+    rows.push('<option value="'+l.code+'">'+flag+' '+escHtml(l.label)+'</option>');
+  });
   sel.innerHTML=rows.join('');
   sel.value=cur||'auto';
 }
@@ -2601,12 +2602,11 @@ function shareSession(cid){
   if(handoffUrl.length>SHARE_URL_WARN_LEN)toast('Share link is long; QR scan may be less reliable on older cameras.');
   addDiagLog('share link generated side=owner mode='+sess.ownerLangMode+' conv='+String(cid||'').slice(0,8));
   var h=document.getElementById('share-overlay');if(h)h.dataset.url=handoffUrl;
-  var ownerLabel=document.getElementById('share-owner-label');
-  if(ownerLabel)ownerLabel.textContent='To Join as '+(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'Owner');
   var qrState=document.getElementById('share-qr-state');
   if(qrState)qrState.textContent='QR: loading';
   var qrNode=document.getElementById('share-owner-qr');if(qrNode)qrNode.innerHTML='';
   document.getElementById('share-overlay').hidden=false;
+  renderShareQr();
 }
 function getShareLink(){
   var overlay=document.getElementById('share-overlay');
@@ -2618,7 +2618,7 @@ function copyShareLink(){
   if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){toast('Copied owner handoff link');});
   else{fallbackCopy(url);toast('Copied owner handoff link');}
 }
-function showShareQr(){
+function renderShareQr(){
   var url=getShareLink();
   var qrState=document.getElementById('share-qr-state');
   var qrNode=document.getElementById('share-owner-qr');
@@ -3664,22 +3664,16 @@ function renderInviteCard(msg){
   var qrWrap=document.createElement('div');
   qrWrap.style.cssText='position:relative;width:180px;height:180px;background:#fff;border:1px solid #e6e6e6;border-radius:0;display:flex;align-items:center;justify-content:center;overflow:hidden;';
   card.appendChild(qrWrap);
-  var qrLabel=document.createElement('div');
-  qrLabel.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;color:#D92D20;border-radius:999px;padding:4px 10px;font-size:10px;font-weight:600;';
-  qrLabel.textContent='Chat with '+ownerName;
-  qrWrap.appendChild(qrLabel);
   var joinLine=document.createElement('div');
   joinLine.style.cssText='font-size:22px;line-height:1.1;color:#000;font-weight:700;text-align:center;';
   joinLine.textContent='To Chat with '+ownerName;
   card.appendChild(joinLine);
-  var actionLink=document.createElement('a');
-  actionLink.href=url||'#';
-  actionLink.target='_blank';
-  actionLink.rel='noopener';
-  actionLink.style.cssText='font-size:30px;line-height:1;color:#000;text-decoration:none;';
-  actionLink.textContent='Copy or Click';
-  actionLink.addEventListener('click',function(){if(url)copyTextToClipboard(url);});
-  card.appendChild(actionLink);
+  var copyBtn=document.createElement('button');
+  copyBtn.type='button';
+  copyBtn.style.cssText='font-size:30px;line-height:1;color:#000;text-decoration:none;background:none;border:none;cursor:pointer;font-family:"Lora",serif;';
+  copyBtn.textContent='Copy';
+  copyBtn.addEventListener('click',function(){if(url)copyTextToClipboard(url);});
+  card.appendChild(copyBtn);
   c.appendChild(card);
   // Draw QR
   if(url&&window.QRCode){

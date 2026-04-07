@@ -2523,6 +2523,7 @@ function validateInvitePayload(payload){
       joinOrigin:payload.o==='o'?'share-owner-handoff':'share-partner',
       side:payload.o==='o'?'owner':'partner'
     };
+    if(payload.ar!==undefined)mapped.autoSpeakIncoming=!!payload.ar;
     if(payload.pm!==undefined)mapped.partnerLangMode=payload.pm;
     if(payload.pf!==undefined)mapped.partnerFixedLang=payload.pf;
     if(payload.pl!==undefined)mapped.partnerLastSentLang=payload.pl;
@@ -2559,9 +2560,19 @@ function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
   var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
   var base={schemaVersion:INVITE_SCHEMA_VERSION,s:sess.convId,d:PART_ID,n:sess.myName||prefs.userName||'yournamehere',o:(mode==='owner-handoff'?'o':'p')};
+  // Persist language-routing pair state and auto-read preference across link/QR handoff.
+  base.pm=sess.partnerLangMode;
+  base.pf=sess.partnerFixedLang;
+  base.pl=sess.partnerLastSentLang;
+  base.pe=sess.partnerEffectiveReplyLang;
+  base.ar=prefs&&prefs.autoSpeakIncoming?1:0;
   if(mode==='owner-handoff'){
     // Preserve owner identity for role-correct owner handoff hydration.
     base.oi=sess.ownerIdentityId;
+    base.om=sess.ownerLangMode;
+    base.of=sess.ownerFixedLang;
+    base.ol=sess.ownerLastSentLang;
+    base.oe=sess.ownerEffectiveReplyLang;
   }
   return pruneInvitePayload(base);
 }
@@ -2588,6 +2599,13 @@ function hydrateSessionFromInvite(sess,invite){
   if(invite.partnerFixedLang!==undefined)sess.partnerFixedLang=normalizeLangSetting(invite.partnerFixedLang)||'';
   if(invite.partnerLastSentLang!==undefined)sess.partnerLastSentLang=normalizeLangSetting(invite.partnerLastSentLang)||'';
   if(invite.partnerEffectiveReplyLang!==undefined)sess.partnerEffectiveReplyLang=normalizeLangSetting(invite.partnerEffectiveReplyLang)||'';
+  if(invite.autoSpeakIncoming!==undefined){
+    var p=getPrefs();
+    p.autoSpeakIncoming=!!invite.autoSpeakIncoming;
+    savePrefs(p);
+    state.autoSpeakIncoming=!!p.autoSpeakIncoming;
+    updateAutoReadBtn();
+  }
   sess.inviterDeviceId=sess.inviterDeviceId||invite.initiatorDeviceId;
   sess.inviteCreatedAt=sess.inviteCreatedAt||invite.createdAt;
   sess.localRole=getSessionLocalRole(sess,invite);
@@ -2922,22 +2940,31 @@ function handleRelayEvent(d){
   if(d.type==='msg'){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     applyPeerRoutingHints(sess,d);
+    var localMeta=buildLocalEnvelope(sess,{});
+    var incomingRole=(d.role==='owner'||d.role==='partner')?d.role:((d.side==='owner'||d.side==='partner')?d.side:'');
+    var sameIdentity=!!(d.identityId&&localMeta.identityId&&String(d.identityId)===String(localMeta.identityId));
+    var isLocalSideMsg=!!(incomingRole&&incomingRole===localMeta.side)||sameIdentity;
     var srcTxt=d.sourceText||d.orig||d.text||'';
     var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
-    var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
-    var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
-    var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
-    sess.partnerLastSentLang=partnerOutLang;
-    setEffectiveReplyLang(sess,'partner',partnerOutLang);
+    if(!isLocalSideMsg){
+      var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
+      var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
+      var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
+      sess.partnerLastSentLang=partnerOutLang;
+      setEffectiveReplyLang(sess,'partner',partnerOutLang);
+    }
     // Receiver always wants translation in local effective reply language.
-    var myLang=getEffectiveReplyLang(sess,'owner','en');
+    var myLang=getEffectiveReplyLang(sess,isLocalSideMsg?'partner':'owner','en');
     var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
     var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
-    // Record partner's detected language in tally (partner messages only)
-    var partnerId=(d.identityId||sess.partnerIdentityId||sess.inviterDeviceId||d.from||'partner');
-    recordLangTally(partnerId,srcLang);
-    var ps=ensureParticipantState(partnerId);
-    sess.partnerIdentityId=sess.partnerIdentityId||partnerId;
+    var ps=null;
+    if(!isLocalSideMsg){
+      // Record partner's detected language in tally (partner messages only)
+      var partnerId=(d.identityId||sess.partnerIdentityId||sess.inviterDeviceId||d.from||'partner');
+      recordLangTally(partnerId,srcLang);
+      ps=ensureParticipantState(partnerId);
+      sess.partnerIdentityId=sess.partnerIdentityId||partnerId;
+    }
     putSession(sess);
     addDiagLog('partnerLang tally: '+(ps?getLangTallySummary(partnerId):'n/a'));
     addDiagLog('RX msg id='+String(d.id||'').slice(0,8)+' srcLang='+srcLang+' myLang='+myLang+' text='+(srcTxt||'').slice(0,30));
@@ -2955,15 +2982,18 @@ function handleRelayEvent(d){
       return;
     }
 
-    upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:false});
+    if(!isLocalSideMsg)upsertPartnerFromEnvelope(sess,d,{allowLangUpdate:false});
     updatePartnerHeader(sess);
     if(state.pendingInviteId===sess.convId){
       state.pendingInviteId=null;
     }
     var rxTs=d.timestamp||d.ts||Date.now();
-    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',deliveredAt:rxTs,readAt:Date.now(),timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
+    var msgFrom=isLocalSideMsg?'me':'them';
+    var msg=normalizeMsgSchema({id:d.id,from:msgFrom,sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',deliveredAt:rxTs,readAt:Date.now(),timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
     // Use wire name for display, not stale session name
-    msg.displayFromName=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
+    msg.displayFromName=isLocalSideMsg
+      ?(firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'You')
+      :(firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner');
     mergeMsgTranslations(msg,d.translations||{});
     stampMsgNames(msg,sess);
     state.messages.push(msg);renderMsg(msg);scrollBottom();

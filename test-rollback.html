@@ -2163,11 +2163,19 @@ function populateNewChatLangSelect(id){
 }
 function openNewChatModal(){
   var modal=document.getElementById('new-chat-modal');
+  var prefs=getPrefs();
+  var active=state.activeConvId?getSession(state.activeConvId):null;
+  var activeNorm=active?normalizeSession(active):null;
   populateNewChatLangSelect('new-chat-my-lang');
   populateNewChatLangSelect('new-chat-partner-lang');
-  var my=document.getElementById('new-chat-my-lang');if(my)my.value='auto';
-  var peer=document.getElementById('new-chat-partner-lang');if(peer)peer.value='auto';
-  var ar=document.getElementById('new-chat-autoread');if(ar)ar.checked=true;
+  var my=document.getElementById('new-chat-my-lang');
+  var peer=document.getElementById('new-chat-partner-lang');
+  var ar=document.getElementById('new-chat-autoread');
+  var myLang=(activeNorm&&activeNorm.ownerLangMode==='fixed')?(normalizeLangSetting(activeNorm.ownerFixedLang)||''):(normalizeLangSetting(prefs.myLang)||'');
+  var peerLang=(activeNorm&&activeNorm.partnerLangMode==='fixed')?(normalizeLangSetting(activeNorm.partnerFixedLang)||''):(normalizeLangSetting(prefs.partnerLang)||'');
+  if(my)my.value=myLang||'auto';
+  if(peer)peer.value=peerLang||'auto';
+  if(ar)ar.checked=!!prefs.autoSpeakIncoming;
   if(modal)modal.hidden=false;
   setTimeout(function(){if(my)my.focus();},30);
 }
@@ -2191,6 +2199,8 @@ function createNewSession(silent,opts){
     var myLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
     var peerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
     var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(myLang?'fixed':'auto'),ownerFixedLang:myLang||'',partnerLangMode:(peerLang?'fixed':'auto'),partnerFixedLang:peerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    p.myLang=myLang||'';
+    p.partnerLang=peerLang||'';
     p.autoSpeakIncoming=opts.autoRead!==false;
     savePrefs(p);
     state.autoSpeakIncoming=!!p.autoSpeakIncoming;

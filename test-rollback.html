@@ -2538,13 +2538,11 @@ function validateInvitePayload(payload){
     if(payload.pf!==undefined)mapped.partnerFixedLang=payload.pf;
     if(payload.pl!==undefined)mapped.partnerLastSentLang=payload.pl;
     if(payload.pe!==undefined)mapped.partnerEffectiveReplyLang=payload.pe;
-    if(payload.o==='o'){
-      if(payload.oi!==undefined)mapped.ownerIdentityId=payload.oi;
-      if(payload.om!==undefined)mapped.ownerLangMode=payload.om;
-      if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
-      if(payload.ol!==undefined)mapped.ownerLastSentLang=payload.ol;
-      if(payload.oe!==undefined)mapped.ownerEffectiveReplyLang=payload.oe;
-    }
+    if(payload.o==='o'&&payload.oi!==undefined)mapped.ownerIdentityId=payload.oi;
+    if(payload.om!==undefined)mapped.ownerLangMode=payload.om;
+    if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
+    if(payload.ol!==undefined)mapped.ownerLastSentLang=payload.ol;
+    if(payload.oe!==undefined)mapped.ownerEffectiveReplyLang=payload.oe;
     return mapped;
   }
   if(payload.schemaVersion===1){
@@ -2576,13 +2574,14 @@ function buildInvitePayload(sess,prefs,intent){
   base.pl=sess.partnerLastSentLang;
   base.pe=sess.partnerEffectiveReplyLang;
   base.ar=prefs&&prefs.autoSpeakIncoming?1:0;
+  // Carry owner routing state in both partner and owner links when present.
+  base.om=sess.ownerLangMode;
+  base.of=sess.ownerFixedLang;
+  base.ol=sess.ownerLastSentLang;
+  base.oe=sess.ownerEffectiveReplyLang;
   if(mode==='owner-handoff'){
     // Preserve owner identity for role-correct owner handoff hydration.
     base.oi=sess.ownerIdentityId;
-    base.om=sess.ownerLangMode;
-    base.of=sess.ownerFixedLang;
-    base.ol=sess.ownerLastSentLang;
-    base.oe=sess.ownerEffectiveReplyLang;
   }
   return pruneInvitePayload(base);
 }
@@ -2597,14 +2596,12 @@ function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
   var inviteName=firstRealName(invite.initiatorGlobalName);
   if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
-  if(invite.side==='owner'){
-    // Preserve owner language-routing state across owner handoff device switches.
-    if(invite.ownerIdentityId)sess.ownerIdentityId=invite.ownerIdentityId;
-    if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
-    if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
-    if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
-    if(invite.ownerEffectiveReplyLang!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(invite.ownerEffectiveReplyLang)||'';
-  }
+  if(invite.side==='owner'&&invite.ownerIdentityId)sess.ownerIdentityId=invite.ownerIdentityId;
+  // Preserve owner language-routing state whenever invite payload provides it.
+  if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
+  if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
+  if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
+  if(invite.ownerEffectiveReplyLang!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(invite.ownerEffectiveReplyLang)||'';
   if(invite.partnerLangMode==='fixed'||invite.partnerLangMode==='auto')sess.partnerLangMode=invite.partnerLangMode;
   if(invite.partnerFixedLang!==undefined)sess.partnerFixedLang=normalizeLangSetting(invite.partnerFixedLang)||'';
   if(invite.partnerLastSentLang!==undefined)sess.partnerLastSentLang=normalizeLangSetting(invite.partnerLastSentLang)||'';

@@ -1891,6 +1891,7 @@ function transportConnect(convId,opts){
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),side:localMeta.side,identityId:localMeta.identityId,ts:Date.now(),seq:++msgSeq};
+    Object.assign(hello,buildRoutingHintFields(sess));
     addDiagLog('TX hello name='+hello.name+' lang='+hello.lang);
     try{ws.send(JSON.stringify(hello));}catch(_){}
     fetchBackfill();
@@ -1969,6 +1970,18 @@ function sendReliable(ev){
   var m=Object.assign({},ev,{session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:localMeta.side,identityId:localMeta.identityId,deviceId:DEVICE_ID,role:localMeta.side,ts:Date.now(),seq:++msgSeq});
   if(ws&&ws.readyState===1){try{ws.send(JSON.stringify(m));if(m.id)pendingAcks[m.id]=m;return true;}catch(_){}}
   queueOutMsg(m);return false;
+}
+
+function buildRoutingHintFields(sess){
+  var s=normalizeSession(sess||{});
+  return {
+    partnerLangMode:s.partnerLangMode,
+    partnerFixedLang:normalizeLangSetting(s.partnerFixedLang)||'',
+    partnerEffectiveReplyLang:normalizeLangSetting(s.partnerEffectiveReplyLang)||'',
+    ownerLangMode:s.ownerLangMode,
+    ownerFixedLang:normalizeLangSetting(s.ownerFixedLang)||'',
+    ownerEffectiveReplyLang:normalizeLangSetting(s.ownerEffectiveReplyLang)||''
+  };
 }
 
 function markMessageDeliveryState(convId,msgId,status,stamp){
@@ -2055,6 +2068,7 @@ function saveLocalName(el){
     var helloMeta=buildLocalEnvelope(sess,{});
     var helloMsg={type:'hello',transient:true,session:connectedConvId,from:DEVICE_ID,participant:PART_ID,side:helloMeta.side,identityId:helloMeta.identityId,
       name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),ts:Date.now(),seq:++msgSeq};
+    Object.assign(helloMsg,buildRoutingHintFields(sess));
     try{ws.send(JSON.stringify(helloMsg));}catch(_){}
   }
   toast('Name saved');
@@ -2120,6 +2134,7 @@ function setMyLang(code){
       name:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       myHandle:firstRealName(sess&&sess.myHandle,sess&&sess.myName,getPreferredOwnerName())||'yournamehere',
       lang:effectiveLang,effectiveTargetLang:getEffectiveTargetLang(sess),side:helloMeta.side,identityId:helloMeta.identityId,ts:Date.now(),seq:++msgSeq};
+    Object.assign(hello,buildRoutingHintFields(sess));
     try{ws.send(JSON.stringify(hello));}catch(_){}
   }
   if(!code){toast('🌐 Language set to Auto-detect');}
@@ -2279,7 +2294,7 @@ function closeInviteScreen(){
 }
 // copyInviteLink / nativeShareInvite removed (invite card uses DOM event listeners)
 function resendInvite(){
-  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess)});}
+  if(state.pendingInviteId&&connectedConvId){var sess=getSession(state.pendingInviteId);if(sess)transportSend(Object.assign({type:'hello',transient:true,name:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,getPreferredOwnerName())||'yournamehere',lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess)},buildRoutingHintFields(sess)));}
   toast('Invite resent');
 }
 
@@ -2359,7 +2374,7 @@ function saveOwnerName(el){
   updatePartnerHeader(sess);
   renderSessionList();
   appendCanonicalEvent(sess.convId,'name_change',{prevName:oldName,nextName:v},buildLocalEnvelope(sess,{}));
-  transportSend({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),timestamp:Date.now()});
+  transportSend(Object.assign({type:'hello',transient:true,name:v,myHandle:v,lang:effectiveLangFromSession(sess),effectiveTargetLang:getEffectiveTargetLang(sess),timestamp:Date.now()},buildRoutingHintFields(sess)));
 }
 
 var HISTORY_SYNC_MAX=1500;
@@ -3748,7 +3763,7 @@ function composerInput(){
 function composerKeydown(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}}
 function sendTyping(kind){
   var sess=getSession(state.activeConvId);var n=normalizeSession(sess||{});
-  transportSend({type:'typing',typing:kind||'start',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n),lang:effectiveLangFromSession(n),timestamp:Date.now()});
+  transportSend(Object.assign({type:'typing',typing:kind||'start',name:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',myHandle:firstRealName(n.myHandle,n.myName,getPreferredOwnerName())||'yournamehere',effectiveTargetLang:getEffectiveTargetLang(n),lang:effectiveLangFromSession(n),timestamp:Date.now()},buildRoutingHintFields(n)));
 }
 function showTyping(n,kind){
   var el=document.getElementById('typing-bar');var sess=getSession(state.activeConvId);

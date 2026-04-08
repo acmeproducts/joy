@@ -4559,6 +4559,28 @@ function setupTabCoordination(){
   }
 }
 
+function processJoinFromUrl(){
+  var params=new URLSearchParams(location.search);
+  var joinId=String(params.get('join')||'').trim();
+  if(!joinId||joinId==='share')return false;
+  var p=getPrefs();
+  var targetId=joinId;
+  if((connectedConvId&&connectedConvId!==targetId)||(state.activeConvId&&state.activeConvId!==targetId)){
+    addDiagLog('url-join: switching to '+targetId.slice(0,8)+' from '+String(connectedConvId||state.activeConvId||'').slice(0,8));
+    transportDisconnect({preserveQueue:false});
+  }
+  var sess=getSession(targetId);
+  if(!sess){
+    var now=Date.now();
+    var ownerName=firstRealName(p.globalName,p.userName)||'yournamehere';
+    sess=normalizeSession({convId:targetId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    putSession(sess);
+    var order=getSessionOrder();order.unshift(targetId);saveSessionOrder(normalizeSessionOrder(order));
+  }
+  openSession(targetId);
+  return true;
+}
+
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
@@ -4600,6 +4622,7 @@ document.addEventListener('DOMContentLoaded',function(){
   updateDot();
 
   function continueStartup(){
+    if(processJoinFromUrl())return;
     // Deep link — share-origin invite only
     var up=new URLSearchParams(location.search);
     var hp=new URLSearchParams((location.hash||'').replace(/^#/,''));
@@ -4652,6 +4675,7 @@ document.addEventListener('DOMContentLoaded',function(){
       else{showEmptyShell();}
     }
   }
+  window.addEventListener('popstate',function(){processJoinFromUrl();});
   ensureUserName(function(){continueStartup();});
   var onboardInput=document.getElementById('onboarding-name');
   if(onboardInput)onboardInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();submitOnboardingName();}});

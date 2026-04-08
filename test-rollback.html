@@ -1071,6 +1071,41 @@ function getSessionLabel(sess){
   if(me)return me+' / Invite Pending'+(ts?(' — '+ts):'');
   return 'new chat';
 }
+function getDefaultNewChatRoutingPrefs(explicit){
+  var p=getPrefs();
+  var src=(explicit&&typeof explicit==='object')?explicit:{};
+  var hasModalMy=hasOwn(p,'lastNewChatMyLang');
+  var hasModalPartner=hasOwn(p,'lastNewChatPartnerLang');
+  var hasModalAutoRead=hasOwn(p,'lastNewChatAutoRead');
+  var modalMy=hasModalMy?(normalizeLangSetting(p.lastNewChatMyLang)||'auto'):'';
+  var modalPartner=hasModalPartner?(normalizeLangSetting(p.lastNewChatPartnerLang)||'auto'):'';
+  var myFallback=hasModalMy?modalMy:((normalizeLangSetting(p.myLang)||'')||'auto');
+  var partnerFallback=hasModalPartner?modalPartner:((normalizeLangSetting(p.partnerLang)||'')||'auto');
+  var ownerMode=(src.ownerLangMode==='fixed'||src.ownerLangMode==='auto')?src.ownerLangMode:'';
+  var ownerFixed=(src.ownerFixedLang!==undefined)?(normalizeLangSetting(src.ownerFixedLang)||''):'';
+  var partnerMode=(src.partnerLangMode==='fixed'||src.partnerLangMode==='auto')?src.partnerLangMode:'';
+  var partnerFixed=(src.partnerFixedLang!==undefined)?(normalizeLangSetting(src.partnerFixedLang)||''):'';
+  if(!ownerMode&&src.ownerFixedLang!==undefined)ownerMode=ownerFixed?'fixed':'auto';
+  if(!partnerMode&&src.partnerFixedLang!==undefined)partnerMode=partnerFixed?'fixed':'auto';
+  if(!ownerMode){ownerMode=(myFallback&&myFallback!=='auto')?'fixed':'auto';ownerFixed=(myFallback&&myFallback!=='auto')?myFallback:'';}
+  if(!partnerMode){partnerMode=(partnerFallback&&partnerFallback!=='auto')?'fixed':'auto';partnerFixed=(partnerFallback&&partnerFallback!=='auto')?partnerFallback:'';}
+  var autoRead=src.autoSpeakIncoming;
+  if(autoRead===undefined&&src.autoRead!==undefined)autoRead=src.autoRead;
+  if(autoRead===undefined){
+    if(hasModalAutoRead)autoRead=(p.lastNewChatAutoRead!==false);
+    else if(hasOwn(p,'autoSpeakIncoming'))autoRead=!!p.autoSpeakIncoming;
+    else autoRead=true;
+  }else{
+    autoRead=!!autoRead;
+  }
+  return {
+    ownerLangMode:ownerMode,
+    ownerFixedLang:ownerFixed,
+    partnerLangMode:partnerMode,
+    partnerFixedLang:partnerFixed,
+    autoRead:autoRead
+  };
+}
 
 function normalizeBacktranslatePayload(payload,fallbacks){
   var now=Date.now();
@@ -2215,15 +2250,16 @@ function createNewSession(silent,opts){
   opts=opts||{};
   ensureUserName(function(name){
     var cid=uid();var p=getPrefs();var now=Date.now();
-    var selectedMyLang=(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'';
-    var selectedPeerLang=(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'';
-    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:(selectedMyLang?'fixed':'auto'),ownerFixedLang:selectedMyLang||'',partnerLangMode:(selectedPeerLang?'fixed':'auto'),partnerFixedLang:selectedPeerLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var routing=getDefaultNewChatRoutingPrefs({ownerFixedLang:(opts.myLang&&opts.myLang!=='auto')?opts.myLang:'',partnerFixedLang:(opts.partnerLang&&opts.partnerLang!=='auto')?opts.partnerLang:'',autoRead:opts.autoRead});
+    var selectedMyLang=(routing.ownerLangMode==='fixed')?routing.ownerFixedLang:'';
+    var selectedPeerLang=(routing.partnerLangMode==='fixed')?routing.partnerFixedLang:'';
+    var sess=normalizeSession({convId:cid,myHandle:name,myName:name,partnerHandle:'',peerName:'',ownerLangMode:routing.ownerLangMode,ownerFixedLang:routing.ownerFixedLang,partnerLangMode:routing.partnerLangMode,partnerFixedLang:routing.partnerFixedLang,createdAt:now,lastActivity:now,lastViewedAt:now});
     p.myLang=selectedMyLang||'';
     p.partnerLang=selectedPeerLang||'';
-    p.autoSpeakIncoming=opts.autoRead!==false;
+    p.autoSpeakIncoming=routing.autoRead;
     p.lastNewChatMyLang=normalizeLangSetting(opts.myLang)||'auto';
     p.lastNewChatPartnerLang=normalizeLangSetting(opts.partnerLang)||'auto';
-    p.lastNewChatAutoRead=opts.autoRead!==false;
+    p.lastNewChatAutoRead=routing.autoRead;
     savePrefs(p);
     state.autoSpeakIncoming=!!p.autoSpeakIncoming;
     updateAutoReadBtn();
@@ -4645,7 +4681,8 @@ function processJoinFromUrl(){
   if(!sess){
     var now=Date.now();
     var ownerName=firstRealName(p.globalName,p.userName)||'yournamehere';
-    sess=normalizeSession({convId:targetId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+    var routing=getDefaultNewChatRoutingPrefs();
+    sess=normalizeSession({convId:targetId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:routing.ownerLangMode,ownerFixedLang:routing.ownerFixedLang,partnerLangMode:routing.partnerLangMode,partnerFixedLang:routing.partnerFixedLang,createdAt:now,lastActivity:now,lastViewedAt:now});
     putSession(sess);
     var order=getSessionOrder();order.unshift(targetId);saveSessionOrder(normalizeSessionOrder(order));
   }
@@ -4716,7 +4753,8 @@ document.addEventListener('DOMContentLoaded',function(){
         if(!sess){
           var now=Date.now();
           var ownerName=firstRealName(getPrefs().globalName,getPrefs().userName)||'yournamehere';
-          sess=normalizeSession({convId:invite.sessionId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:(p.myLang?'fixed':'auto'),ownerFixedLang:p.myLang||'',createdAt:now,lastActivity:now,lastViewedAt:now});
+          var routing=getDefaultNewChatRoutingPrefs(invite);
+          sess=normalizeSession({convId:invite.sessionId,myHandle:ownerName,myName:ownerName,partnerHandle:'',peerName:'',ownerLangMode:routing.ownerLangMode,ownerFixedLang:routing.ownerFixedLang,partnerLangMode:routing.partnerLangMode,partnerFixedLang:routing.partnerFixedLang,createdAt:now,lastActivity:now,lastViewedAt:now});
           putSession(sess);
           var order=getSessionOrder();order.unshift(invite.sessionId);saveSessionOrder(normalizeSessionOrder(order));
         }else{

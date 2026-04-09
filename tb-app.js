@@ -82,6 +82,31 @@ const tbApp = {
     // Check for room param
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('r');
+    const sharedData = params.get('d');
+
+    if (roomId && !tbTransport.getRoomData(roomId) && sharedData) {
+      try {
+        const decoded = decodeURIComponent(escape(atob(sharedData)));
+        const payload = JSON.parse(decoded);
+        if (payload?.id === roomId && payload.myLang && payload.theirLang) {
+          const roomData = {
+            id: roomId,
+            name: payload.name || 'Shared Room',
+            myLang: payload.myLang,
+            theirLang: payload.theirLang,
+            createdAt: new Date().toISOString(),
+            creator: payload.creator || 'shared-link',
+            initiated: true
+          };
+          const dataStr = JSON.stringify(roomData);
+          sessionStorage.setItem(`tb_room_${roomId}`, dataStr);
+          localStorage.setItem(`tb_room_${roomId}`, dataStr);
+          tbLog.log('Recovered room from share link', { id: roomId });
+        }
+      } catch (err) {
+        tbLog.warn('Invalid share-link room payload', { id: roomId });
+      }
+    }
 
     if (roomId) {
       this.joinRoomPhase(roomId);
@@ -158,7 +183,15 @@ const tbApp = {
 
   getShareLink() {
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?r=${this.roomId}`;
+    const shareData = {
+      id: this.roomId,
+      name: this.roomData?.name || '',
+      myLang: this.roomData?.myLang || this.myLang,
+      theirLang: this.roomData?.theirLang || this.theirLang,
+      creator: this.roomData?.creator || ''
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(shareData))));
+    return `${baseUrl}?r=${this.roomId}&d=${encodeURIComponent(encoded)}`;
   },
 
   async joinRoomPhase(roomId) {

@@ -615,8 +615,8 @@ var uid=function(){return Date.now().toString(36)+Math.random().toString(36).sli
 // STATE
 // ════════════════════════════════════════════════════════
 var state={activeConvId:null,messages:[],connected:false,autoSpeakIncoming:false,participants:{},
-  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false,callState:'idle',callAccepted:false,pendingKind:'',incomingKind:'',callOpInFlight:false,mediaOpInFlight:false,ccOpInFlight:false,lastSignalHash:'',lastRemoteMediaHash:''},
-  ccTranscript:{entries:[],visible:true,collapsed:false}};
+  mediaRuntime:{stream:null,kind:'',activeSessionId:'',floatVisible:false,videoEnabled:false,micEnabled:false,collapsed:false,ccEnabled:false,pc:null,remoteStream:null,remoteVideoEnabled:false,remoteMicEnabled:false,remotePeerId:'',makingOffer:false,ignoreOffer:false,callState:'idle',callAccepted:false,pendingKind:'',incomingKind:'',callOpInFlight:false,mediaOpInFlight:false,ccOpInFlight:false,lastSignalHash:'',lastRemoteMediaHash:'',disconnectTimer:null},
+  ccTranscript:{entries:[],visible:true,collapsed:false,seen:{} }};
 var ws=null,connectedConvId=null,socketState='closed',intentionalClose=false;
 var rcTimer=null,rcAttempts=0,hbTimer=null,lastPongAt=0,lastRxAt=0,_hiddenAt=0;
 var outQ=[],pendingAcks={},lastRelaySeq=0,msgSeq=0,inboundSeen={};
@@ -1097,7 +1097,7 @@ var VideoSurfaceModule=(function(){
       var shouldEnable=(typeof enabled==='boolean')?enabled:!state.mediaRuntime.ccEnabled;
       if(shouldEnable===state.mediaRuntime.ccEnabled)return state.mediaRuntime.ccEnabled;
       state.mediaRuntime.ccEnabled=shouldEnable;
-      if(shouldEnable){startCCCapture();state.ccTranscript.visible=true}else stopCCCapture();
+      if(shouldEnable){startCCCapture();state.ccTranscript.visible=true}else{stopCCCapture();state.ccTranscript.visible=false}
       renderMediaShareUI();updateComposerMicState();return state.mediaRuntime.ccEnabled
     },
     getTranscriptEntries:function(){
@@ -1213,9 +1213,21 @@ function ensurePeerConnection(){
     renderMediaShareUI();
   };
   pc.onconnectionstatechange=function(){
-    if(pc.connectionState==='failed'||pc.connectionState==='closed'||pc.connectionState==='disconnected'){
-      if(pc.connectionState!=='connected'){state.mediaRuntime.remoteStream=null;state.mediaRuntime.remoteVideoEnabled=false;state.mediaRuntime.remoteMicEnabled=false;renderMediaShareUI()}
+    if(pc.connectionState==='connected'){
+      if(state.mediaRuntime.disconnectTimer){clearTimeout(state.mediaRuntime.disconnectTimer);state.mediaRuntime.disconnectTimer=null}
+      return;
     }
+    if(pc.connectionState==='failed'&&state.mediaRuntime.callState==='active'){maybeStartOffer();return}
+    if(pc.connectionState==='closed'||pc.connectionState==='disconnected'){
+      if(state.mediaRuntime.disconnectTimer)clearTimeout(state.mediaRuntime.disconnectTimer);
+      state.mediaRuntime.disconnectTimer=setTimeout(function(){
+        if(pc.connectionState==='connected')return;
+        state.mediaRuntime.remoteStream=null;state.mediaRuntime.remoteVideoEnabled=false;state.mediaRuntime.remoteMicEnabled=false;renderMediaShareUI()
+      },4500);
+    }
+  };
+  pc.oniceconnectionstatechange=function(){
+    if((pc.iceConnectionState==='failed'||pc.iceConnectionState==='disconnected')&&state.mediaRuntime.callState==='active'){maybeStartOffer()}
   };
   syncLocalTracksToPeer();
   return pc;
@@ -1305,7 +1317,7 @@ function renderTranscriptUI(){
   }).join('');body.scrollTop=body.scrollHeight
 }
 function toggleTranscriptCollapse(){state.ccTranscript.collapsed=!state.ccTranscript.collapsed;renderTranscriptUI();var ui=getCcUiState();ui.collapsed=state.ccTranscript.collapsed;saveCcUiState(ui)}
-function closeTranscriptWindow(){state.ccTranscript.visible=false;renderTranscriptUI()}
+function closeTranscriptWindow(){if(state.mediaRuntime.ccEnabled)VideoSurfaceModule.toggleCC(false);state.ccTranscript.visible=false;renderTranscriptUI()}
 function addCcTranscriptEntry(p){
   state.ccTranscript.entries.push({ts:p.ts||Date.now(),convId:p.convId||state.activeConvId||'',dir:p.dir||'local',sourceText:p.sourceText||'',targetText:p.targetText||'',sourceLang:p.sourceLang||'',targetLang:p.targetLang||'',origin:'video_surface'});
   if(state.ccTranscript.entries.length>120)state.ccTranscript.entries=state.ccTranscript.entries.slice(-120);
@@ -1345,6 +1357,13 @@ function emitCcTranscript(text){
 }
 function handleRemoteCcTranscript(d,sess){
   var src=(d.sourceText||'').trim();if(!src)return;
+  var dedupeKey=[sess&&sess.convId||'',d.from||'',String(d.timestamp||''),src].join('|');
+  if(state.ccTranscript.seen[dedupeKey])return;
+  state.ccTranscript.seen[dedupeKey]=Date.now();
+  var seenKeys=Object.keys(state.ccTranscript.seen);
+  if(seenKeys.length>400){
+    seenKeys.sort(function(a,b){return state.ccTranscript.seen[a]-state.ccTranscript.seen[b]}).slice(0,120).forEach(function(k){delete state.ccTranscript.seen[k]})
+  }
   var srcLang=normalizeLangSetting(d.sourceLang)||detectLang(src,'en');
   var tgtLang=resolveEffectiveLang(sess,'owner','en');var stamp=Number(d.timestamp)||Date.now();
   translate(src,srcLang,tgtLang).then(function(out){addCcTranscriptEntry({ts:stamp,convId:sess.convId,dir:'remote',sourceText:src,targetText:out||src,sourceLang:srcLang,targetLang:tgtLang});if(state.autoSpeakIncoming)speak(out||src,tgtLang,null)})

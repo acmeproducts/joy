@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<!-- talkbridge · 2026-04-09 · modular rebuild -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>TalkBridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Lora:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0a0a0a;--surface:#161616;--surface2:#222;
+  --teal:#2E8B8B;--teal-bright:#3FC1C1;
+  --text:#e8e4df;--text-dim:#888;--text-muted:#555;
+  --red:#e74c3c;--green:#2ecc71;--radius:14px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:"DM Sans",sans-serif;color:var(--text);}
+.lobby{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:10;background:var(--bg);transition:opacity .3s;overflow-y:auto;}
+.lobby.hidden{opacity:0;pointer-events:none;}
+.lobby-card{width:min(100%,380px);display:flex;flex-direction:column;gap:16px;}
+.lobby-brand{font-family:"Lora",serif;font-size:32px;font-weight:600;color:var(--teal-bright);text-align:center;letter-spacing:-0.5px;}
+.lobby-sub{font-size:13px;color:var(--text-dim);text-align:center;margin-top:-8px;}
+.lobby-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:-8px;}
+.lobby-input{width:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--surface2);border-radius:10px;padding:12px 14px;font-size:15px;font-family:"DM Sans",sans-serif;outline:none;}
+.lobby-input:focus{border-color:var(--teal);}
+.lobby-input::placeholder{color:var(--text-muted);}
+.lobby-select{width:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--surface2);border-radius:10px;padding:12px 14px;font-size:15px;font-family:"DM Sans",sans-serif;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer;}
+.lobby-select:focus{border-color:var(--teal);}
+.lobby-btn{width:100%;background:var(--teal);color:#fff;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;transition:opacity .15s;margin-top:4px;}
+.lobby-btn:hover{opacity:.85;}
+.lobby-btn:disabled{opacity:.4;cursor:default;}
+.lobby-btn.secondary{background:var(--surface2);color:var(--text);}
+.lobby-btn.secondary:hover{background:var(--teal);color:#fff;opacity:1;}
+.lobby-link-box{background:var(--surface);border:1.5px solid var(--surface2);border-radius:10px;padding:12px;word-break:break-all;font-size:11px;color:var(--teal-bright);margin-bottom:12px;cursor:pointer;}
+.lobby-link-row{display:flex;gap:8px;}
+.lobby-link-btn{flex:1;background:var(--surface2);color:var(--text);border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
+.lobby-link-btn:hover{background:var(--teal);color:#fff;}
+.lobby-preview{width:min(100%,280px);aspect-ratio:16/9;border-radius:var(--radius);overflow:hidden;background:var(--surface);margin:0 auto 8px;}
+.lobby-preview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+.recent-rooms{margin-top:6px;display:flex;flex-direction:column;gap:8px;}
+.recent-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;}
+.recent-item{background:var(--surface);border:1px solid var(--surface2);border-radius:10px;padding:10px 12px;}
+.recent-item-top{display:flex;align-items:center;gap:8px;}
+.recent-open{flex:1;min-width:0;background:none;border:none;color:var(--text);text-align:left;cursor:pointer;font:inherit;font-size:14px;font-weight:500;}
+.recent-open small{display:block;color:var(--text-dim);font-size:11px;}
+.recent-actions{display:flex;gap:6px;margin-top:8px;}
+.recent-act{flex:1;background:rgba(255,255,255,.06);color:var(--text-dim);border:none;border-radius:8px;padding:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
+.recent-act:hover{background:var(--teal);color:#fff;}
+.recent-act.danger{color:var(--red);}
+.recent-act.danger:hover{background:var(--red);color:#fff;}
+.lobby-footer{display:flex;gap:8px;margin-top:4px;}
+.lobby-footer-btn{flex:1;background:none;border:1px solid var(--surface2);border-radius:8px;color:var(--text-dim);padding:8px;font-size:12px;cursor:pointer;font-family:"DM Sans",sans-serif;}
+.lobby-footer-btn:hover{background:var(--surface2);color:var(--text);}
+.joining-screen{position:fixed;inset:0;background:var(--bg);z-index:20;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.joining-screen.show{display:flex;}
+.joining-spinner{width:40px;height:40px;border:3px solid var(--surface2);border-top-color:var(--teal-bright);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.joining-label{font-size:14px;color:var(--text-dim);}
+.log-overlay{position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:50;display:none;flex-direction:column;}
+.log-overlay.show{display:flex;}
+.log-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--surface2);flex-shrink:0;gap:8px;flex-wrap:wrap;}
+.log-title{font-family:"Lora",serif;font-size:17px;color:var(--teal-bright);}
+.log-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.log-btn{background:var(--surface2);color:var(--text);border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
+.log-btn:hover{background:var(--teal);color:#fff;}
+.log-body{flex:1;overflow-y:auto;padding:10px 16px 20px;font-family:monospace;font-size:11px;line-height:1.7;color:#aaa;}
+.log-row{border-bottom:1px solid rgba(255,255,255,.03);padding:1px 0;}
+.log-row .ts{color:#555;}.log-row .ev{color:var(--teal-bright);}
+.log-row.error .ev{color:#e74c3c;}.log-row.warn .ev{color:#f39c12;}.log-row.ok .ev{color:#2ecc71;}
+.call{position:fixed;inset:0;background:#000;z-index:5;display:none;flex-direction:column;}
+.call.active{display:flex;}
+.call-videos{position:relative;background:#000;overflow:hidden;flex:1;min-height:0;}
+#remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:1;}
+#local-video{position:absolute;top:8px;right:8px;width:min(24%,120px);aspect-ratio:16/9;border-radius:8px;object-fit:cover;transform:scaleX(-1);border:2px solid rgba(255,255,255,.2);box-shadow:0 2px 12px rgba(0,0,0,.5);z-index:3;background:var(--surface);}
+.no-video-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;color:var(--text-muted);z-index:1;}
+.solo-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;text-align:center;pointer-events:none;}
+.solo-banner-text{background:rgba(0,0,0,.6);color:var(--text-dim);font-size:13px;padding:8px 18px;border-radius:20px;backdrop-filter:blur(6px);}
+.subtitle-area{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:8px 14px 10px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;background:linear-gradient(transparent,rgba(0,0,0,.6) 40%);}
+.subtitle-line{max-width:94%;padding:4px 12px;border-radius:6px;font-size:14px;line-height:1.35;text-align:center;word-break:break-word;}
+.subtitle-line.partner{background:rgba(0,0,0,.6);color:#fff;}
+.subtitle-line.mine{background:rgba(46,139,139,.2);color:rgba(255,255,255,.65);font-size:12px;}
+.partner-speaking-indicator{position:absolute;right:12px;bottom:56px;z-index:5;min-width:34px;height:24px;border-radius:999px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);color:#fff;display:none;align-items:center;justify-content:center;font-size:18px;font-weight:700;line-height:1;backdrop-filter:blur(4px);}
+.partner-speaking-indicator.show{display:flex;animation:pulseSpeak .9s ease-in-out infinite alternate;}
+@keyframes pulseSpeak{from{opacity:.55;transform:scale(.98)}to{opacity:1;transform:scale(1.03)}}
+.call-transcript{position:relative;flex:0 0 30%;min-height:0;max-height:45%;overflow-y:auto;background:var(--bg);border-top:1px solid var(--surface2);padding:0 12px;}
+.call-transcript-header{display:flex;align-items:center;justify-content:flex-start;padding:8px 0;position:sticky;top:0;background:var(--bg);z-index:1;gap:8px;}
+.call-transcript-title{font-size:12px;font-weight:700;color:var(--text-dim);letter-spacing:.3px;}
+.call-transcript-actions{display:flex;gap:6px;}
+.call-transcript-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;color:#8f959d;border:1px solid rgba(255,255,255,.18);border-radius:7px;cursor:pointer;padding:0;}
+.call-transcript-btn:hover{background:rgba(255,255,255,.06);color:#b6bcc3;border-color:rgba(255,255,255,.26);}
+.call-transcript-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.call.transcript-collapsed .chevron-down{display:none;}
+.call:not(.transcript-collapsed) .chevron-right{display:none;}
+.transcript-more-indicator{position:absolute;right:6px;top:50%;transform:translateY(-50%);z-index:3;width:22px;height:22px;border-radius:999px;background:rgba(46,139,139,.2);color:var(--teal-bright);border:1px solid rgba(63,193,193,.35);display:none;align-items:center;justify-content:center;font-size:14px;font-weight:700;pointer-events:none;}
+.transcript-more-indicator.show{display:flex;}
+.call.transcript-collapsed .call-transcript{flex:0 0 32px;max-height:32px;overflow:hidden;}
+.call.transcript-collapsed #transcript-body{display:none;}
+.call-videos.swapped #remote-video{top:8px;right:8px;left:auto;bottom:auto;width:min(24%,120px);height:auto;aspect-ratio:16/9;border-radius:8px;border:2px solid rgba(255,255,255,.2);box-shadow:0 2px 12px rgba(0,0,0,.5);z-index:3;}
+.call-videos.swapped #local-video{inset:0;width:100%;height:100%;border-radius:0;border:none;box-shadow:none;z-index:1;}
+.tr-entry{padding:6px 0;}
+.tr-bubble{border:1px solid rgba(255,255,255,.14);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.02);}
+.tr-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.08);font-size:11px;}
+.tr-who{font-weight:700;color:var(--text-dim);}
+.tr-who.mine{color:var(--teal-bright);}
+.tr-time{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+.tr-body{display:grid;grid-template-columns:1fr 1px 1fr;}
+.tr-col{padding:8px 10px;display:flex;flex-direction:column;gap:6px;min-width:0;}
+.tr-divider{background:rgba(255,255,255,.08);}
+.tr-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);}
+.tr-text{font-size:13px;line-height:1.4;color:var(--text);word-break:break-word;}
+.tr-col.source .tr-text{color:var(--text-dim);}
+.tr-tts{border:none;background:transparent;color:#8f959d;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;font-size:10px;line-height:1;}
+.tr-tts:hover{color:#c4ccd4;}
+.tr-tts svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.tr-empty{color:var(--text-muted);font-size:12px;font-style:italic;padding:12px 0;}
+.call-controls{display:flex;align-items:center;justify-content:center;gap:14px;padding:8px 16px max(8px,env(safe-area-inset-bottom));background:var(--surface);flex-shrink:0;}
+.ctrl-btn{width:48px;height:48px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .1s;background:rgba(255,255,255,.1);color:#fff;}
+.ctrl-btn:hover{background:rgba(255,255,255,.18);}
+.ctrl-btn:active{transform:scale(.93);}
+.ctrl-btn.off{background:rgba(231,76,60,.2);color:var(--red);}
+.ctrl-btn.end-call{background:var(--red);color:#fff;width:56px;height:48px;border-radius:24px;}
+.ctrl-btn.end-call:hover{background:#c0392b;}
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(255,255,255,.15);backdrop-filter:blur(12px);color:#fff;font-size:13px;font-weight:600;padding:10px 20px;border-radius:22px;z-index:100;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+@media(min-width:768px){
+  .lobby-card{width:420px;}
+  #local-video{width:min(18%,160px);}
+  .call-controls{gap:20px;padding:10px 24px;}
+  .ctrl-btn{width:54px;height:54px;}
+  .ctrl-btn.end-call{width:64px;height:54px;}
+  .subtitle-line{font-size:16px;max-width:80%;}
+  .call-transcript{flex-basis:28%;}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .call-transcript{flex-basis:34%;}
+  #local-video{width:min(16%,90px);top:6px;right:6px;}
+  .call-controls{gap:10px;padding:6px 12px;}
+  .ctrl-btn{width:40px;height:40px;}
+  .ctrl-btn.end-call{width:48px;height:40px;}
+  .subtitle-line{font-size:12px;padding:3px 8px;}
+}
+@media(max-width:400px){
+  .call-controls{gap:10px;}
+  .ctrl-btn{width:44px;height:44px;}
+  .ctrl-btn.end-call{width:52px;height:44px;}
+}
+</style>
+</head>
+<body>
+
+<div class="lobby" id="lobby">
+  <div class="lobby-card">
+    <div class="lobby-brand">TalkBridge</div>
+    <div class="lobby-sub">Video call with live subtitles</div>
+    <div id="lobby-setup">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div><div class="lobby-label" style="margin-bottom:6px;">Room name (optional)</div>
+        <input class="lobby-input" id="room-name" placeholder="e.g. English ↔ Thai session" maxlength="60"></div>
+        <div><div class="lobby-label" style="margin-bottom:6px;">I speak</div>
+        <select class="lobby-select" id="my-lang"></select></div>
+        <div><div class="lobby-label" style="margin-bottom:6px;">They speak</div>
+        <select class="lobby-select" id="their-lang"></select></div>
+        <button class="lobby-btn" id="create-btn" onclick="createRoom()" disabled>Start a room</button>
+      </div>
+      <div class="recent-rooms" id="recent-rooms" style="display:none;">
+        <div class="recent-title">Recent rooms</div>
+        <div id="recent-rooms-list"></div>
+      </div>
+      <div class="lobby-footer">
+        <button class="lobby-footer-btn" onclick="openLog()">🪲 Debug log</button>
+      </div>
+    </div>
+    <div id="lobby-waiting" style="display:none;">
+      <div class="lobby-preview"><video id="preview-video" autoplay muted playsinline></video></div>
+      <div style="font-size:14px;color:var(--text-dim);text-align:center;margin-bottom:10px;" id="room-name-display"></div>
+      <div class="lobby-link-box" id="lobby-link" onclick="copyLink()">—</div>
+      <div class="lobby-link-row">
+        <button class="lobby-link-btn" onclick="copyLink()">Copy link</button>
+        <button class="lobby-link-btn" onclick="shareLink()">Share</button>
+      </div>
+      <button class="lobby-btn secondary" style="margin-top:8px;" onclick="backToSetup()">← Back</button>
+    </div>
+  </div>
+</div>
+
+<div class="joining-screen" id="joining-screen">
+  <div class="joining-spinner"></div>
+  <div class="joining-label">Joining call…</div>
+</div>
+
+<div class="log-overlay" id="log-overlay">
+  <div class="log-header">
+    <span class="log-title">🪲 Debug Log</span>
+    <div class="log-actions">
+      <button class="log-btn" onclick="copyLogText()">Copy</button>
+      <button class="log-btn" onclick="clearLogText()">Clear</button>
+      <button class="log-btn" onclick="closeLog()">✕ Close</button>
+    </div>
+  </div>
+  <div class="log-body" id="log-body"></div>
+</div>
+
+<div class="log-overlay" id="room-tr-overlay">
+  <div class="log-header">
+    <span class="log-title" id="room-tr-title">Transcript</span>
+    <div class="log-actions">
+      <button class="log-btn" onclick="copyRoomTr()">Copy</button>
+      <button class="log-btn" onclick="closeRoomTr()">✕ Close</button>
+    </div>
+  </div>
+  <div class="log-body" id="room-tr-body" style="font-family:'DM Sans',sans-serif;font-size:13px;"></div>
+</div>
+
+<div class="call" id="call-screen">
+  <div class="call-videos" id="call-videos">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline></video>
+    <div class="no-video-placeholder" id="no-video-msg">👤</div>
+    <div class="solo-banner" id="solo-banner" style="display:none;"><div class="solo-banner-text">Waiting for partner…</div></div>
+    <div class="partner-speaking-indicator" id="partner-speaking-indicator" aria-hidden="true">…</div>
+    <div class="subtitle-area" id="subtitle-area"></div>
+  </div>
+  <div class="call-controls">
+    <button class="ctrl-btn" id="mic-btn" onclick="toggleMic()" title="Mute/unmute">
+      <svg id="mic-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <svg id="mic-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/><line x1="2" y1="22" x2="22" y2="2" stroke="#e74c3c" stroke-width="2.5"/></svg>
+    </button>
+    <button class="ctrl-btn end-call" onclick="hangUp()" title="End call">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 2.59 3.4z" transform="rotate(135 12 12)"/></svg>
+    </button>
+    <button class="ctrl-btn" id="cam-btn" onclick="toggleCam()" title="Camera">
+      <svg id="cam-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      <svg id="cam-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="22" x2="22" y2="2" stroke="#e74c3c" stroke-width="2.5"/></svg>
+    </button>
+  </div>
+  <div class="call-transcript" id="call-transcript">
+    <div class="call-transcript-header">
+      <div class="call-transcript-actions">
+        <button class="call-transcript-btn" id="transcript-toggle-btn" onclick="toggleTranscript()" title="Collapse" aria-expanded="true">
+          <svg class="chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+          <svg class="chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button class="call-transcript-btn" id="transcript-tts-toggle" onclick="toggleTranscriptTts()" aria-pressed="false">
+          <svg class="tts-on" viewBox="0 0 24 24"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18 7a7 7 0 0 1 0 10"/></svg>
+          <svg class="tts-off" viewBox="0 0 24 24"><path d="M4 10h4l5-4v12l-5-4H4z"/><line x1="3" y1="21" x2="21" y2="3" stroke="#e74c3c" stroke-width="2.5"/></svg>
+        </button>
+        <button class="call-transcript-btn" onclick="shareLink()" title="Share invite">
+          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.8 10.8l6.4-3.6M8.8 13.2l6.4 3.6"/></svg>
+        </button>
+        <button class="call-transcript-btn" onclick="copyTr()" title="Copy transcript">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        </button>
+        <button class="call-transcript-btn" onclick="exportTxt()" title="Download transcript">
+          <svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 20h16"/></svg>
+        </button>
+      </div>
+      <span class="call-transcript-title" id="transcript-ribbon-title">Transcript</span>
+    </div>
+    <div id="transcript-body"><div class="tr-empty">Speak to see transcript here.</div></div>
+    <div class="transcript-more-indicator" id="transcript-more-indicator" aria-hidden="true">↓</div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="tb-media.js"></script>
+<script src="tb-translate.js"></script>
+<script src="tb-transcribe.js"></script>
+<script src="tb-transport.js"></script>
+<script src="tb-app.js"></script>
+</body>
+</html>

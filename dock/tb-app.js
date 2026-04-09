@@ -68,6 +68,11 @@ const tbApp = {
   audioMuted: false,
   videoDisabled: false,
   transcriptTtsEnabled: false,
+  signalingRetries: 0,
+  signalingMaxRetries: 8,
+  signalingTimeoutMs: 12000,
+  lastSignalingRxAt: 0,
+  signalingPollInFlight: false,
 
   async init() {
     tbLog.log('Initializing TalkBridge');
@@ -241,12 +246,71 @@ const tbApp = {
     }
   },
 
+  setSignalingStatus(state, details = '') {
+    const messages = {
+      searching: 'Waiting for signaling partner…',
+      retrying: `Signaling retrying… ${details || ''}`.trim(),
+      stalled: 'No signaling response yet. Keeping retries active…',
+      connected: 'Signaling connected',
+      failed: 'Signaling failed to reach partner'
+    };
+
+    const label = messages[state] || details || state;
+    tbLog.log('Signaling status', { state, label });
+
+    const joiningLabel = document.querySelector('#joining-screen .joining-label');
+    if (joiningLabel && (state === 'searching' || state === 'retrying' || state === 'stalled' || state === 'failed')) {
+      joiningLabel.textContent = label;
+    }
+
+    const soloBannerText = document.querySelector('#solo-banner .solo-banner-text');
+    if (soloBannerText && (state === 'searching' || state === 'retrying' || state === 'stalled' || state === 'failed')) {
+      soloBannerText.textContent = label;
+    }
+
+    if (state === 'retrying' || state === 'stalled' || state === 'failed') {
+      showToast(label);
+    }
+  },
+
   startSignalingPoll() {
-    // Poll for signaling messages every 500ms
-    this.signalingInterval = setInterval(() => {
-      tbTransport.pollSignalingMessages(this.roomId, (msg) => {
-        this.handleSignalingMessage(msg);
-      });
+    this.signalingRetries = 0;
+    this.lastSignalingRxAt = Date.now();
+    this.signalingPollInFlight = false;
+    this.setSignalingStatus('searching');
+
+    if (this.signalingInterval) clearInterval(this.signalingInterval);
+    this.signalingPollInFlight = false;
+
+    // Poll for signaling messages every 500ms, with timeout/retry UI states.
+    this.signalingInterval = setInterval(async () => {
+      if (this.signalingPollInFlight) return;
+      this.signalingPollInFlight = true;
+
+      try {
+        await tbTransport.pollSignalingMessages(this.roomId, (msg) => {
+          this.lastSignalingRxAt = Date.now();
+          this.signalingRetries = 0;
+          this.setSignalingStatus('connected');
+          this.handleSignalingMessage(msg);
+        });
+
+        if ((Date.now() - this.lastSignalingRxAt) > this.signalingTimeoutMs) {
+          this.setSignalingStatus('stalled');
+        }
+      } catch (err) {
+        this.signalingRetries += 1;
+        this.setSignalingStatus('retrying', `attempt ${this.signalingRetries}/${this.signalingMaxRetries}`);
+        tbLog.warn('Signaling poll failed', { attempt: this.signalingRetries, message: err.message });
+
+        if (this.signalingRetries >= this.signalingMaxRetries) {
+          clearInterval(this.signalingInterval);
+          this.signalingInterval = null;
+          this.setSignalingStatus('failed');
+        }
+      } finally {
+        this.signalingPollInFlight = false;
+      }
     }, 500);
   },
 
@@ -254,11 +318,13 @@ const tbApp = {
     try {
       if (msg.type === 'offer') {
         tbLog.log('Received offer from partner');
+        this.setSignalingStatus('connected');
         await tbMedia.handleOffer(msg.offer);
         const answer = await tbMedia.createAnswer();
         tbTransport.sendMessage({ type: 'answer', answer });
       } else if (msg.type === 'answer') {
         tbLog.log('Received answer from partner');
+        this.setSignalingStatus('connected');
         await tbMedia.handleAnswer(msg.answer);
         tbMedia.flushIceCandidates();
       } else if (msg.type === 'ice-candidate') {
@@ -359,6 +425,7 @@ const tbApp = {
 
     // Clean up
     if (this.signalingInterval) clearInterval(this.signalingInterval);
+    this.signalingPollInFlight = false;
     tbTranscribe.stop();
     tbMedia.closePeerConnection();
     tbMedia.stopLocalStream();

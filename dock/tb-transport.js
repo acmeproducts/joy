@@ -8,15 +8,20 @@ const tbTransport = {
   dataChannel: null,
   peerId: null,
   partnerId: null,
+  signalingHttpUrl: null,
+  signalingWsUrl: null,
+  signalingQueue: [],
 
-  connect(signalingServer = 'https://api.talkbridge.io') {
-    return new Promise((resolve, reject) => {
-      // For demo: use localStorage + polling or WebSocket
-      // In production: use actual signaling server
-      this.peerId = this.generateId();
-      tbLog.log('Peer ID generated', { id: this.peerId.substring(0, 8) });
-      resolve();
-    });
+  async connect(signalingServer = 'https://api.talkbridge.io') {
+    this.peerId = this.generateId();
+    tbLog.log('Peer ID generated', { id: this.peerId.substring(0, 8) });
+
+    const normalized = String(signalingServer || '').replace(/\/$/, '');
+    this.signalingHttpUrl = normalized.endsWith('/signal') ? normalized : `${normalized}/signal`;
+    this.signalingWsUrl = this.signalingHttpUrl.replace(/^http/i, 'ws');
+    this.signalingQueue = [];
+
+    await this.ensureSignalingChannel();
   },
 
   generateId() {
@@ -57,33 +62,121 @@ const tbTransport = {
       this.dataChannel.send(JSON.stringify(msg));
       tbLog.log('Data channel message sent', { type: msg.type });
     } else if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'ice-candidate') {
-      // For signaling messages, use localStorage polling (demo)
-      this.storeSignalingMessage(msg);
+      this.storeSignalingMessage(msg).catch((err) => {
+        tbLog.error('Failed to send signaling message', { type: msg.type, message: err.message });
+      });
     }
   },
 
-  storeSignalingMessage(msg) {
-    const key = `sig_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    localStorage.setItem(key, JSON.stringify({
-      ...msg,
-      from: this.peerId,
-      timestamp: Date.now()
-    }));
+  async ensureSignalingChannel() {
+    if (!this.signalingWsUrl || !this.peerId || typeof WebSocket === 'undefined') return;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const ws = new WebSocket(`${this.signalingWsUrl}?peerId=${encodeURIComponent(this.peerId)}`);
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { ws.close(); } catch (_) {}
+        reject(new Error('Signaling WebSocket timeout'));
+      }, 4000);
+
+      ws.onopen = () => {
+        this.socket = ws;
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          resolve();
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (!msg || !msg.roomId || msg.from === this.peerId) return;
+          this.signalingQueue.push(msg);
+        } catch (_) {}
+      };
+
+      ws.onclose = () => {
+        if (this.socket === ws) this.socket = null;
+      };
+
+      ws.onerror = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error('Signaling WebSocket error'));
+        }
+      };
+    }).catch(() => {
+      // HTTP polling fallback path will be used by pollSignalingMessages.
+    });
   },
 
-  pollSignalingMessages(roomId, callback, interval = 1000) {
-    const keys = Object.keys(localStorage);
-    keys.forEach(key => {
-      if (key.startsWith('sig_')) {
-        const msgStr = localStorage.getItem(key);
-        const msg = JSON.parse(msgStr);
-        if (msg.from !== this.peerId && !msg.read) {
-          callback(msg);
-          msg.read = true;
-          localStorage.setItem(key, JSON.stringify(msg));
-        }
-      }
+  async storeSignalingMessage(msg) {
+    const roomId = tbApp.roomId;
+    if (!roomId) {
+      throw new Error('Missing roomId for signaling');
+    }
+
+    const payload = {
+      ...msg,
+      from: this.peerId,
+      roomId,
+      timestamp: Date.now()
+    };
+
+    await this.ensureSignalingChannel();
+
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(payload));
+      return;
+    }
+
+    const res = await fetch(`${this.signalingHttpUrl}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
+
+    if (!res.ok) {
+      throw new Error(`Signaling POST failed (${res.status})`);
+    }
+  },
+
+  async pollSignalingMessages(roomId, callback) {
+    await this.ensureSignalingChannel();
+
+    // Server-side filter requirement: roomId scoped, and excludes sender peerId.
+    if ((!this.socket || this.socket.readyState !== WebSocket.OPEN) && this.signalingHttpUrl) {
+      const url = `${this.signalingHttpUrl}/messages?roomId=${encodeURIComponent(roomId)}&peerId=${encodeURIComponent(this.peerId)}`;
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) {
+        throw new Error(`Signaling poll failed (${res.status})`);
+      }
+
+      const messages = await res.json();
+      if (Array.isArray(messages)) {
+        messages.forEach((msg) => {
+          if (msg && msg.roomId === roomId && msg.from !== this.peerId) {
+            this.signalingQueue.push(msg);
+          }
+        });
+      }
+    }
+
+    const remaining = [];
+    for (const msg of this.signalingQueue) {
+      if (msg.roomId !== roomId || msg.from === this.peerId) {
+        remaining.push(msg);
+        continue;
+      }
+      callback(msg);
+    }
+    this.signalingQueue = remaining;
   },
 
   createDataChannel(label = 'default') {

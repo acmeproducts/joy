@@ -78,6 +78,43 @@ const tbApp = {
     // Check for room param
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('room');
+    const sharedData = params.get('d');
+
+    if (roomId && !localStorage.getItem(`room_${roomId}`)) {
+      if (!sharedData) {
+        tbLog.error('Missing shared room payload for legacy link', { id: roomId });
+        alert('This room link is missing required share data. Please ask the host to send a new link.');
+        return;
+      }
+
+      try {
+        const decoded = decodeURIComponent(escape(atob(sharedData)));
+        const payload = JSON.parse(decoded);
+        const hasRequiredFields = payload
+          && payload.id === roomId
+          && typeof payload.myLang === 'string'
+          && typeof payload.theirLang === 'string';
+
+        if (!hasRequiredFields) {
+          throw new Error('Invalid room payload');
+        }
+
+        const roomData = {
+          id: roomId,
+          name: payload.name || 'Shared Room',
+          myLang: payload.myLang,
+          theirLang: payload.theirLang,
+          createdAt: new Date().toISOString(),
+          creator: payload.creator || 'shared-link'
+        };
+        localStorage.setItem(`room_${roomId}`, JSON.stringify(roomData));
+        tbLog.log('Recovered room data from share link', { id: roomId });
+      } catch (err) {
+        tbLog.error('Invalid shared room payload', { id: roomId, message: err.message });
+        alert('This room link is invalid or expired. Please ask the host for a new link.');
+        return;
+      }
+    }
 
     if (roomId) {
       this.joinRoomPhase(roomId);

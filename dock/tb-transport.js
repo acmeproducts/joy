@@ -38,7 +38,30 @@ const tbTransport = {
 
   getRoomUrl(roomId) {
     const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?room=${roomId}`;
+    const roomDataRaw = localStorage.getItem(`room_${roomId}`);
+    let encodedPayload = '';
+
+    if (roomDataRaw) {
+      try {
+        const roomData = JSON.parse(roomDataRaw);
+        const shareData = {
+          id: roomId,
+          name: roomData.name || '',
+          myLang: roomData.myLang || 'en',
+          theirLang: roomData.theirLang || 'en',
+          creator: roomData.creator || ''
+        };
+        encodedPayload = encodeURIComponent(
+          btoa(unescape(encodeURIComponent(JSON.stringify(shareData))))
+        );
+      } catch (err) {
+        tbLog.warn('Failed to encode room payload for URL', { id: roomId });
+      }
+    }
+
+    return encodedPayload
+      ? `${baseUrl}?room=${roomId}&d=${encodedPayload}`
+      : `${baseUrl}?room=${roomId}`;
   },
 
   async joinRoom(roomId) {

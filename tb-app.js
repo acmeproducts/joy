@@ -1,7 +1,8 @@
 /**
  * tb-app.js
  * Main application orchestration
- * Transcription works standalone without connection to partner
+ * AUTO-ENTER CALL AFTER ROOM CREATION
+ * CC TRANSCRIBES IMMEDIATELY
  */
 
 // Global logging system
@@ -136,19 +137,19 @@ const tbApp = {
       this.roomId = tbTransport.createRoom(roomName, this.myLang, this.theirLang);
       this.roomData = tbTransport.getRoomData(this.roomId);
 
-      // Switch to waiting screen
+      // Initialize media
+      await tbMedia.initLocalStream(true, true);
+
+      // Update lobby UI to show waiting screen
       document.getElementById('lobby-setup').style.display = 'none';
       document.getElementById('lobby-waiting').style.display = 'block';
       document.getElementById('room-name-display').textContent = roomName || 'Unnamed Room';
       document.getElementById('lobby-link').textContent = this.getShareLink();
 
-      // Initialize media for preview
-      await tbMedia.initLocalStream(true, true);
+      // AUTO-ENTER CALL IMMEDIATELY (no waiting on lobby screen)
+      await this.enterCall();
 
-      // Start transcription (CC works even without partner)
-      this.startTranscription();
-
-      tbLog.log('Room ready for partner');
+      tbLog.log('Room ready and call started');
     } catch (err) {
       tbLog.error('Failed to create room', err);
       alert('Failed to create room: ' + err.message);
@@ -175,9 +176,9 @@ const tbApp = {
       }
 
       this.roomData = roomData;
-      // Use room's preset language pair—no prompt needed
-      this.myLang = roomData.theirLang;  // I speak what they speak in the invite
-      this.theirLang = roomData.myLang;  // They speak what I speak
+      // Use room's preset language pair
+      this.myLang = roomData.theirLang;
+      this.theirLang = roomData.myLang;
 
       await tbTransport.connect();
       await tbTransport.joinRoom(roomId);
@@ -185,14 +186,10 @@ const tbApp = {
       // Initialize media
       await tbMedia.initLocalStream(true, true);
 
-      // Start transcription immediately (CC works standalone)
-      this.startTranscription();
+      // AUTO-ENTER CALL (no language dialog)
+      await this.enterCall();
 
-      // Join call automatically (no language dialog)
-      document.getElementById('joining-screen').classList.remove('show');
-      this.startCall();
-
-      tbLog.log('Ready to join call');
+      tbLog.log('Joined room and call started');
     } catch (err) {
       tbLog.error('Failed to join room', err);
       alert('Failed to join room: ' + err.message);
@@ -200,16 +197,13 @@ const tbApp = {
     }
   },
 
-  startTranscription() {
-    this.shouldListen = true;
-    if (tbTranscribe.init(this.myLang)) {
-      tbTranscribe.start();
-      tbLog.log('Transcription started', { lang: this.myLang });
-    }
-  },
+  async enterCall() {
+    // Hide joining screen, show call screen
+    document.getElementById('joining-screen').classList.remove('show');
+    document.getElementById('lobby').classList.add('hidden');
+    document.getElementById('lobby-waiting').style.display = 'none';
 
-  async startCall() {
-    tbLog.log('Starting call', { myLang: this.myLang, theirLang: this.theirLang });
+    tbLog.log('Entering call', { myLang: this.myLang, theirLang: this.theirLang });
 
     this.callActive = true;
     document.getElementById('call-screen').classList.add('active');
@@ -222,9 +216,11 @@ const tbApp = {
       tbTransport.createDataChannel('messages');
       tbMedia.peerConnection.ondatachannel = (e) => tbTransport.handleDataChannel(e);
 
-      // If I created the room, I'm the offerer
+      // START TRANSCRIPTION IMMEDIATELY (CC active from start)
+      this.startTranscription();
+
+      // If I created the room, wait for partner
       if (this.roomData.creator === tbTransport.peerId) {
-        // I'm the creator, wait for partner
         tbLog.log('Waiting for partner to join...');
         this.startSignalingPoll();
         return;
@@ -239,6 +235,14 @@ const tbApp = {
     } catch (err) {
       tbLog.error('Failed to start call', err);
       this.hangUp();
+    }
+  },
+
+  startTranscription() {
+    this.shouldListen = true;
+    if (tbTranscribe.init(this.myLang)) {
+      tbTranscribe.start();
+      tbLog.log('Transcription started', { lang: this.myLang });
     }
   },
 
@@ -278,15 +282,17 @@ const tbApp = {
       // Add to transcript
       this.addTranscriptEntry(this.myName, text, translated, this.myLang, this.theirLang);
 
-      // Send to partner
-      tbTransport.sendMessage({
-        type: 'transcription',
-        speaker: this.myName,
-        text,
-        translated
-      });
+      // Send to partner if connected
+      if (this.callActive && tbMedia.peerConnection && tbMedia.peerConnection.connectionState === 'connected') {
+        tbTransport.sendMessage({
+          type: 'transcription',
+          speaker: this.myName,
+          text,
+          translated
+        });
+      }
 
-      // Show partner's view of my subtitle (translated)
+      // Show my subtitle (translated view for partner)
       tbTranscribe.showSubtitle(translated, 'mine', false);
     });
   },
@@ -358,12 +364,13 @@ const tbApp = {
     tbLog.log('Call ended');
     this.callActive = false;
 
-    // Keep transcription running for CC
+    // Clean up
     if (this.signalingInterval) clearInterval(this.signalingInterval);
+    tbTranscribe.stop();
     tbMedia.closePeerConnection();
     tbMedia.stopLocalStream();
 
-    // Reset UI
+    // Reset to lobby
     document.getElementById('call-screen').classList.remove('active');
     document.getElementById('lobby').classList.remove('hidden');
     document.getElementById('lobby-setup').style.display = 'block';
@@ -371,6 +378,7 @@ const tbApp = {
     document.getElementById('subtitle-area').innerHTML = '';
     this.transcript = [];
     this.renderTranscript();
+    this.shouldListen = false;
   }
 };
 

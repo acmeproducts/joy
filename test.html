@@ -2168,14 +2168,28 @@ function getLangLabel(code){
   if(!code)return'Auto';
   return getLangEntry(code).label;
 }
+// Returns the explicitly-fixed "I speak" lang for the local role in a session.
+// Returns '' if the session is in auto mode — callers use '' to mean "show 🌐".
+function getSessionFixedLang(sess){
+  if(!sess)return '';
+  var s=normalizeSession(sess);
+  var role=s.localRole==='partner'?'partner':'owner';
+  if(role==='partner'){
+    return (s.partnerLangMode==='fixed'&&s.partnerFixedLang)?s.partnerFixedLang:'';
+  }else{
+    return (s.ownerLangMode==='fixed'&&s.ownerFixedLang)?s.ownerFixedLang:'';
+  }
+}
 function updateLangPill(){
-  var myLang=getPrefs().myLang||'';
+  var sess=state.activeConvId?getSession(state.activeConvId):null;
+  var myLang=sess?getSessionFixedLang(sess):(getPrefs().myLang||'');
   var ribbonBtn=document.getElementById('ribbon-lang-btn');
   if(ribbonBtn)ribbonBtn.textContent=myLang?(getLangEntry(myLang).flag||'🌐'):'🌐';
 }
 function renderLanguageSheet(){
   var host=document.getElementById('language-sheet-options');if(!host)return;
-  var cur=getPrefs().myLang||'';
+  var sess=state.activeConvId?getSession(state.activeConvId):null;
+  var cur=sess?getSessionFixedLang(sess):(getPrefs().myLang||'');
   var rows=['<button class="lsd-row lsd-row-link" style="width:100%;border:none;background:none;text-align:left;" onclick="setMyLang(\'\')"><span class="lsd-label">🌐 Auto-detect</span><span class="lsd-ctrl">'+(cur===''?'✓':'')+'</span></button>'];
   LANGS.forEach(function(l){rows.push('<button class="lsd-row lsd-row-link" style="width:100%;border:none;background:none;text-align:left;" onclick="setMyLang(\''+l.code+'\')"><span class="lsd-label">'+l.flag+' '+escHtml(l.label)+'</span><span class="lsd-ctrl">'+(l.code===cur?'✓':'')+'</span></button>');});
   host.innerHTML=rows.join('');
@@ -2194,9 +2208,16 @@ function setMyLang(code){
   // Scope the language-mode write to the active session only; other sessions keep their own setting
   var activeSess=state.activeConvId?getSession(state.activeConvId):null;
   if(activeSess){
-    activeSess.ownerLangMode=code?'fixed':'auto';
-    activeSess.ownerFixedLang=code||'';
-    if(code)setEffectiveReplyLang(activeSess,'owner',code);
+    var role=activeSess.localRole==='partner'?'partner':'owner';
+    if(role==='partner'){
+      activeSess.partnerLangMode=code?'fixed':'auto';
+      activeSess.partnerFixedLang=code||'';
+      if(code)setEffectiveReplyLang(activeSess,'partner',code);
+    }else{
+      activeSess.ownerLangMode=code?'fixed':'auto';
+      activeSess.ownerFixedLang=code||'';
+      if(code)setEffectiveReplyLang(activeSess,'owner',code);
+    }
     putSession(activeSess);
   }
   updateLangPill();
@@ -2329,6 +2350,7 @@ function openInviteScreen(cid){
   setTimeout(function(){var ta=document.getElementById('msg-input');if(ta&&!document.hidden)ta.focus();},100);
   if(!document.hidden)scheduleMarkSessionRead(cid);
   showScreen('chat-screen');
+  updateLangPill();
   refreshActiveSessionChrome(cid);
   renderSessionList();
   addDiagLog('Session created: '+cid.slice(0,8));
@@ -2403,6 +2425,7 @@ function openSession(cid){
   setTimeout(function(){var ta=document.getElementById('msg-input');if(ta&&!document.hidden)ta.focus();},100);
   if(!document.hidden)scheduleMarkSessionRead(cid);
   showScreen('chat-screen');
+  updateLangPill();
   refreshActiveSessionChrome(cid);
 }
 

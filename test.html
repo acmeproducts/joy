@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Talk + Say v3.8 · April 16, 2026 22:00 Los Angeles · tr handler overwrite fix, effectiveTargetLang gate, targetLang capture -->
+<!-- Talk + Say v3.8 · April 16, 2026 22:30 Los Angeles · single source of truth: flat fields only for lang state -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1016,11 +1016,12 @@ function normalizeSession(sess){
   var lastActivity=Number(raw.lastActivity)||createdAt;
   var myHandle=firstRealName(raw.myHandle,raw.myName,p.globalName,p.userName)||p.userName||'yournamehere';
   var partnerHandle=firstRealName(raw.partnerHandle,raw.peerName)||'';
-  var legacyOwnerIdentity=String(raw.ownerIdentityId||raw.myIdentityId||PART_ID||'');
-  var legacyPartnerIdentity=String(raw.partnerIdentityId||'');
+  // Identity: read from flat fields first, fall back to roles sub-object for legacy sessions
   var rolesRaw=(raw.roles&&typeof raw.roles==='object')?raw.roles:{};
   var ownerRaw=(rolesRaw.owner&&typeof rolesRaw.owner==='object')?rolesRaw.owner:{};
   var partnerRaw=(rolesRaw.partner&&typeof rolesRaw.partner==='object')?rolesRaw.partner:{};
+  var legacyOwnerIdentity=String(raw.ownerIdentityId||raw.myIdentityId||ownerRaw.identityId||PART_ID||'');
+  var legacyPartnerIdentity=String(raw.partnerIdentityId||partnerRaw.identityId||'');
   var out={
     convId:raw.convId||uid(),
     myHandle:myHandle,
@@ -1029,24 +1030,26 @@ function normalizeSession(sess){
     peerName:partnerHandle,
     createdAt:createdAt,
     lastActivity:lastActivity,
-    ownerIdentityId:String(ownerRaw.identityId||legacyOwnerIdentity||''),
-    partnerIdentityId:String(partnerRaw.identityId||legacyPartnerIdentity||''),
+    ownerIdentityId:String(legacyOwnerIdentity||''),
+    partnerIdentityId:String(legacyPartnerIdentity||''),
     localRole:(raw.localRole==='partner')?'partner':'owner',
-    ownerLangMode:(ownerRaw.langMode==='fixed'||ownerRaw.langMode==='auto')?ownerRaw.langMode:((raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto')),
-    ownerFixedLang:normalizeLangSetting(ownerRaw.fixedLang!==undefined?ownerRaw.fixedLang:(raw.ownerFixedLang!==undefined?raw.ownerFixedLang:p.myLang))||'',
-    ownerLastSentLang:normalizeLangSetting(ownerRaw.lastSentLang!==undefined?ownerRaw.lastSentLang:raw.ownerLastSentLang)||'',
-    ownerEffectiveReplyLang:normalizeLangSetting(ownerRaw.effectiveReplyLang!==undefined?ownerRaw.effectiveReplyLang:raw.ownerEffectiveReplyLang)||'',
-    partnerLangMode:(partnerRaw.langMode==='fixed'||partnerRaw.langMode==='auto')?partnerRaw.langMode:((raw.partnerLangMode==='fixed'||raw.partnerLangMode==='auto')?raw.partnerLangMode:'auto'),
-    partnerFixedLang:normalizeLangSetting(partnerRaw.fixedLang!==undefined?partnerRaw.fixedLang:raw.partnerFixedLang)||'',
-    partnerLastSentLang:normalizeLangSetting(partnerRaw.lastSentLang!==undefined?partnerRaw.lastSentLang:raw.partnerLastSentLang)||'',
-    partnerEffectiveReplyLang:normalizeLangSetting(partnerRaw.effectiveReplyLang!==undefined?partnerRaw.effectiveReplyLang:raw.partnerEffectiveReplyLang)||'',
+    // ── Lang: FLAT FIELDS ONLY — roles sub-object is not consulted for lang state ──
+    ownerLangMode:(raw.ownerLangMode==='fixed'||raw.ownerLangMode==='auto')?raw.ownerLangMode:((normalizeLangSetting(p.myLang)||'')?'fixed':'auto'),
+    ownerFixedLang:normalizeLangSetting(raw.ownerFixedLang!==undefined?raw.ownerFixedLang:p.myLang)||'',
+    ownerLastSentLang:normalizeLangSetting(raw.ownerLastSentLang)||'',
+    ownerEffectiveReplyLang:normalizeLangSetting(raw.ownerEffectiveReplyLang)||'',
+    partnerLangMode:(raw.partnerLangMode==='fixed'||raw.partnerLangMode==='auto')?raw.partnerLangMode:'auto',
+    partnerFixedLang:normalizeLangSetting(raw.partnerFixedLang)||'',
+    partnerLastSentLang:normalizeLangSetting(raw.partnerLastSentLang)||'',
+    partnerEffectiveReplyLang:normalizeLangSetting(raw.partnerEffectiveReplyLang)||'',
     autoSpeakIncoming:hasOwn(raw,'autoSpeakIncoming')?!!raw.autoSpeakIncoming:null,
     partnerJoinedAt:Number(raw.partnerJoinedAt)||0,
     peerLastSeenAt:Number(raw.peerLastSeenAt)||0
   };
+  // roles object carries identity only — lang fields are NOT written here to avoid split-brain
   out.roles={
-    owner:{identityId:out.ownerIdentityId,langMode:out.ownerLangMode,fixedLang:out.ownerFixedLang,lastSentLang:out.ownerLastSentLang,effectiveReplyLang:out.ownerEffectiveReplyLang},
-    partner:{identityId:out.partnerIdentityId,langMode:out.partnerLangMode,fixedLang:out.partnerFixedLang,lastSentLang:out.partnerLastSentLang,effectiveReplyLang:out.partnerEffectiveReplyLang}
+    owner:{identityId:out.ownerIdentityId},
+    partner:{identityId:out.partnerIdentityId}
   };
   if(Number(raw.lastViewedAt))out.lastViewedAt=Number(raw.lastViewedAt);
   if(raw.inviterDeviceId)out.inviterDeviceId=raw.inviterDeviceId;
@@ -1331,33 +1334,24 @@ function normalizeAutoReplyTargetLang(v){
 }
 function getEffectiveReplyLang(sess,side,fallbackLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var role=side==='partner'?'partner':'owner';
-  var roleNode=(s.roles&&s.roles[role])||{};
-  var key=role==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
-  var saved=normalizeLangSetting(roleNode.effectiveReplyLang!==undefined?roleNode.effectiveReplyLang:s[key])||'';
+  var key=side==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
+  var saved=normalizeLangSetting(s[key])||'';
   if(saved)return saved;
   return resolveEffectiveLang(s,side,fallbackLang);
 }
 function setEffectiveReplyLang(sess,side,lang){
   if(!sess)return;
-  var role=side==='partner'?'partner':'owner';
-  var key=role==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
-  var value=normalizeLangSetting(lang)||'';
-  sess[key]=value;
-  if(!sess.roles||typeof sess.roles!=='object')sess.roles={owner:{},partner:{}};
-  if(!sess.roles[role]||typeof sess.roles[role]!=='object')sess.roles[role]={};
-  sess.roles[role].effectiveReplyLang=value;
+  var key=side==='partner'?'partnerEffectiveReplyLang':'ownerEffectiveReplyLang';
+  sess[key]=normalizeLangSetting(lang)||'';
 }
 function resolveEffectiveLang(sess,side,fallbackLang){
   var s=sess?normalizeSession(sess):normalizeSession({});
-  var role=side==='partner'?'partner':'owner';
-  var roleNode=(s.roles&&s.roles[role])||{};
-  var modeKey=role==='partner'?'partnerLangMode':'ownerLangMode';
-  var fixedKey=role==='partner'?'partnerFixedLang':'ownerFixedLang';
-  var lastKey=role==='partner'?'partnerLastSentLang':'ownerLastSentLang';
-  var mode=(roleNode.langMode||s[modeKey])==='fixed'?'fixed':'auto';
-  var fixed=normalizeLangSetting(roleNode.fixedLang!==undefined?roleNode.fixedLang:s[fixedKey])||'';
-  var last=normalizeLangSetting(roleNode.lastSentLang!==undefined?roleNode.lastSentLang:s[lastKey])||'';
+  var modeKey=side==='partner'?'partnerLangMode':'ownerLangMode';
+  var fixedKey=side==='partner'?'partnerFixedLang':'ownerFixedLang';
+  var lastKey=side==='partner'?'partnerLastSentLang':'ownerLastSentLang';
+  var mode=s[modeKey]==='fixed'?'fixed':'auto';
+  var fixed=normalizeLangSetting(s[fixedKey])||'';
+  var last=normalizeLangSetting(s[lastKey])||'';
   if(mode==='fixed'&&fixed)return fixed;
   return last||normalizeLangSetting(fallbackLang)||detectBrowserLang()||'en';
 }
@@ -2208,21 +2202,15 @@ function setMyLang(code){
   var activeSess=state.activeConvId?getSession(state.activeConvId):null;
   if(activeSess){
     var role=activeSess.localRole==='partner'?'partner':'owner';
-    if(!activeSess.roles||typeof activeSess.roles!=='object')activeSess.roles={owner:{},partner:{}};
-    if(!activeSess.roles[role]||typeof activeSess.roles[role]!=='object')activeSess.roles[role]={};
     var mode=code?'fixed':'auto';
     var fixed=code||'';
     if(role==='partner'){
       activeSess.partnerLangMode=mode;
       activeSess.partnerFixedLang=fixed;
-      activeSess.roles.partner.langMode=mode;
-      activeSess.roles.partner.fixedLang=fixed;
       if(code)setEffectiveReplyLang(activeSess,'partner',code);
     }else{
       activeSess.ownerLangMode=mode;
       activeSess.ownerFixedLang=fixed;
-      activeSess.roles.owner.langMode=mode;
-      activeSess.roles.owner.fixedLang=fixed;
       if(code)setEffectiveReplyLang(activeSess,'owner',code);
     }
     putSession(activeSess);
@@ -3064,22 +3052,17 @@ function upsertPartnerFromEnvelope(sess,d,opts){
 
 function applyPeerRoutingHints(sess,d){
   if(!sess||!d)return false;
-  if(!sess.roles||typeof sess.roles!=='object')sess.roles={owner:{},partner:{}};
-  if(!sess.roles.partner||typeof sess.roles.partner!=='object')sess.roles.partner={};
   var changed=false;
   if(d.lang){var l=normalizeLangSetting(d.lang)||'';if(l&&sess.partnerLastSentLang!==l){sess.partnerLastSentLang=l;changed=true;}}
   if(d.partnerLangMode==='fixed'||d.partnerLangMode==='auto'){
     if(sess.partnerLangMode!==d.partnerLangMode){sess.partnerLangMode=d.partnerLangMode;changed=true;}
-    sess.roles.partner.langMode=d.partnerLangMode;
   }
   if(d.partnerFixedLang!==undefined){
     var pf=normalizeLangSetting(d.partnerFixedLang)||'';
     if(sess.partnerFixedLang!==pf){sess.partnerFixedLang=pf;changed=true;}
-    sess.roles.partner.fixedLang=pf;
   }
   if(d.effectiveTargetLang){
-    // Only update partner effective lang from wire if the local session doesn't have partner in fixed mode.
-    // When partnerLangMode='fixed', the fixed lang takes absolute priority over partner's reported preference.
+    // Only update partner effective lang from wire when partner is not in fixed mode locally.
     if(sess.partnerLangMode!=='fixed'||!sess.partnerFixedLang){
       var et=normalizeLangSetting(d.effectiveTargetLang)||'';
       if(et&&sess.partnerEffectiveReplyLang!==et){sess.partnerEffectiveReplyLang=et;changed=true;}
@@ -4939,5 +4922,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.8 · Build Apr 16, 2026 22:00 Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.8 · Build Apr 16, 2026 22:30 Los Angeles</div></body>
 </html>

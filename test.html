@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Talk + Say v3.6 · April 16, 2026 · iOS TTS fix, per-session lang pair, tab lease, bubble defaults -->
+<!-- Talk + Say v3.7 · April 16, 2026 17:00 Los Angeles · lang roles clobber fix, speaker icon, auto-read helper removed, WASM seam -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v3.6</title>
+<title>Talk + Say · v3.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -71,6 +71,12 @@ textarea.field-input{resize:none;}
 .ribbon-btn{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s,color .12s;}
 .ribbon-btn:hover{background:var(--paper);color:var(--teal);}
 .ribbon-spacer{flex:1;}
+/* Auto-read speaker button */
+.ribbon-speaker{background:none;border:none;cursor:pointer;padding:7px 8px;border-radius:9px;line-height:0;transition:background .12s;position:relative;}
+.ribbon-speaker:hover{background:var(--paper);}
+.ribbon-speaker svg{display:block;}
+.ribbon-speaker .speaker-slash{display:none;}
+.ribbon-speaker.off .speaker-slash{display:block;}
 /* Toggle switch (used in settings drawer) */
 .toggle-switch{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
 .toggle-switch input{opacity:0;width:0;height:0;}
@@ -366,11 +372,6 @@ textarea.field-input{resize:none;}
 .new-chat-title-wrap::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;}
 .new-chat-sub{font-size:12px;color:var(--ink-dim);}
 .new-chat-actions{display:flex;gap:8px;margin-top:6px;}
-.helper-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:280;width:min(92vw,420px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;}
-.helper-toast[hidden]{display:none!important;}
-.helper-toast-msg{font-size:12px;color:var(--ink);line-height:1.4;}
-.helper-toast-links{margin-top:8px;display:flex;gap:10px;}
-.helper-toast-link{background:none;border:none;color:var(--teal);font-size:12px;font-weight:600;cursor:pointer;padding:0;}
 @keyframes fadeIn{from{opacity:0;}}
 .sheet{background:var(--cream);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92dvh;overflow-y:auto;animation:slideUp .22s ease-out;}
 @keyframes slideUp{from{transform:translateY(36px);opacity:.7;}}
@@ -535,10 +536,14 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </button>
     <button class="ribbon-btn" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
     <span class="ribbon-spacer"></span>
-    <label class="toggle-switch" title="Auto-read">
-      <input type="checkbox" id="ribbon-autoread" onchange="setAutoReadFromRibbon(this.checked)">
-      <span class="toggle-slider"></span>
-    </label>
+    <button class="ribbon-speaker" id="ribbon-speaker-btn" onclick="toggleAutoReadRibbon()" title="Auto-read">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9A9592" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        <line class="speaker-slash" x1="3" y1="3" x2="21" y2="21" stroke="#C0392B" stroke-width="2.5"/>
+      </svg>
+    </button>
   </div>
   <!-- Partner name -->
   <div class="shell-partner" id="shell-partner-name"><span class="shell-participant editable" id="shell-self-name" contenteditable="true" spellcheck="false" title="Edit your name for this chat" onfocus="this.dataset.editing='1'" onblur="this.dataset.editing='0';saveOwnerName(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"><span class="shell-participant-label">new chat</span></span><span class="shell-partner-arrow" id="shell-partner-arrow" hidden>↔</span><span class="shell-participant" id="shell-peer-name" title="Never seen" hidden><span class="shell-participant-label">?</span></span></div>
@@ -639,13 +644,6 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   </div>
 </div>
 
-<div class="helper-toast" id="auto-read-helper" hidden>
-  <div class="helper-toast-msg">Auto-read is on. You can switch it off/on any time using the toggle in the top bar.</div>
-  <div class="helper-toast-links">
-    <button class="helper-toast-link" type="button" onclick="dismissAutoReadHelper()">Dismiss</button>
-    <button class="helper-toast-link" type="button" onclick="disableAutoReadHelper()">Don’t show again</button>
-  </div>
-</div>
 
 <!-- ══ OVERLAYS ══ -->
 
@@ -1301,7 +1299,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoReadHelperSeenCount:0,autoReadHelperDisabled:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:16,targetBubbleFontSize:16,bubblePreset:'medium',bubblePresetMeChoice:'ash-grey',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='ash-grey';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';if(!hasOwn(p,'autoReadHelperSeenCount'))p.autoReadHelperSeenCount=0;if(!hasOwn(p,'autoReadHelperDisabled'))p.autoReadHelperDisabled=false;return p;}
+function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:16,targetBubbleFontSize:16,bubblePreset:'medium',bubblePresetMeChoice:'ash-grey',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='ash-grey';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';return p;}
 function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';if(!next.bubblePreset)next.bubblePreset='medium';lsW(SK.prefs,JSON.stringify(next));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -1590,6 +1588,7 @@ function applyMsgTarget(msg,targetLang,targetText){
   return changed;
 }
 function normalizeTag(s){return s.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'').slice(0,24);}
+// TODO: replace with WASM sidecar result when available — currently script-range only, Latin languages fall back to browser lang
 function detectLang(text,fb){var t=(text||'').trim();if(!t)return fb||'en';if(/[฀-๿]/.test(t))return'th';if(/[぀-ヿ]/.test(t))return'ja';if(/[一-鿿]/.test(t))return'zh';if(/[가-힯]/.test(t))return'ko';if(/[؀-ۿ]/.test(t))return'ar';return fb||'en';}
 function fallbackCopy(t){var ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;left:-9999px;';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied');}catch(e){}document.body.removeChild(ta);}
 function scrollBottom(){var c=document.getElementById('messages');if(c)c.scrollTop=c.scrollHeight;}
@@ -2209,13 +2208,21 @@ function setMyLang(code){
   var activeSess=state.activeConvId?getSession(state.activeConvId):null;
   if(activeSess){
     var role=activeSess.localRole==='partner'?'partner':'owner';
+    if(!activeSess.roles||typeof activeSess.roles!=='object')activeSess.roles={owner:{},partner:{}};
+    if(!activeSess.roles[role]||typeof activeSess.roles[role]!=='object')activeSess.roles[role]={};
+    var mode=code?'fixed':'auto';
+    var fixed=code||'';
     if(role==='partner'){
-      activeSess.partnerLangMode=code?'fixed':'auto';
-      activeSess.partnerFixedLang=code||'';
+      activeSess.partnerLangMode=mode;
+      activeSess.partnerFixedLang=fixed;
+      activeSess.roles.partner.langMode=mode;
+      activeSess.roles.partner.fixedLang=fixed;
       if(code)setEffectiveReplyLang(activeSess,'partner',code);
     }else{
-      activeSess.ownerLangMode=code?'fixed':'auto';
-      activeSess.ownerFixedLang=code||'';
+      activeSess.ownerLangMode=mode;
+      activeSess.ownerFixedLang=fixed;
+      activeSess.roles.owner.langMode=mode;
+      activeSess.roles.owner.fixedLang=fixed;
       if(code)setEffectiveReplyLang(activeSess,'owner',code);
     }
     putSession(activeSess);
@@ -2342,7 +2349,6 @@ function openInviteScreen(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
-  showAutoReadHelperIfNeeded();
   resetActivePresence(cid);
   transportConnect(cid);
   renderAllMessages();
@@ -2415,7 +2421,6 @@ function openSession(cid){
   document.getElementById('composer').style.display='flex';
   updatePartnerHeader(sess);
   updateAutoReadBtn();
-  showAutoReadHelperIfNeeded();
   resetActivePresence(cid);
   transportConnect(cid);
   state.pendingInviteId=cid;
@@ -2996,12 +3001,11 @@ function syncAutoReadState(){
   state.autoSpeakIncoming=getEffectiveAutoRead(getSession(state.activeConvId));
   var cb=document.getElementById('set-autoread');
   if(cb)cb.checked=!!state.autoSpeakIncoming;
-  var rib=document.getElementById('ribbon-autoread');
-  if(rib)rib.checked=!!state.autoSpeakIncoming;
+  var spk=document.getElementById('ribbon-speaker-btn');
+  if(spk)spk.classList.toggle('off',!state.autoSpeakIncoming);
 }
-function setAutoReadFromSettings(checked){
-  var current=getEffectiveAutoRead(getSession(state.activeConvId));
-  if(!!checked!==!!current)toggleAutoRead();
+function toggleAutoReadRibbon(){
+  toggleAutoRead();
 }
 function setAutoReadFromRibbon(checked){
   var current=getEffectiveAutoRead(getSession(state.activeConvId));
@@ -3009,27 +3013,6 @@ function setAutoReadFromRibbon(checked){
 }
 function muteAutoRead(){if(canSpeak)synth.cancel();}
 function dismissAutoRead(){if(canSpeak)synth.cancel();if(getEffectiveAutoRead(getSession(state.activeConvId)))toggleAutoRead();}
-function showAutoReadHelperIfNeeded(){
-  var p=getPrefs();
-  if(!getEffectiveAutoRead(getSession(state.activeConvId))||p.autoReadHelperDisabled)return;
-  var seen=Number(p.autoReadHelperSeenCount)||0;
-  if(seen>=3)return;
-  var helper=document.getElementById('auto-read-helper');
-  if(!helper)return;
-  helper.hidden=false;
-  p.autoReadHelperSeenCount=seen+1;
-  savePrefs(p);
-}
-function dismissAutoReadHelper(){
-  var helper=document.getElementById('auto-read-helper');
-  if(helper)helper.hidden=true;
-}
-function disableAutoReadHelper(){
-  var p=getPrefs();
-  p.autoReadHelperDisabled=true;
-  savePrefs(p);
-  dismissAutoReadHelper();
-}
 
 // ════════════════════════════════════════════════════════
 // STT
@@ -3081,10 +3064,19 @@ function upsertPartnerFromEnvelope(sess,d,opts){
 
 function applyPeerRoutingHints(sess,d){
   if(!sess||!d)return false;
+  if(!sess.roles||typeof sess.roles!=='object')sess.roles={owner:{},partner:{}};
+  if(!sess.roles.partner||typeof sess.roles.partner!=='object')sess.roles.partner={};
   var changed=false;
   if(d.lang){var l=normalizeLangSetting(d.lang)||'';if(l&&sess.partnerLastSentLang!==l){sess.partnerLastSentLang=l;changed=true;}}
-  if(d.partnerLangMode==='fixed'||d.partnerLangMode==='auto'){if(sess.partnerLangMode!==d.partnerLangMode){sess.partnerLangMode=d.partnerLangMode;changed=true;}}
-  if(d.partnerFixedLang!==undefined){var pf=normalizeLangSetting(d.partnerFixedLang)||'';if(sess.partnerFixedLang!==pf){sess.partnerFixedLang=pf;changed=true;}}
+  if(d.partnerLangMode==='fixed'||d.partnerLangMode==='auto'){
+    if(sess.partnerLangMode!==d.partnerLangMode){sess.partnerLangMode=d.partnerLangMode;changed=true;}
+    sess.roles.partner.langMode=d.partnerLangMode;
+  }
+  if(d.partnerFixedLang!==undefined){
+    var pf=normalizeLangSetting(d.partnerFixedLang)||'';
+    if(sess.partnerFixedLang!==pf){sess.partnerFixedLang=pf;changed=true;}
+    sess.roles.partner.fixedLang=pf;
+  }
   if(d.effectiveTargetLang){var et=normalizeLangSetting(d.effectiveTargetLang)||'';if(et&&sess.partnerEffectiveReplyLang!==et){sess.partnerEffectiveReplyLang=et;changed=true;}}
   if(d.partnerEffectiveReplyLang!==undefined){var pe=normalizeLangSetting(d.partnerEffectiveReplyLang)||'';if(sess.partnerEffectiveReplyLang!==pe){sess.partnerEffectiveReplyLang=pe;changed=true;}}
   return changed;
@@ -4371,7 +4363,7 @@ function resetSourceBubbleDefaults(){var p=getPrefs();p.sourceTheme=BUBBLE_DEFAU
 function resetTargetBubbleDefaults(){var p=getPrefs();p.targetTheme=BUBBLE_DEFAULTS.targetTheme;p.targetBubbleFontSize=BUBBLE_DEFAULTS.targetBubbleFontSize;p.targetAccentColor=BUBBLE_DEFAULTS.targetAccentColor;savePrefs(p);openSettings();applyBubbleTheme();toast('Target bubble reset');}
 function applyPhrasebookAccent(v){var p=getPrefs();p.phrasebookAccentColor=v;savePrefs(p);}
 
-function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.6</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
+function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.7</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
 function openPrintPhrasebookModal(){document.getElementById('print-overlay').hidden=false;}
 function printPhrasebookSelection(){document.getElementById('print-overlay').hidden=true;renderCatalogCards();setTimeout(function(){window.print();},60);}
 
@@ -4931,5 +4923,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.6 · Build April 16, 2026 · Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.7 · Build Apr 16, 2026 17:00 Los Angeles</div></body>
 </html>

@@ -182,7 +182,7 @@ textarea.field-input{resize:none;}
 .bbl-side{padding:10px 13px;display:flex;flex-direction:column;min-width:0;}
 .bbl-divider{background:rgba(0,0,0,.1);}
 
-.bbl-txt{font-size:15px;line-height:1.5;word-break:break-word;flex:1;}
+.bbl-txt{font-size:16px;line-height:1.5;word-break:break-word;flex:1;}
 
 .bbl-txt.loading{min-height:18px;border-radius:4px;background:linear-gradient(90deg,transparent 30%,rgba(0,0,0,.06) 50%,transparent 70%);background-size:200% 100%;animation:shimmer 1.5s infinite;}
 @keyframes shimmer{to{background-position:-200% 0;}}
@@ -963,6 +963,7 @@ var tabBus=('BroadcastChannel' in window)?new BroadcastChannel('ts3-tab-coord'):
 var tabWriterLeaseMs=12000;
 var isActiveTabWriter=false;
 var writerEpoch=0;
+var _receivedPingFromOther=false;
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -1300,7 +1301,7 @@ function getTags(){return lsJSON(SAY.tags,STARTER_TAGS.slice());}
 function saveTags(t){lsW(SAY.tags,JSON.stringify([].concat(Array.from(new Set(t))).sort()));}
 function addTagToRegistry(t){var tags=getTags();if(tags.indexOf(t)<0){tags.push(t);saveTags(tags);}}
 
-function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoReadHelperSeenCount:0,autoReadHelperDisabled:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,bubblePreset:'medium',bubblePresetMeChoice:'pacific-blue',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='pacific-blue';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';if(!hasOwn(p,'autoReadHelperSeenCount'))p.autoReadHelperSeenCount=0;if(!hasOwn(p,'autoReadHelperDisabled'))p.autoReadHelperDisabled=false;return p;}
+function getPrefs(){var p=lsJSON(SK.prefs,{userName:'yournamehere',globalName:'',myLang:'',partnerLang:'en',phrasebookSourceLang:'en',phrasebookTargetLang:'en',autoSpeakIncoming:false,autoReadHelperSeenCount:0,autoReadHelperDisabled:false,autoDetectLang:true,noOpOnSameLanguage:true,forceOppositePartyLanguage:false,sourceTheme:'default',targetTheme:'default',accentColor:'#2E8B8B',targetAccentColor:'#1A1714',phrasebookAccentColor:'#2E8B8B',bubbleWidth:75,bubbleFontSize:16,targetBubbleFontSize:16,bubblePreset:'medium',bubblePresetMeChoice:'ash-grey',bubblePresetPartnerChoice:'almond-cream'});if(!p.globalName&&p.userName)p.globalName=p.userName;if(!hasOwn(p,'myLang'))p.myLang='';if(!p.bubblePreset)p.bubblePreset='medium';if(!p.bubblePresetMeChoice)p.bubblePresetMeChoice='ash-grey';if(!p.bubblePresetPartnerChoice)p.bubblePresetPartnerChoice='almond-cream';if(!hasOwn(p,'autoReadHelperSeenCount'))p.autoReadHelperSeenCount=0;if(!hasOwn(p,'autoReadHelperDisabled'))p.autoReadHelperDisabled=false;return p;}
 function savePrefs(p){if(!p)return;var next=Object.assign({},p);if(!next.globalName&&next.userName)next.globalName=next.userName;if(!next.userName&&next.globalName)next.userName=next.globalName;if(!hasOwn(next,'myLang'))next.myLang='';else next.myLang=normalizeLangSetting(next.myLang)||'';if(hasOwn(next,'partnerLang'))next.partnerLang=normalizeLangSetting(next.partnerLang)||'';if(!next.bubblePreset)next.bubblePreset='medium';lsW(SK.prefs,JSON.stringify(next));}
 function persistPhrasebookLangSelection(){
   var p=getPrefs();
@@ -2273,7 +2274,15 @@ function submitNewChatModal(){
   var mySel=document.getElementById('new-chat-my-lang');
   var peerSel=document.getElementById('new-chat-partner-lang');
   var ar=document.getElementById('new-chat-autoread');
-  var opts={myLang:(mySel&&mySel.value)||'auto',partnerLang:(peerSel&&peerSel.value)||'auto',autoRead:!(ar&&!ar.checked)};
+  var myVal=(mySel&&mySel.value)||'auto';
+  var peerVal=(peerSel&&peerSel.value)||'auto';
+  // Persist choices so next openNewChatModal() pre-fills them
+  var p=getPrefs();
+  p.myLang=myVal==='auto'?'':myVal;
+  p.partnerLang=peerVal==='auto'?'en':peerVal;
+  p.autoSpeakIncoming=!(ar&&!ar.checked);
+  savePrefs(p);
+  var opts={myLang:myVal,partnerLang:peerVal,autoRead:!(ar&&!ar.checked)};
   closeNewChatModal(false);
   createNewSession(false,opts);
 }
@@ -4073,7 +4082,7 @@ var THEMES=[
   {id:'amber',label:'Amber',mine:'#b45309',theirs:'#fffbeb',hdr:'#92400e'},
   {id:'purple',label:'Violet',mine:'#7c3aed',theirs:'#f5f3ff',hdr:'#6d28d9'}
 ];
-var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,bubbleFontSize:15,targetBubbleFontSize:15,accentColor:'#2E8B8B',targetAccentColor:'#1A1714'};
+var BUBBLE_DEFAULTS={sourceTheme:'default',targetTheme:'default',bubbleWidth:75,bubbleFontSize:16,targetBubbleFontSize:16,accentColor:'#2E8B8B',targetAccentColor:'#1A1714'};
 var PRESET_PALETTES={
   light:[
     {id:'atomic-tangerine',label:'Atomic Tangerine',hex:'#ff6b35'},
@@ -4128,7 +4137,7 @@ function toggleSettingsDrawer(){
 function openSettings(){
   var p=getPrefs();
   updateLangPill();
-  var mineBg=p.srcBgColor||'#2E8B8B';
+  var mineBg=p.srcBgColor||'#9fb7b9';
   var theirsBg=p.tgtBgColor||'#F5F1EC';
   var srcBg=document.getElementById('set-src-bg');if(srcBg)srcBg.value=mineBg;
   var tgtBg=document.getElementById('set-tgt-bg');if(tgtBg)tgtBg.value=theirsBg;
@@ -4205,10 +4214,10 @@ function applyTgtBg(val){
 function applyTgtText(){}
 function resetAllBubbleDefaults(){
   var p=getPrefs();
-  p.srcBgColor='#2E8B8B';p.srcTextColor='#ffffff';p.accentColor='#2E8B8B';
+  p.srcBgColor='#9fb7b9';p.srcTextColor='';p.accentColor='#9fb7b9';
   p.tgtBgColor='#F5F1EC';p.targetAccentColor='#1A1714';
-  p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=15;p.targetBubbleFontSize=15;
-  p.srcFontColor='';p.tgtFontColor='';p.bubblePreset='medium';p.bubblePresetMeChoice='pacific-blue';p.bubblePresetPartnerChoice='almond-cream';
+  p.bubbleWidth=75;p.tgtBubbleWidth=75;p.bubbleFontSize=16;p.targetBubbleFontSize=16;
+  p.srcFontColor='';p.tgtFontColor='';p.bubblePreset='medium';p.bubblePresetMeChoice='ash-grey';p.bubblePresetPartnerChoice='almond-cream';
   savePrefs(p);document.documentElement.style.setProperty('--teal','#2E8B8B');
   openSettings();applyBubbleTheme();toast('Appearance reset to defaults');
 }
@@ -4238,7 +4247,7 @@ function applyBubbleTheme(){
   var mineSize=p.bubbleFontSize||BUBBLE_DEFAULTS.bubbleFontSize;
   var theirsSize=p.targetBubbleFontSize||BUBBLE_DEFAULTS.targetBubbleFontSize;
   // Source (mine) bubble — text auto-computed; font color overridable
-  var mineBg=p.srcBgColor||'#2E8B8B';
+  var mineBg=p.srcBgColor||'#9fb7b9';
   var mineLum=hexLumGlobal(mineBg);
   var mineText=effectiveBubbleTextColor(mineBg,p.srcFontColor);
   var mineTextDim=mineLum>0.45?'rgba(0,0,0,.55)':'rgba(255,255,255,.75)';
@@ -4757,7 +4766,8 @@ function seedStarterData(){
 function refreshTabWriterLease(){
   var now=Date.now();
   var lease=lsJSON(SK.writer,{});
-  if(!lease.tabId||Number(lease.expiresAt||0)<=now||lease.tabId===TAB_ID){
+  // Claim if: no lease, expired, already ours, no ping from other tab yet, OR this tab is currently visible
+  if(!lease.tabId||Number(lease.expiresAt||0)<=now||lease.tabId===TAB_ID||!_receivedPingFromOther||!document.hidden){
     lease={tabId:TAB_ID,expiresAt:now+tabWriterLeaseMs,epoch:(Number(lease.epoch)||0)+(lease.tabId===TAB_ID?0:1)};
     lsW(SK.writer,JSON.stringify(lease));
   }
@@ -4769,7 +4779,7 @@ function setupTabCoordination(){
   setInterval(refreshTabWriterLease,4000);
   if(tabBus){
     tabBus.onmessage=function(ev){
-      if(ev&&ev.data&&ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID)refreshTabWriterLease();
+      if(ev&&ev.data&&ev.data.type==='writer-ping'&&ev.data.tabId!==TAB_ID){_receivedPingFromOther=true;refreshTabWriterLease();}
     };
     setInterval(function(){try{tabBus.postMessage({type:'writer-ping',tabId:TAB_ID,ts:Date.now()});}catch(_){}},5000);
   }else{

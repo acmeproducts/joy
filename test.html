@@ -362,7 +362,7 @@ textarea.field-input{resize:none;}
 .new-chat-modal[hidden]{display:none!important;}
 .new-chat-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
 .new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;position:relative;padding:14px;}
-.new-chat-title-wrap{position:relative;border-radius:12px;overflow:hidden;min-height:72px;display:flex;align-items:center;margin:-4px -4px 2px;}
+.new-chat-title-wrap{position:relative;border-radius:12px 12px 0 0;overflow:hidden;min-height:72px;display:flex;align-items:center;margin:-16px -16px 0;}
 .new-chat-title-wrap::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;}
 .new-chat-sub{font-size:12px;color:var(--ink-dim);}
 .new-chat-actions{display:flex;gap:8px;margin-top:6px;}
@@ -2255,11 +2255,12 @@ function populateNewChatLangSelect(id){
 }
 function openNewChatModal(){
   var modal=document.getElementById('new-chat-modal');
+  var p=getPrefs();
   populateNewChatLangSelect('new-chat-my-lang');
   populateNewChatLangSelect('new-chat-partner-lang');
-  var my=document.getElementById('new-chat-my-lang');if(my)my.value='auto';
-  var peer=document.getElementById('new-chat-partner-lang');if(peer)peer.value='auto';
-  var ar=document.getElementById('new-chat-autoread');if(ar)ar.checked=true;
+  var my=document.getElementById('new-chat-my-lang');if(my)my.value=p.myLang||'auto';
+  var peer=document.getElementById('new-chat-partner-lang');if(peer)peer.value=p.partnerLang||'auto';
+  var ar=document.getElementById('new-chat-autoread');if(ar)ar.checked=!!(p.autoSpeakIncoming!==false);
   if(modal)modal.hidden=false;
   setTimeout(function(){if(my)my.focus();},30);
 }

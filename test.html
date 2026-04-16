@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Talk + Say v3.7 · April 16, 2026 17:00 Los Angeles · lang roles clobber fix, speaker icon, auto-read helper removed, WASM seam -->
+<!-- Talk + Say v3.8 · April 16, 2026 22:00 Los Angeles · tr handler overwrite fix, effectiveTargetLang gate, targetLang capture -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v3.7</title>
+<title>Talk + Say · v3.8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -3077,7 +3077,14 @@ function applyPeerRoutingHints(sess,d){
     if(sess.partnerFixedLang!==pf){sess.partnerFixedLang=pf;changed=true;}
     sess.roles.partner.fixedLang=pf;
   }
-  if(d.effectiveTargetLang){var et=normalizeLangSetting(d.effectiveTargetLang)||'';if(et&&sess.partnerEffectiveReplyLang!==et){sess.partnerEffectiveReplyLang=et;changed=true;}}
+  if(d.effectiveTargetLang){
+    // Only update partner effective lang from wire if the local session doesn't have partner in fixed mode.
+    // When partnerLangMode='fixed', the fixed lang takes absolute priority over partner's reported preference.
+    if(sess.partnerLangMode!=='fixed'||!sess.partnerFixedLang){
+      var et=normalizeLangSetting(d.effectiveTargetLang)||'';
+      if(et&&sess.partnerEffectiveReplyLang!==et){sess.partnerEffectiveReplyLang=et;changed=true;}
+    }
+  }
   if(d.partnerEffectiveReplyLang!==undefined){var pe=normalizeLangSetting(d.partnerEffectiveReplyLang)||'';if(sess.partnerEffectiveReplyLang!==pe){sess.partnerEffectiveReplyLang=pe;changed=true;}}
   return changed;
 }
@@ -3209,8 +3216,16 @@ function handleRelayEvent(d){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill,suppressJoinNote:true});
     var m2=findMsg(d.id);
     if(m2){
-      normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
-      applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
+      // Always merge into translations map — useful for multi-lang display
+      if(d.targetLang&&(d.targetText||d.text))setMsgTranslation(m2,d.targetLang,d.targetText||d.text||'');
+      // For sender's own messages: only overwrite primary targetLang if it matches what was originally stored.
+      // The partner sends back their self-translation which may be a different target lang — don't clobber.
+      // For received messages (from='them'): apply normally.
+      var applyPrimary=m2.from!=='me'||(d.targetLang&&d.targetLang===m2.targetLang);
+      if(applyPrimary){
+        normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
+        applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
+      }
       markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
       updateTransDOM(m2);saveMsgs(state.activeConvId,state.messages);
     }
@@ -3985,8 +4000,9 @@ async function sendMessage(){
     updateTransDOM(msg);
     saveMsgs(sess.convId,state.messages);
   }else{
-    translate(outboundText,outLang,msg.targetLang).then(function(tr){
-      applyMsgTarget(msg,msg.targetLang,tr||outboundText);
+    var _capturedTargetLang=msg.targetLang;
+    translate(outboundText,outLang,_capturedTargetLang).then(function(tr){
+      applyMsgTarget(msg,_capturedTargetLang,tr||outboundText);
       updateTransDOM(msg);
       saveMsgs(sess.convId,state.messages);
     });
@@ -4363,7 +4379,7 @@ function resetSourceBubbleDefaults(){var p=getPrefs();p.sourceTheme=BUBBLE_DEFAU
 function resetTargetBubbleDefaults(){var p=getPrefs();p.targetTheme=BUBBLE_DEFAULTS.targetTheme;p.targetBubbleFontSize=BUBBLE_DEFAULTS.targetBubbleFontSize;p.targetAccentColor=BUBBLE_DEFAULTS.targetAccentColor;savePrefs(p);openSettings();applyBubbleTheme();toast('Target bubble reset');}
 function applyPhrasebookAccent(v){var p=getPrefs();p.phrasebookAccentColor=v;savePrefs(p);}
 
-function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.7</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
+function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.8</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
 function openPrintPhrasebookModal(){document.getElementById('print-overlay').hidden=false;}
 function printPhrasebookSelection(){document.getElementById('print-overlay').hidden=true;renderCatalogCards();setTimeout(function(){window.print();},60);}
 
@@ -4923,5 +4939,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.7 · Build Apr 16, 2026 17:00 Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.8 · Build Apr 16, 2026 22:00 Los Angeles</div></body>
 </html>

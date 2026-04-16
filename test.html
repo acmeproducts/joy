@@ -28,10 +28,10 @@ html,body{height:100%;overflow:hidden;background:var(--cream);font-family:"DM Sa
 
 /* FIELDS */
 .field-label{display:block;font-size:11px;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 5px;}
-.field-input{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 13px;font-size:15px;font-family:"DM Sans",sans-serif;color:var(--ink);background:#fff;outline:none;}
+.field-input{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 13px;font-size:16px;font-family:"DM Sans",sans-serif;color:var(--ink);background:#fff;outline:none;}
 .field-input:focus{border-color:var(--teal);}
 textarea.field-input{resize:none;}
-.field-select{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 13px;font-size:14px;font-family:"DM Sans",sans-serif;color:var(--ink);background:#fff;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer;}
+.field-select{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:10px 13px;font-size:16px;font-family:"DM Sans",sans-serif;color:var(--ink);background:#fff;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer;}
 
 /* ════ CHAT SHELL ════ */
 .icon-btn-sm{background:none;border:none;cursor:pointer;padding:5px;border-radius:8px;color:var(--ink-dim);line-height:0;transition:background .12s;}
@@ -281,7 +281,7 @@ textarea.field-input{resize:none;}
 .composer-icon:hover{color:var(--teal);}
 .composer-icon.active{color:var(--red);}
 .composer-wrap{flex:1;position:relative;}
-.composer-ta{width:100%;border:1.5px solid var(--border);border-radius:20px;padding:9px 14px;font-size:15px;font-family:"DM Sans",sans-serif;background:#fff;resize:none;outline:none;min-height:40px;max-height:110px;line-height:1.4;-webkit-appearance:none;appearance:none;overflow:hidden;display:block;}
+.composer-ta{width:100%;border:1.5px solid var(--border);border-radius:20px;padding:9px 14px;font-size:16px;font-family:"DM Sans",sans-serif;background:#fff;resize:none;outline:none;min-height:40px;max-height:110px;line-height:1.4;-webkit-appearance:none;appearance:none;overflow:hidden;display:block;}
 .composer-ta:focus{border-color:var(--teal);}
 .send-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--teal);color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:opacity .12s;}
 .send-btn:disabled{opacity:.3;}
@@ -305,7 +305,7 @@ textarea.field-input{resize:none;}
 .export-mode-meta{font-size:11px;color:var(--ink-dim);margin-top:6px;line-height:1.4;}
 .scr-action{background:var(--teal);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:"DM Sans",sans-serif;}
 .cat-toolbar{padding:8px 16px 6px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:8px;align-items:center;}
-.cat-omni{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:"DM Sans",sans-serif;background:#fff;outline:none;}
+.cat-omni{width:100%;border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:16px;font-family:"DM Sans",sans-serif;background:#fff;outline:none;}
 .cat-omni:focus{border-color:var(--teal);}
 .search-wrap{position:relative;flex:1;}
 .search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--ink-dim);font-size:14px;cursor:pointer;padding:2px 4px;border-radius:6px;display:none;}
@@ -339,7 +339,7 @@ textarea.field-input{resize:none;}
 .search-overlay{position:fixed;inset:0;background:var(--cream);z-index:35;display:none;flex-direction:column;}
 .search-overlay.open{display:flex;}
 .search-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;}
-.search-input{flex:1;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;font-size:15px;font-family:"DM Sans",sans-serif;background:#fff;outline:none;}
+.search-input{flex:1;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;font-size:16px;font-family:"DM Sans",sans-serif;background:#fff;outline:none;}
 .search-input:focus{border-color:var(--teal);}
 .search-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink-mid);padding:6px;}
 .search-results{flex:1;overflow-y:auto;padding:8px 16px;}
@@ -361,7 +361,9 @@ textarea.field-input{resize:none;}
 .new-chat-modal{position:fixed;inset:0;background:rgba(26,23,20,.52);display:flex;align-items:center;justify-content:center;z-index:265;padding:20px;}
 .new-chat-modal[hidden]{display:none!important;}
 .new-chat-card{width:min(100%,380px);background:var(--cream);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:10px;}
-.new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;}
+.new-chat-title{font-family:"Lora",serif;font-size:20px;font-weight:600;position:relative;padding:14px;}
+.new-chat-title-wrap{position:relative;border-radius:12px;overflow:hidden;min-height:72px;display:flex;align-items:center;margin:-4px -4px 2px;}
+.new-chat-title-wrap::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(253,250,247,.58),rgba(253,250,247,.58)),url('./flags.gif'),url('./flags.png'),linear-gradient(135deg,#f7e9d8,#f2f4ff);background-size:cover,cover,cover,cover;background-position:center,center,center,center;background-repeat:no-repeat,no-repeat,no-repeat,no-repeat;opacity:.58;}
 .new-chat-sub{font-size:12px;color:var(--ink-dim);}
 .new-chat-actions{display:flex;gap:8px;margin-top:6px;}
 .helper-toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:280;width:min(92vw,420px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:10px 12px;}
@@ -619,7 +621,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
 
 <div class="new-chat-modal" id="new-chat-modal" hidden onclick="if(event.target===this)closeNewChatModal(true)">
   <div class="new-chat-card">
-    <div class="new-chat-title">Start new chat</div>
+    <div class="new-chat-title-wrap"><div class="new-chat-title">Start new chat</div></div>
     <label class="field-label" style="margin-top:2px;">Your language</label>
     <select class="field-select" id="new-chat-my-lang"></select>
     <label class="field-label">Partner language</label>
@@ -2082,6 +2084,8 @@ function scheduleMarkSessionRead(convId){
 // ── Visibility / focus ────────────────────────────────────
 document.addEventListener('visibilitychange',function(){
   if(document.hidden){_hiddenAt=Date.now();if(_readDebounceTimer){clearTimeout(_readDebounceTimer);_readDebounceTimer=null;}/* heartbeat keeps running */return;}
+  // iOS can leave synth wedged after backgrounding — cancel to unblock next speak()
+  if(canSpeak&&_isIos){try{if(synth.speaking||synth.pending)synth.cancel();}catch(_){}}
   var hiddenMs=Date.now()-(_hiddenAt||0);
   if(state.activeConvId){
     if(!ws||ws.readyState>1){
@@ -2186,13 +2190,14 @@ function openLanguagePanel(){
 }
 function setMyLang(code){
   var p=getPrefs();p.myLang=code;p._langDetected=true;savePrefs(p);
-  var all=getAllSessions();
-  all.forEach(function(s){
-    s.ownerLangMode=code?'fixed':'auto';
-    s.ownerFixedLang=code||'';
-    if(code)setEffectiveReplyLang(s,'owner',code);
-    putSession(s);
-  });
+  // Scope the language-mode write to the active session only; other sessions keep their own setting
+  var activeSess=state.activeConvId?getSession(state.activeConvId):null;
+  if(activeSess){
+    activeSess.ownerLangMode=code?'fixed':'auto';
+    activeSess.ownerFixedLang=code||'';
+    if(code)setEffectiveReplyLang(activeSess,'owner',code);
+    putSession(activeSess);
+  }
   updateLangPill();
   renderLanguageSheet();
   var ov=document.getElementById('language-overlay');if(ov)ov.hidden=true;
@@ -2627,10 +2632,12 @@ function validateInvitePayload(payload){
     if(payload.pf!==undefined)mapped.partnerFixedLang=payload.pf;
     if(payload.pl!==undefined)mapped.partnerLastSentLang=payload.pl;
     if(payload.pe!==undefined)mapped.partnerEffectiveReplyLang=payload.pe;
+    // om/of/ar decoded unconditionally — partner-invite now carries them too
+    if(payload.om!==undefined)mapped.ownerLangMode=payload.om;
+    if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
+    if(payload.ar!==undefined)mapped.autoSpeakIncoming=!!payload.ar;
     if(payload.o==='o'){
       if(payload.oi!==undefined)mapped.ownerIdentityId=payload.oi;
-      if(payload.om!==undefined)mapped.ownerLangMode=payload.om;
-      if(payload.of!==undefined)mapped.ownerFixedLang=payload.of;
       if(payload.ol!==undefined)mapped.ownerLastSentLang=payload.ol;
       if(payload.oe!==undefined)mapped.ownerEffectiveReplyLang=payload.oe;
     }
@@ -2660,6 +2667,13 @@ function buildInvitePayload(sess,prefs,intent){
   sess=normalizeSession(sess||{});
   var mode=(intent==='owner-handoff')?'owner-handoff':'partner-invite'; // Keep partner-invite and owner-handoff payloads distinct.
   var base={schemaVersion:INVITE_SCHEMA_VERSION,s:sess.convId,d:DEVICE_ID,p:PART_ID,n:sess.myName||prefs.userName||'yournamehere',o:(mode==='owner-handoff'?'o':'p')};
+  // Language pair — carried on both flavors so the receiver can restore routing state
+  if(sess.ownerLangMode)base.om=sess.ownerLangMode;
+  if(sess.ownerFixedLang)base.of=sess.ownerFixedLang;
+  if(sess.partnerLangMode)base.pm=sess.partnerLangMode;
+  if(sess.partnerFixedLang)base.pf=sess.partnerFixedLang;
+  // Auto-read preference
+  if(sess.autoSpeakIncoming!==null&&sess.autoSpeakIncoming!==undefined)base.ar=sess.autoSpeakIncoming?1:0;
   if(mode==='owner-handoff'){
     // Preserve owner identity for role-correct owner handoff hydration.
     base.oi=sess.ownerIdentityId;
@@ -2679,11 +2693,14 @@ function hydrateSessionFromInvite(sess,invite){
   if(!sess||!invite)return sess;
   var inviteName=firstRealName(invite.initiatorGlobalName);
   if(inviteName){sess.partnerHandle=inviteName;sess.peerName=inviteName;}
+  // Owner language-routing state — apply on both invite types so a partner-join restores the pair
+  if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
+  if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
+  // Auto-read preference — apply on both invite types
+  if(invite.autoSpeakIncoming!==undefined&&invite.autoSpeakIncoming!==null)sess.autoSpeakIncoming=!!invite.autoSpeakIncoming;
   if(invite.side==='owner'){
-    // Preserve owner language-routing state across owner handoff device switches.
+    // Owner identity only restored on a device-handoff to avoid misidentification
     if(invite.ownerIdentityId)sess.ownerIdentityId=invite.ownerIdentityId;
-    if(invite.ownerLangMode==='fixed'||invite.ownerLangMode==='auto')sess.ownerLangMode=invite.ownerLangMode;
-    if(invite.ownerFixedLang!==undefined)sess.ownerFixedLang=normalizeLangSetting(invite.ownerFixedLang)||'';
     if(invite.ownerLastSentLang!==undefined)sess.ownerLastSentLang=normalizeLangSetting(invite.ownerLastSentLang)||'';
     if(invite.ownerEffectiveReplyLang!==undefined)sess.ownerEffectiveReplyLang=normalizeLangSetting(invite.ownerEffectiveReplyLang)||'';
   }
@@ -2842,6 +2859,8 @@ function translate(text,from,to){
 // TTS
 // ════════════════════════════════════════════════════════
 var synth=window.speechSynthesis;var canSpeak='speechSynthesis' in window;
+var _isIos=(/iphone|ipad|ipod/i.test(navigator.userAgent)||(/macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1));
+var _ttsWarmed=false;
 var _voicesReady=false;var _voicesList=[];
 function ensureVoices(cb){
   if(_voicesReady&&_voicesList.length){cb(_voicesList);return;}
@@ -2860,10 +2879,16 @@ function ensureVoices(cb){
 }
 function speak(text,lang,btn){
   if(!canSpeak||!text)return;
-  if(btn&&ttsActive===btn){synth.cancel();setTTSBtn(btn,false);ttsActive=null;return;}
-  if(ttsActive){synth.cancel();setTTSBtn(ttsActive,false);ttsActive=null;}
-  // Chrome bug: cancel() then speak() in same tick sometimes fails
-  synth.cancel();
+  // Toggle off: stop current utterance if same button clicked again
+  if(btn&&ttsActive===btn){
+    if(synth.speaking||synth.pending)synth.cancel();
+    setTTSBtn(btn,false);ttsActive=null;return;
+  }
+  // Stop any other active utterance — only cancel if actually running (idle cancel wedges iOS)
+  if(ttsActive){
+    if(synth.speaking||synth.pending)synth.cancel();
+    setTTSBtn(ttsActive,false);ttsActive=null;
+  }
   ensureVoices(function(voices){
     var utt=new SpeechSynthesisUtterance(text);
     var locale=TTS_LOCALE[lang]||lang;
@@ -2876,17 +2901,40 @@ function speak(text,lang,btn){
       null;
     utt.lang=locale||lang||'en';
     if(voice)utt.voice=voice;
-    console.log('[TTS] attempt len=%d lang=%s voice=%s',String(text||'').length,utt.lang,(voice&&voice.name)||'browser-default');
+    console.log('[TTS] attempt len=%d lang=%s voice=%s ios=%s',String(text||'').length,utt.lang,(voice&&voice.name)||'browser-default',String(_isIos));
     setTTSBtn(btn,true);ttsActive=btn;
     utt.onend=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
-    utt.onerror=function(){setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;clearInterval(utt._keepAlive);};
-    try{
-      synth.cancel(); // Chrome desktop: clear any stuck synth state before speaking
-      synth.speak(utt);
-      // Chrome workaround: pause/resume keeps utterance alive past 15s (Android + desktop)
-      utt._keepAlive=setInterval(function(){if(!synth.speaking){clearInterval(utt._keepAlive);return;}synth.pause();synth.resume();},10000);
-    }catch(e){setTTSBtn(btn,false);ttsActive=null;}
+    utt.onerror=function(){
+      // Hard-reset: iOS leaves synth wedged after an error; cancel clears the stuck queue
+      try{synth.cancel();}catch(_){}
+      setTTSBtn(btn,false);if(ttsActive===btn)ttsActive=null;
+      clearInterval(utt._keepAlive);
+    };
+    function doSpeak(){
+      try{
+        // Only cancel if something is actually queued — idle cancel silently wedges iOS
+        if(synth.speaking||synth.pending)synth.cancel();
+        synth.speak(utt);
+        // Keep-alive via pause/resume (Chrome desktop + Android only — breaks iOS)
+        if(!_isIos){
+          utt._keepAlive=setInterval(function(){if(!synth.speaking){clearInterval(utt._keepAlive);return;}synth.pause();synth.resume();},10000);
+        }
+      }catch(e){setTTSBtn(btn,false);ttsActive=null;}
+    }
+    // iOS needs a short gap after any prior cancel() before speak() or the utterance silently drops
+    if(_isIos){setTimeout(doSpeak,30);}else{doSpeak();}
   });
+}
+function warmTTS(){
+  // iOS requires a gesture-context utterance before auto-read will work; call on first user touch
+  if(!canSpeak||_ttsWarmed)return;
+  _ttsWarmed=true;
+  try{
+    var w=new SpeechSynthesisUtterance('');
+    w.volume=0;
+    synth.speak(w);
+    setTimeout(function(){try{if(synth.speaking||synth.pending)synth.cancel();}catch(_){}},120);
+  }catch(_){}
 }
 function setTTSBtn(btn,on){if(!btn)return;btn.classList.toggle('playing',on);}
 function getEffectiveAutoRead(sess){
@@ -4844,6 +4892,9 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 
   // online/offline handlers registered in transport block
+
+  // iOS requires a gesture to unlock the audio session before auto-read will work
+  if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
 <div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.5 · Build April, 1 2026 18:53 Los Angeles</div></body>

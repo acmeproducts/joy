@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Talk + Say v3.8 · April 16, 2026 22:30 Los Angeles · single source of truth: flat fields only for lang state -->
+<!-- Talk + Say v3.9 · April 16, 2026 23:30 Los Angeles · role-aware send/receive: partner device translates correctly -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v3.8</title>
+<title>Talk + Say · v3.9</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -1201,13 +1201,14 @@ function normalizeMsgSchema(msg,defaults){
 
 function getMsgs(cid){
   var sess=getSession(cid)||{};
+  var _sides=getLocalSides(sess);
+  var myEff=resolveEffectiveLang(sess,_sides.mySide);
+  var theirEff=resolveEffectiveLang(sess,_sides.theirSide);
   var raw=lsJSON('ts3_m_'+cid,[]);
   var changed=false;
   var norm=(raw||[]).map(function(msg){
     var before=JSON.stringify(msg||{});
-    var ownerEff=resolveEffectiveLang(sess,'owner');
-    var partnerEff=resolveEffectiveLang(sess,'partner');
-    var next=normalizeMsgSchema(msg,{sourceLang:(msg&&msg.from==='me')?(ownerEff||'en'):(msg&&msg.lang)||partnerEff||'en',targetLang:(msg&&msg.from==='me')?(partnerEff||'en'):(ownerEff||'en')});
+    var next=normalizeMsgSchema(msg,{sourceLang:(msg&&msg.from==='me')?(myEff||'en'):(msg&&msg.lang)||theirEff||'en',targetLang:(msg&&msg.from==='me')?(theirEff||'en'):(myEff||'en')});
     if(before!==JSON.stringify(next))changed=true;
     return next;
   });
@@ -1356,20 +1357,35 @@ function resolveEffectiveLang(sess,side,fallbackLang){
   return last||normalizeLangSetting(fallbackLang)||detectBrowserLang()||'en';
 }
 function resolveIncomingTargetLang(sess){
-  return getEffectiveReplyLang(sess,'owner','en');
+  return getEffectiveReplyLang(sess,getLocalSides(sess).mySide,'en');
 }
 function resolveTargetLang(sess){
-  return getEffectiveReplyLang(sess,'partner','en');
+  return getEffectiveReplyLang(sess,getLocalSides(sess).theirSide,'en');
 }
 function shouldSkipSameLanguage(sourceLang,targetLang){return !!(sourceLang&&targetLang&&sourceLang===targetLang);}
 
-// ════════════════════════════════════════════════════════
-// IDENTITY HELPERS
+// ── Role-aware side resolution ─────────────────────────────
+// Returns {mySide, theirSide} based on localRole so every caller
+// can use the correct session fields regardless of which device opened the session.
+function getLocalSides(sess){
+  var s=sess?normalizeSession(sess):normalizeSession({});
+  var mySide=s.localRole==='partner'?'partner':'owner';
+  var theirSide=mySide==='partner'?'owner':'partner';
+  return {mySide:mySide,theirSide:theirSide};
+}
+function effectiveLangFromSession(sess){
+  var sides=getLocalSides(sess);
+  return getEffectiveReplyLang(sess,sides.mySide,'en');
+}
+function getEffectiveTargetLang(sess){
+  var sides=getLocalSides(sess);
+  return getEffectiveReplyLang(sess,sides.theirSide,'en');
+}
 // ════════════════════════════════════════════════════════
 function isPlaceholderName(name){var v=(name||'').trim().toLowerCase();return !v||v==='new chat'||v==='partner'||v==='yournamehere';}
 function firstRealName(){for(var i=0;i<arguments.length;i++){var v=(arguments[i]||'').trim();if(v&&!isPlaceholderName(v))return v;}return '';}
 function getPreferredOwnerName(){var p=getPrefs();return firstRealName(p.globalName,p.userName)||'yournamehere';}
-function effectiveLangFromSession(sess){return getEffectiveReplyLang(sess,'owner','en');}
+function effectiveLangFromSession(sess){return getEffectiveReplyLang(sess,getLocalSides(sess).mySide,'en');}
 function getEffectiveTargetLang(sess){return resolveTargetLang(sess);}
 
 function stampMsgNames(msg,sess){
@@ -1569,8 +1585,9 @@ function applyMsgTarget(msg,targetLang,targetText){
   if((msg.targetText||'')!==next){msg.targetText=next;changed=true;}
   if(targetLang===msg.sourceLang&&msg.sourceText&&!(msg.translations||{})[targetLang]){setMsgTranslation(msg,targetLang,msg.sourceText);}
   var activeSess=getSession(state.activeConvId)||{};
-  if(msg.from==='them'&&targetLang===resolveEffectiveLang(activeSess,'owner'))msg.text=msg.targetText||msg.sourceText;
-  if(msg.from==='me'&&targetLang===resolveEffectiveLang(activeSess,'partner'))msg.translated=msg.targetText||'';
+  var _sides=getLocalSides(activeSess);
+  if(msg.from==='them'&&targetLang===resolveEffectiveLang(activeSess,_sides.mySide))msg.text=msg.targetText||msg.sourceText;
+  if(msg.from==='me'&&targetLang===resolveEffectiveLang(activeSess,_sides.theirSide))msg.translated=msg.targetText||'';
   // Invalidate back-translate if target text changed
   if(changed&&msg.backtranslate){
     var newHash=btContentHash(msg.sourceText,msg.targetText);
@@ -3010,7 +3027,7 @@ function toggleSTT(){
   if(sttActive){if(recognition)recognition.stop();return;}
   var sess=getSession(state.activeConvId);
   recognition=new SpeechRec();
-  recognition.lang=TTS_LOCALE[resolveEffectiveLang(sess,'owner')||getPrefs().myLang||'en']||'en';
+  recognition.lang=TTS_LOCALE[effectiveLangFromSession(sess)||getPrefs().myLang||'en']||'en';
   recognition.interimResults=true;recognition.continuous=false;
   var btn=document.getElementById('stt-btn');
   recognition.onstart=function(){sttActive=true;if(btn)btn.classList.add('active');};
@@ -3131,15 +3148,15 @@ function handleRelayEvent(d){
   if(d.type==='msg'){
     markPeerSeen(sess.convId,d.timestamp||d.ts||Date.now(),{fromBackfill:!!d._fromBackfill});
     applyPeerRoutingHints(sess,d);
+    var sides=getLocalSides(sess);  // mySide=my role, theirSide=sender's role
     var srcTxt=d.sourceText||d.orig||d.text||'';
-    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,'partner'))||resolveEffectiveLang(sess,'partner');
-    var partnerMode=sess.partnerLangMode==='fixed'?'fixed':'auto';
-    var partnerFixed=normalizeLangSetting(sess.partnerFixedLang)||'';
-    var partnerOutLang=(partnerMode==='fixed'&&partnerFixed)?partnerFixed:srcLang;
-    sess.partnerLastSentLang=partnerOutLang;
-    setEffectiveReplyLang(sess,'partner',partnerOutLang);
-    // Receiver always wants translation in local effective reply language.
-    var myLang=getEffectiveReplyLang(sess,'owner','en');
+    var srcLang=d.sourceLang||d.lang||detectLang(srcTxt,resolveEffectiveLang(sess,sides.theirSide))||resolveEffectiveLang(sess,sides.theirSide);
+    var remoteMode=sess[sides.theirSide+'LangMode']==='fixed'?'fixed':'auto';
+    var remoteFixed=normalizeLangSetting(sess[sides.theirSide+'FixedLang'])||'';
+    var remoteOutLang=(remoteMode==='fixed'&&remoteFixed)?remoteFixed:srcLang;
+    sess[sides.theirSide+'LastSentLang']=remoteOutLang;
+    setEffectiveReplyLang(sess,sides.theirSide,remoteOutLang);
+    var myLang=getEffectiveReplyLang(sess,sides.mySide,'en');
     var incomingTargetLang=normalizeLangSetting(d.targetLang||'');
     var incomingForcedText=(incomingTargetLang===myLang)?(d.targetText||d.text||''):'';
     var partnerId=String(d.identityId||'').trim();
@@ -3167,7 +3184,7 @@ function handleRelayEvent(d){
       state.pendingInviteId=null;
     }
     var rxTs=d.timestamp||d.ts||Date.now();
-    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:srcLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:srcLang,status:'received',deliveredAt:rxTs,timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:srcLang,targetLang:myLang});
+    var msg=normalizeMsgSchema({id:d.id,from:'them',sourceText:srcTxt,sourceLang:remoteOutLang,targetLang:myLang,targetText:incomingForcedText,orig:srcTxt,text:null,lang:remoteOutLang,status:'received',deliveredAt:rxTs,timestamp:rxTs,clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:remoteOutLang,targetLang:myLang});
     // Use wire name for display, not stale session name
     msg.displayFromName=firstRealName(d.name,sess.partnerHandle,sess.peerName)||'Partner';
     mergeMsgTranslations(msg,d.translations||{});
@@ -3177,16 +3194,16 @@ function handleRelayEvent(d){
     sess.lastActivity=msg.timestamp;putSession(sess);saveMsgs(sess.convId,state.messages);
 
     // Same language — no translation needed
-    if(srcLang===myLang){
+    if(remoteOutLang===myLang){
       applyMsgTarget(msg,myLang,srcTxt);
       updateTransDOM(msg);saveMsgs(sess.convId,state.messages);
       sendReliable({type:'tr',id:d.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:msg.targetText,targetLang:myLang,translations:msg.translations});
       if(getEffectiveAutoRead(sess)&&msg.targetText)speak(msg.targetText,myLang,null);
       return;
     }
-    translate(msg.sourceText,srcLang,myLang).then(function(tr){
+    translate(msg.sourceText,remoteOutLang,myLang).then(function(tr){
       var translated=tr||msg.sourceText;
-      addDiagLog(tr?('TRANSLATE ok '+srcLang+'>'+myLang+' "'+tr.slice(0,25)+'"'):('TRANSLATE null '+srcLang+'>'+myLang+' fallback=source'));
+      addDiagLog(tr?('TRANSLATE ok '+remoteOutLang+'>'+myLang+' "'+tr.slice(0,25)+'"'):('TRANSLATE null '+remoteOutLang+'>'+myLang+' fallback=source'));
       applyMsgTarget(msg,myLang,translated);
       updateTransDOM(msg);saveMsgs(sess.convId,state.messages);
       sendReliable({type:'tr',id:d.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:msg.targetText,targetLang:myLang,translations:msg.translations});
@@ -3204,9 +3221,10 @@ function handleRelayEvent(d){
       // For sender's own messages: only overwrite primary targetLang if it matches what was originally stored.
       // The partner sends back their self-translation which may be a different target lang — don't clobber.
       // For received messages (from='them'): apply normally.
+      var _trSides=getLocalSides(sess);
       var applyPrimary=m2.from!=='me'||(d.targetLang&&d.targetLang===m2.targetLang);
       if(applyPrimary){
-        normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,'partner'):resolveEffectiveLang(sess,'owner'))});
+        normalizeMsgSchema(m2,{sourceLang:m2.sourceLang||'en',targetLang:d.targetLang||(m2.from==='me'?resolveEffectiveLang(sess,_trSides.theirSide):resolveEffectiveLang(sess,_trSides.mySide))});
         applyMsgTarget(m2,d.targetLang||m2.targetLang,d.targetText||d.text||'');
       }
       markMessageDeliveryState(state.activeConvId,m2.id,'translated',Date.now());
@@ -3369,23 +3387,23 @@ function buildBubbleCard(cfg){
 // ════════════════════════════════════════════════════════
 function getSides(msg){
   var sess=getSession(state.activeConvId)||{};
-  var myLang=getEffectiveReplyLang(sess,'owner','en');
-  var partnerLang=getEffectiveReplyLang(sess,'partner','en');
+  var sides=getLocalSides(sess);
+  var myLang=getEffectiveReplyLang(sess,sides.mySide,'en');
+  var theirLang=getEffectiveReplyLang(sess,sides.theirSide,'en');
 
   if(msg.from==='me'){
-    // Left: what I typed (my lang). Right: translation into partner's lang.
+    // Left: what I typed (my lang). Right: translation into their lang.
     var srcTxt=msg.sourceText||'';
     var srcLang=msg.sourceLang||myLang;
-    var targetKey=msg.targetLang||partnerLang;
+    var targetKey=msg.targetLang||theirLang;
     var tgtInfo=getMsgTranslatedText(msg,targetKey,msg.targetText||'');
     var tgtTxt=tgtInfo.text;
     var tgtLang=targetKey;
     return {srcLang:srcLang,srcTxt:srcTxt,srcTtsLang:srcLang,tgtLang:tgtLang,tgtTxt:tgtTxt,tgtTtsLang:tgtInfo.langUsed||tgtLang};
   }else{
-    // Received message: left=translation (my lang), right=original (partner's lang).
-    // This way the reader sees the meaning first, source second.
+    // Received message: left=translation (my lang), right=original (their lang).
     var origTxt=msg.sourceText||'';
-    var origLang=msg.sourceLang||partnerLang;
+    var origLang=msg.sourceLang||theirLang;
     var targetKey=msg.targetLang||myLang;
     var transInfo=getMsgTranslatedText(msg,targetKey,msg.targetText||'');
     var transTxt=transInfo.text;
@@ -3400,16 +3418,15 @@ function getSides(msg){
 // For 'theirs': source is what partner typed (tgtLang after swap), translate translation back to that lang
 function getBacktranslateContextFromMsg(msg){
   var sess=getSession(state.activeConvId)||{};
-  var myLang=getEffectiveReplyLang(sess,'owner','en');
-  var partnerLang=getEffectiveReplyLang(sess,'partner','en');
+  var sides=getLocalSides(sess);
+  var myLang=getEffectiveReplyLang(sess,sides.mySide,'en');
+  var theirLang=getEffectiveReplyLang(sess,sides.theirSide,'en');
   if(msg.from==='me'){
-    // Back-translate: take partner-lang translation, translate back to my lang
-    var tgtTxt=getMsgTranslatedText(msg,msg.targetLang||partnerLang,msg.targetText||'').text;
-    return {inputText:tgtTxt,fromLang:partnerLang,toLang:msg.sourceLang||myLang};
+    var tgtTxt=getMsgTranslatedText(msg,msg.targetLang||theirLang,msg.targetText||'').text;
+    return {inputText:tgtTxt,fromLang:theirLang,toLang:msg.sourceLang||myLang};
   }else{
-    // Back-translate: take my-lang translation, translate back to partner's lang (= source)
     var transTxt=getMsgTranslatedText(msg,msg.targetLang||myLang,msg.targetText||'').text;
-    return {inputText:transTxt,fromLang:myLang,toLang:msg.sourceLang||partnerLang};
+    return {inputText:transTxt,fromLang:myLang,toLang:msg.sourceLang||theirLang};
   }
 }
 
@@ -3740,17 +3757,18 @@ function sendClarifyNote(id,ctx){
 function bblSave(id){
   var msg=findMsg(id);if(!msg)return;
   var sess=getSession(state.activeConvId)||{};
-  var myLang=getEffectiveReplyLang(sess,'owner','en');
-  var partnerLang=getEffectiveReplyLang(sess,'partner','en');
+  var sides=getLocalSides(sess);
+  var myLang=getEffectiveReplyLang(sess,sides.mySide,'en');
+  var theirLang=getEffectiveReplyLang(sess,sides.theirSide,'en');
 
   // Card always stores: source = what was originally typed, target = translation
   var sourceText, sourceLang, targetText, targetLang;
   if(msg.from==='me'){
     sourceText=msg.sourceText||'';sourceLang=msg.sourceLang||myLang;
-    targetLang=msg.targetLang||partnerLang;
+    targetLang=msg.targetLang||theirLang;
     targetText=getMsgTranslatedText(msg,targetLang,msg.targetText||'').text;
   }else{
-    sourceText=msg.sourceText||'';sourceLang=msg.sourceLang||partnerLang;
+    sourceText=msg.sourceText||'';sourceLang=msg.sourceLang||theirLang;
     targetLang=msg.targetLang||myLang;
     targetText=getMsgTranslatedText(msg,targetLang,msg.targetText||'').text;
   }
@@ -3946,38 +3964,39 @@ async function sendMessage(){
   if(typingStopTimer){clearTimeout(typingStopTimer);typingStopTimer=null;}
   var sess=getSession(state.activeConvId);if(!sess)return;
   var p=getPrefs();
+  var sides=getLocalSides(sess);  // mySide / theirSide based on localRole
+  var myModeKey=sides.mySide+'LangMode';
+  var myFixedKey=sides.mySide+'FixedLang';
 
-  var ownerEffective=getEffectiveReplyLang(sess,'owner','en');
-  var explicitLang=(sess.ownerLangMode==='fixed')?normalizeLangSetting(sess.ownerFixedLang||''):'';
+  var myEffective=getEffectiveReplyLang(sess,sides.mySide,'en');
+  var explicitLang=(sess[myModeKey]==='fixed')?normalizeLangSetting(sess[myFixedKey]||''):'';
   var detectedLang=detectLang(text,detectBrowserLang()||'en');
-  // Case A/B language rules:
-  // A) auto => semantic source and expected replies follow detected typed language.
-  // B) fixed => semantic source normalizes to fixed language and expected replies stay fixed.
-  var outLang=explicitLang||(detectedLang||ownerEffective||'en');
+  // A) auto => source follows detected lang. B) fixed => normalize to fixed lang before sending.
+  var outLang=explicitLang||(detectedLang||myEffective||'en');
   var outboundText=text;
   if(explicitLang&&detectedLang&&detectedLang!==explicitLang){
     try{
       outboundText=(await translate(text,detectedLang,explicitLang))||text;
     }catch(_){outboundText=text;}
   }
-  var partnerTargetLang=getEffectiveReplyLang(sess,'partner','en');
-  sess.ownerLastSentLang=outLang;
-  setEffectiveReplyLang(sess,'owner',outLang);
+  var targetLang=getEffectiveReplyLang(sess,sides.theirSide,'en');
+  sess[sides.mySide+'LastSentLang']=outLang;
+  setEffectiveReplyLang(sess,sides.mySide,outLang);
   putSession(sess);
 
-  var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:'owner',sourceText:outboundText,sourceLang:outLang,targetLang:partnerTargetLang,targetText:'',text:outboundText,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:partnerTargetLang});
+  var msg=normalizeMsgSchema({id:uid(),from:'me',ownerRole:sides.mySide,sourceText:outboundText,sourceLang:outLang,targetLang:targetLang,targetText:'',text:outboundText,lang:outLang,translated:null,status:'sent',timestamp:Date.now(),clarify:{status:'none',text:'',thread:[]},translations:{}},{sourceLang:outLang,targetLang:targetLang});
   stampMsgNames(msg,sess);
   state.messages.push(msg);renderMsg(msg);ta.value='';autoResize();updateSendBtn();scrollBottom();
   sess.lastActivity=msg.timestamp;putSession(sess);
 
-  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:partnerTargetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
+  var payload={type:'msg',id:msg.id,sourceText:msg.sourceText,sourceLang:msg.sourceLang,targetText:'',targetLang:targetLang,effectiveTargetLang:getEffectiveTargetLang(sess),translations:msg.translations,orig:msg.sourceText,lang:msg.sourceLang,timestamp:msg.timestamp,name:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere',myHandle:firstRealName(sess.myHandle,sess.myName,p.globalName,p.userName)||'yournamehere'};
   var ok=sendReliable(payload);
   if(!ok){msg.status='queued';toast('Message queued — switch to this tab to send');addDiagLog('TX msg QUEUED id='+msg.id.slice(0,8),'warn');}
   else{msg.status='sent';addDiagLog('TX msg SENT id='+msg.id.slice(0,8)+' src='+outLang+' tgt='+msg.targetLang);}
   saveMsgs(sess.convId,state.messages);
   updateMessageStatusUI(msg);
 
-  // Translate locally so sender sees target column filled in their own bubble
+  // Translate locally so sender sees target column filled
   if(outLang===msg.targetLang){
     applyMsgTarget(msg,msg.targetLang,outboundText);
     updateTransDOM(msg);
@@ -4362,7 +4381,7 @@ function resetSourceBubbleDefaults(){var p=getPrefs();p.sourceTheme=BUBBLE_DEFAU
 function resetTargetBubbleDefaults(){var p=getPrefs();p.targetTheme=BUBBLE_DEFAULTS.targetTheme;p.targetBubbleFontSize=BUBBLE_DEFAULTS.targetBubbleFontSize;p.targetAccentColor=BUBBLE_DEFAULTS.targetAccentColor;savePrefs(p);openSettings();applyBubbleTheme();toast('Target bubble reset');}
 function applyPhrasebookAccent(v){var p=getPrefs();p.phrasebookAccentColor=v;savePrefs(p);}
 
-function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.8</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
+function openInfoModal(kind){var title=document.getElementById('info-title');var body=document.getElementById('info-body');if(kind==='privacy'){title.textContent='Privacy';body.innerHTML='<strong>Local-first storage.</strong><br>All session and phrasebook data stays in localStorage unless you export it yourself.';}else{title.textContent='About';body.innerHTML='<strong>Talk + Say · v3.9</strong><br>Shell-first bilingual chat &amp; phrasebook with unified bubble renderer, back-translation, and clarify workflows.';}document.getElementById('info-overlay').hidden=false;}
 function openPrintPhrasebookModal(){document.getElementById('print-overlay').hidden=false;}
 function printPhrasebookSelection(){document.getElementById('print-overlay').hidden=true;renderCatalogCards();setTimeout(function(){window.print();},60);}
 
@@ -4922,5 +4941,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.8 · Build Apr 16, 2026 22:30 Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.9 · Build Apr 16, 2026 23:30 Los Angeles</div></body>
 </html>

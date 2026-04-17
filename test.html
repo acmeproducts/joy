@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Talk + Say v3.9 · April 16, 2026 23:30 Los Angeles · role-aware send/receive: partner device translates correctly -->
+<!-- Talk + Say v4.0 · April 17, 2026 · fastText WASM lang detection, two-tab nav, composer globe, consolidated diag export -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v3.9</title>
+<title>Talk + Say · v4.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -42,8 +42,8 @@ textarea.field-input{resize:none;}
 .left-panel.open{transform:translateX(0);}
 .left-scrim{position:absolute;inset:0;background:rgba(0,0,0,.2);z-index:29;display:none;}
 .left-scrim.show{display:block;}
-.left-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0;}
-.left-gear{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:6px;border-radius:8px;line-height:0;}
+.left-top{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:2px;}
+.left-gear{background:none;border:none;cursor:pointer;color:var(--ink-dim);width:36px;height:36px;padding:0;border-radius:8px;line-height:0;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
 .left-body{flex:1;overflow-y:auto;padding:8px 12px 80px;position:relative;}
 .sess-card{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;user-select:none;}
 .sess-card:hover{border-color:var(--teal-mid);}
@@ -286,6 +286,8 @@ textarea.field-input{resize:none;}
 .composer-icon{background:none;border:none;cursor:pointer;color:var(--ink-dim);padding:8px 5px;flex-shrink:0;line-height:0;border-radius:8px;transition:color .12s;}
 .composer-icon:hover{color:var(--teal);}
 .composer-icon.active{color:var(--red);}
+/* Mic button matches send button geometry — same 40×40 circle, no fill */
+#stt-btn{width:40px;height:40px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;}
 .composer-wrap{flex:1;position:relative;}
 .composer-ta{width:100%;border:1.5px solid var(--border);border-radius:20px;padding:9px 14px;font-size:16px;font-family:"DM Sans",sans-serif;background:#fff;resize:none;outline:none;min-height:40px;max-height:110px;line-height:1.4;-webkit-appearance:none;appearance:none;overflow:hidden;display:block;}
 .composer-ta:focus{border-color:var(--teal);}
@@ -426,8 +428,12 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <aside class="left-panel" id="left-panel">
     <div class="left-top">
       <button class="left-gear" id="left-gear-btn" onclick="toggleSettingsDrawer()" title="Settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
+      <button class="left-gear" onclick="closeLeftPanel();openPhrasebookModal();" title="Phrasebook">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="left-gear" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
     </div>
 
     <!-- Settings drawer — slides down below gear row -->
@@ -523,18 +529,11 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
     </div>
   </aside>
 
-  <!-- Ribbon -->
+  <!-- Ribbon: hamburger (left) · speaker (right) -->
   <div class="shell-ribbon">
     <button class="ribbon-btn" onclick="openLeftPanel()" title="Sessions">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <button class="ribbon-btn" onclick="openPhrasebookModal()" title="Phrasebook">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    </button>
-    <button class="ribbon-btn" onclick="shareCurrentSession()" title="Share session">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-    </button>
-    <button class="ribbon-btn" id="ribbon-lang-btn" onclick="openLanguagePanel()" title="Your language">🌐</button>
     <span class="ribbon-spacer"></span>
     <button class="ribbon-speaker" id="ribbon-speaker-btn" onclick="toggleAutoReadRibbon()" title="Auto-read">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9A9592" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -564,7 +563,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-dim);opacity:.7;}
   <!-- Composer: [mic] [textarea] [send] -->
   <div class="composer" id="composer" style="display:none;">
     <button class="composer-icon" id="stt-btn" onclick="toggleSTT()" title="Voice input">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
     </button>
     <div class="composer-wrap">
       <textarea class="composer-ta" id="msg-input" placeholder="Type or speak…" rows="1" oninput="composerInput()" onkeydown="composerKeydown(event)"></textarea>
@@ -852,6 +851,7 @@ Owner</div>
   <div class="sheet" style="max-height:80dvh;"><div class="sheet-handle"></div>
     <div style="padding:14px 20px 6px;display:flex;align-items:center;gap:8px;">
       <span style="font-family:'Lora',serif;font-size:17px;font-weight:600;flex:1;">Diagnostics</span>
+      <button onclick="exportSessionChat(diagCurrentSess)" style="background:var(--paper);color:var(--ink-mid);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">⇩ Transcript</button>
       <button onclick="copyDiagLog()" style="background:var(--teal-light);color:var(--teal);border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Copy</button>
       <button onclick="clearDiagLog()" style="background:none;border:none;color:var(--ink-dim);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Clear</button>
       <button onclick="document.getElementById('diag-overlay').hidden=true" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-mid);">×</button>
@@ -1599,8 +1599,135 @@ function applyMsgTarget(msg,targetLang,targetText){
   return changed;
 }
 function normalizeTag(s){return s.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'').slice(0,24);}
-// TODO: replace with WASM sidecar result when available — currently script-range only, Latin languages fall back to browser lang
-function detectLang(text,fb){var t=(text||'').trim();if(!t)return fb||'en';if(/[฀-๿]/.test(t))return'th';if(/[぀-ヿ]/.test(t))return'ja';if(/[一-鿿]/.test(t))return'zh';if(/[가-힯]/.test(t))return'ko';if(/[؀-ۿ]/.test(t))return'ar';return fb||'en';}
+// ════════════════════════════════════════════════════════
+// LANGUAGE DETECTION — fastText WASM (lid.176.ftz)
+// Handles Latin languages + mixed-language (Spanglish etc.)
+// Graceful fallback: if WASM/model unavailable, falls through
+// to existing script-range detector, then browser lang.
+// ════════════════════════════════════════════════════════
+var _ftReady=false;        // WASM + model fully loaded
+var _ftModule=null;        // fastText JS wrapper instance
+var _ftLoadFailed=false;   // permanent failure flag — skip retries
+var _ftPending=[];         // callbacks waiting for load
+
+function _loadFastText(){
+  if(_ftReady||_ftLoadFailed)return;
+  // Dynamically load the fastText JS glue from the same subdirectory
+  var script=document.createElement('script');
+  script.src='/fastText/fasttext.js';
+  script.onerror=function(){
+    _ftLoadFailed=true;
+    addDiagLog('fastText WASM load failed reason=script-missing fallback=script-range','warn');
+    _ftPending.forEach(function(cb){cb(null);});_ftPending=[];
+  };
+  script.onload=function(){
+    if(typeof FastText==='undefined'){
+      _ftLoadFailed=true;
+      addDiagLog('fastText WASM load failed reason=FastText-undefined','warn');
+      _ftPending.forEach(function(cb){cb(null);});_ftPending=[];
+      return;
+    }
+    try{
+      var ft=new FastText();
+      ft.loadModel('/fastText/models/lid.176.ftz').then(function(){
+        _ftModule=ft;_ftReady=true;
+        addDiagLog('fastText WASM ready model=lid.176.ftz');
+        _ftPending.forEach(function(cb){cb(ft);});_ftPending=[];
+      }).catch(function(e){
+        _ftLoadFailed=true;
+        addDiagLog('fastText model load failed: '+String(e),'warn');
+        _ftPending.forEach(function(cb){cb(null);});_ftPending=[];
+      });
+    }catch(e){
+      _ftLoadFailed=true;
+      addDiagLog('fastText init error: '+String(e),'warn');
+      _ftPending.forEach(function(cb){cb(null);});_ftPending=[];
+    }
+  };
+  document.head.appendChild(script);
+}
+
+// Returns a Promise<langCode|null>. Resolves immediately from cache or
+// script-range for non-Latin scripts; uses fastText for Latin text.
+function _detectLangAsync(text){
+  var t=(text||'').trim();
+  if(!t)return Promise.resolve(null);
+  // Script-range fast path — non-Latin scripts don't need fastText
+  if(/[฀-๿]/.test(t))return Promise.resolve('th');
+  if(/[぀-ヿ]/.test(t))return Promise.resolve('ja');
+  if(/[一-鿿\u4E00-\u9FFF]/.test(t))return Promise.resolve('zh');
+  if(/[가-힯]/.test(t))return Promise.resolve('ko');
+  if(/[؀-ۿ]/.test(t))return Promise.resolve('ar');
+  if(/[\u0900-\u097F]/.test(t))return Promise.resolve('hi');
+  if(/[\u0400-\u04FF]/.test(t))return Promise.resolve('ru');
+  // Latin text — use fastText
+  if(_ftLoadFailed){return Promise.resolve(null);}
+  if(_ftReady&&_ftModule){
+    return _runFastText(t);
+  }
+  // Queue until loaded
+  return new Promise(function(resolve){
+    _ftPending.push(function(ft){
+      if(!ft){resolve(null);return;}
+      _runFastText(t).then(resolve).catch(function(){resolve(null);});
+    });
+    if(!_ftReady&&!_ftLoadFailed&&_ftPending.length===1){_loadFastText();}
+  });
+}
+
+var CONFIDENT_THRESHOLD=0.5; // fastText confidence floor
+function _runFastText(text){
+  return new Promise(function(resolve){
+    try{
+      // fastText predict returns array of {label,prob}
+      var result=_ftModule.predict(text,1);
+      if(result&&result.length){
+        var top=result[0];
+        var raw=(top.label||'').replace('__label__','');
+        var prob=top.prob||0;
+        if(prob>=CONFIDENT_THRESHOLD){
+          addDiagLog('lang-detect=fasttext lang='+raw+' conf='+prob.toFixed(2));
+          resolve(raw||null);
+        }else{
+          addDiagLog('lang-detect=fasttext low-conf lang='+raw+' conf='+prob.toFixed(2)+' fallback=browser');
+          resolve(null);
+        }
+      }else{resolve(null);}
+    }catch(e){
+      addDiagLog('fastText predict error: '+String(e),'warn');
+      resolve(null);
+    }
+  });
+}
+
+// Sync shim — used in sendMessage where we need a sync value.
+// Returns best available sync result; WASM result applied via async update if needed.
+// TODO: replace with fully async sendMessage refactor in a future release.
+function detectLang(text,fb){
+  var t=(text||'').trim();if(!t)return fb||'en';
+  // Script-range (instant, no WASM needed)
+  if(/[฀-๿]/.test(t))return'th';
+  if(/[぀-ヿ]/.test(t))return'ja';
+  if(/[一-鿿\u4E00-\u9FFF]/.test(t))return'zh';
+  if(/[가-힯]/.test(t))return'ko';
+  if(/[؀-ۿ]/.test(t))return'ar';
+  if(/[\u0900-\u097F]/.test(t))return'hi';
+  if(/[\u0400-\u04FF]/.test(t))return'ru';
+  // If fastText is ready, use it synchronously via predict
+  if(_ftReady&&_ftModule){
+    try{
+      var r=_ftModule.predict(t,1);
+      if(r&&r.length&&(r[0].prob||0)>=CONFIDENT_THRESHOLD){
+        var lang=r[0].label.replace('__label__','');
+        addDiagLog('lang-detect=fasttext lang='+lang+' conf='+r[0].prob.toFixed(2));
+        return lang||fb||'en';
+      }
+    }catch(_){}
+  }
+  // WASM not ready — fall back to browser language
+  addDiagLog('lang-detect=fallback fb='+(fb||'en'));
+  return fb||'en';
+}
 function fallbackCopy(t){var ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;left:-9999px;';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied');}catch(e){}document.body.removeChild(ta);}
 function scrollBottom(){var c=document.getElementById('messages');if(c)c.scrollTop=c.scrollHeight;}
 function populateLangSelect(id,def){var sel=document.getElementById(id);if(!sel)return;sel.innerHTML='';LANGS.forEach(function(l){var o=document.createElement('option');o.value=l.code;o.textContent=l.label;if(l.code===def)o.selected=true;sel.appendChild(o);});}
@@ -1816,7 +1943,7 @@ function refreshInviteStatus(convId){
   var rt=getRoomRuntime(cid);var sess=cid&&getSession(cid);
   if(!el||!rt)return;
   el.style.color='var(--ink-dim)';
-  if(!rt.peerEverSeen){el.textContent='Waiting for partner';return;}
+  if(!rt.peerEverSeen){el.textContent='';return;}
   if(rt.peerPresent){el.textContent=getSessionLabel(sess)+' connected \u2713';el.style.color='var(--green)';return;}
   el.textContent='Partner last seen '+fmtPresenceTime(rt.peerLastSeenAt);
 }
@@ -2466,6 +2593,8 @@ function showEmptyShell(){
   document.getElementById('composer').style.display='none';
   updatePartnerHeader(null);
   updateDot();
+  // Auto-open left panel so user can start or pick a session
+  openLeftPanel();
 }
 
 function findSessionByLabel(label,excludeConvId){var want=(label||'').trim().toLowerCase();if(!want)return null;return getAllSessions().find(function(s){if(!s||s.convId===excludeConvId)return false;return getSessionLabel(s).trim().toLowerCase()===want;})||null;}
@@ -2571,7 +2700,6 @@ function renderSessionList(){
       +statusBadge
       +'<div style="display:flex;gap:2px;flex-shrink:0;">'
       +'<button class="sess-card-act" onclick="event.stopPropagation();shareSession(\''+s.convId+'\')" title="Share">'+ICON_SHARE+'</button>'
-      +'<button class="sess-card-act" onclick="event.stopPropagation();exportSessionChat(\''+s.convId+'\')" title="Export chat">⇩</button>'
       +'<button class="sess-card-act" onclick="event.stopPropagation();openDiagModal(\''+s.convId+'\')" title="Diagnostics">'+ICON_DIAG+'</button>'
       +'<button class="sess-card-act del" onclick="event.stopPropagation();softDelete(\''+s.convId+'\')" title="Delete">'+ICON_DELETE+'</button>'
       +'</div></div>';
@@ -2968,6 +3096,12 @@ function speak(text,lang,btn){
     if(_isIos){setTimeout(doSpeak,30);}else{doSpeak();}
   });
 }
+// Read text from DOM at click time so TTS works even when translation arrived after render
+function speakBubble(id,side,lang,btn){
+  var el=document.getElementById((side==='src'?'bsrc-':'btgt-')+id);
+  var text=el?(el.textContent||el.innerText||'').trim():'';
+  speak(text,lang,btn);
+}
 function warmTTS(){
   // iOS requires a gesture-context utterance before auto-read will work; call on first user touch
   if(!canSpeak||_ttsWarmed)return;
@@ -3333,14 +3467,14 @@ function buildBubbleCard(cfg){
     +'<div class="'+srcClass+'" id="bsrc-'+id+'">'+renderMd(srcTxt)+'</div>'
     +'<div class="bbl-side-acts">'
     +'<button class="bbl-use" data-use-src="'+id+'">Use</button>'
-    +'<button class="bbl-tts" onclick="speak('+aS+','+aSL+',this)" title="Listen">'+ICON_TTS+'</button>'
+    +'<button class="bbl-tts" onclick="speakBubble(\''+id+'\',\'src\','+aSL+',this)" title="Listen">'+ICON_TTS+'</button>'
     +'</div></div>'
     +'<div class="bbl-divider"></div>'
     +'<div class="bbl-side">'
     +'<div class="'+tgtClass+'" id="btgt-'+id+'">'+renderMd(tgtTxt)+'</div>'
     +'<div class="bbl-side-acts">'
     +'<button class="bbl-use" data-use-tgt="'+id+'">Use</button>'
-    +'<button class="bbl-tts" onclick="speak('+aT+','+aTL+',this)" title="Listen">'+ICON_TTS+'</button>'
+    +'<button class="bbl-tts" onclick="speakBubble(\''+id+'\',\'tgt\','+aTL+',this)" title="Listen">'+ICON_TTS+'</button>'
     +'</div></div>'
     +'</div>';
 
@@ -4827,6 +4961,9 @@ document.addEventListener('DOMContentLoaded',function(){
   setupTabCoordination();
   loadCanonicalLedger();
   seedStarterData();
+
+  // ── Start fastText WASM load (non-blocking) ──
+  _loadFastText();
   document.addEventListener('keydown',function(e){
     var modal=document.getElementById('new-chat-modal');
     if(!modal||modal.hidden)return;
@@ -4941,5 +5078,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v3.9 · Build Apr 16, 2026 23:30 Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v4.0 · Build Apr 17, 2026 · Los Angeles</div></body>
 </html>

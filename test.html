@@ -4529,11 +4529,12 @@ function runOmniSearch(){var q=(document.getElementById('omni-search').value||''
 // ════════════════════════════════════════════════════════
 function openPhrasebookModal(){
   state.currentCatId='all';
+  document.getElementById('shell-empty').style.display='none';
   document.getElementById('cat-screen-title').textContent='Phrasebook';
   renderCatalogCards();
   showScreen('catalog-screen');
 }
-function closePhrasebookView(){showScreen('chat-screen');}
+function closePhrasebookView(){showScreen('chat-screen');document.getElementById('shell-empty').style.display=state.activeConvId?'none':'flex';}
 function openCatalogFilterModal(){renderPhrasebookCatalogFilter();document.getElementById('catalog-filter-overlay').hidden=false;}
 
 function getActivePhrasebookCatalogId(){return state.currentCatId||'all';}

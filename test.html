@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<!-- Talk + Say v4.0 · April 17, 2026 · fastText WASM lang detection, two-tab nav, composer globe, consolidated diag export -->
+<!-- Talk + Say v4.1 · April 19, 2026 · language pair flags on session cards, mic silence timer, lang routing fix -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk + Say · v4.0</title>
+<title>Talk + Say · v4.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -2683,6 +2683,17 @@ function savePartnerName(){return;}
 function getUnreadCount(convId){return getMsgs(convId).filter(function(m){return m&&m.from==='them'&&!m.readAt;}).length;}
 
 var dragSrcId=null;
+function getSessionLangPair(s){
+  // Always show from local perspective: my language → their language
+  var sides=getLocalSides(s);
+  var myLang=resolveEffectiveLang(s,sides.mySide)||'';
+  var theirLang=resolveEffectiveLang(s,sides.theirSide)||'';
+  var myFlag=myLang?langFlag(myLang):'';
+  var theirFlag=theirLang?langFlag(theirLang):'';
+  if(!myFlag&&!theirFlag)return '';
+  if(myFlag===theirFlag)return myFlag;
+  return myFlag+(theirFlag?(' → '+theirFlag):'');
+}
 function renderSessionList(){
   var c=document.getElementById('session-list');if(!c)return;
   var ss=getAllSessions();var order=getSessionOrder();
@@ -2696,7 +2707,7 @@ function renderSessionList(){
     var unread=getUnreadCount(s.convId);
     var statusBadge=unread>0?('<div class="sess-card-badge">'+unread+'</div>'):'';
     return '<div class="sess-card'+(isActive?' active':'')+'" draggable="true" data-conv="'+s.convId+'" ondragstart="dragStart(event)" ondragover="event.preventDefault()" ondrop="dragDrop(event)" ondragend="dragEnd(event)" onclick="onSessCardClick(event,\''+s.convId+'\')">'
-      +'<div class="sess-card-info"><div class="sess-card-title">'+escHtml(getSessionLabel(s))+'</div><div class="sess-card-sub">'+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
+      +'<div class="sess-card-info"><div class="sess-card-title">'+escHtml(getSessionLabel(s))+'</div><div class="sess-card-sub">'+( getSessionLangPair(s)?getSessionLangPair(s)+' · ':'')+timeAgo(s.lastActivity||s.createdAt)+'</div></div>'
       +statusBadge
       +'<div style="display:flex;gap:2px;flex-shrink:0;">'
       +'<button class="sess-card-act" onclick="event.stopPropagation();shareSession(\''+s.convId+'\')" title="Share">'+ICON_SHARE+'</button>'
@@ -3162,12 +3173,17 @@ function toggleSTT(){
   var sess=getSession(state.activeConvId);
   recognition=new SpeechRec();
   recognition.lang=TTS_LOCALE[effectiveLangFromSession(sess)||getPrefs().myLang||'en']||'en';
-  recognition.interimResults=true;recognition.continuous=false;
+  recognition.interimResults=true;recognition.continuous=true;
   var btn=document.getElementById('stt-btn');
-  recognition.onstart=function(){sttActive=true;if(btn)btn.classList.add('active');};
-  recognition.onresult=function(e){var f='',i='';for(var r of e.results){if(r.isFinal)f+=r[0].transcript;else i+=r[0].transcript;}var ta=document.getElementById('msg-input');ta.value=f||i;autoResize();updateSendBtn();};
-  recognition.onend=function(){sttActive=false;if(btn)btn.classList.remove('active');};
-  recognition.onerror=function(e){if(e.error==='not-allowed')toast('Mic permission needed');sttActive=false;if(btn)btn.classList.remove('active');};
+  var ta=document.getElementById('msg-input');
+  // Capture any existing text so a second tap appends rather than replaces.
+  var baseText=(ta&&ta.value.trim())?ta.value.trimEnd()+' ':'';
+  var silenceTimer=null;
+  function resetSilenceTimer(){clearTimeout(silenceTimer);silenceTimer=setTimeout(function(){if(recognition)recognition.stop();},2500);}
+  recognition.onstart=function(){sttActive=true;if(btn)btn.classList.add('active');resetSilenceTimer();};
+  recognition.onresult=function(e){var f='',i='';for(var r of e.results){if(r.isFinal)f+=r[0].transcript;else i+=r[0].transcript;}if(ta)ta.value=baseText+(f||i);autoResize();updateSendBtn();resetSilenceTimer();};
+  recognition.onend=function(){sttActive=false;clearTimeout(silenceTimer);if(btn)btn.classList.remove('active');};
+  recognition.onerror=function(e){if(e.error==='not-allowed')toast('Mic permission needed');sttActive=false;clearTimeout(silenceTimer);if(btn)btn.classList.remove('active');};
   try{recognition.start();}catch(e){}
 }
 
@@ -3204,7 +3220,18 @@ function upsertPartnerFromEnvelope(sess,d,opts){
 function applyPeerRoutingHints(sess,d){
   if(!sess||!d)return false;
   var changed=false;
-  if(d.lang){var l=normalizeLangSetting(d.lang)||'';if(l&&sess.partnerLastSentLang!==l){sess.partnerLastSentLang=l;changed=true;}}
+  // Use d.side to route lang to the correct session slot (owner vs partner).
+  // d.lang is the sender's own language; it must go to the sender's role slot.
+  var remoteSide=(d.side==='owner'||d.side==='partner')?d.side:'partner';
+  if(d.lang){
+    var l=normalizeLangSetting(d.lang)||'';
+    if(l){
+      var lsKey=remoteSide+'LastSentLang';
+      if(sess[lsKey]!==l){sess[lsKey]=l;changed=true;}
+      var erlKey=remoteSide+'EffectiveReplyLang';
+      if(sess[erlKey]!==l){sess[erlKey]=l;changed=true;}
+    }
+  }
   if(d.partnerLangMode==='fixed'||d.partnerLangMode==='auto'){
     if(sess.partnerLangMode!==d.partnerLangMode){sess.partnerLangMode=d.partnerLangMode;changed=true;}
   }
@@ -5079,5 +5106,5 @@ document.addEventListener('DOMContentLoaded',function(){
   if(canSpeak&&_isIos){document.addEventListener('touchstart',warmTTS,{once:true,passive:true});}
 });
 </script>
-<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v4.0 · Build Apr 17, 2026 · Los Angeles</div></body>
+<div style="text-align:center;padding:4px 0 max(4px,env(safe-area-inset-bottom));font-size:9px;color:var(--ink-dim);opacity:.5;">Talk + Say v4.1 · Build Apr 19, 2026 · Los Angeles</div></body>
 </html>

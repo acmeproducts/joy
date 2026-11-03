@@ -37,7 +37,7 @@ New-device recovery with all other participants offline is also required.
   offline queue replay, fresh-browser recovery without peers, shared deletion,
   stale translation saves, 350-entry local history, and reading position.
 - `wrangler deploy --dry-run` passes. These are lab checks; physical-watch and
-  production deployment checks remain unverified.
+  production page checks remain pending publication.
 - The original page also throws `splashSheetSource is not defined` in pagehide
   telemetry. Browser tests exclude only that confirmed baseline error.
 
@@ -54,8 +54,14 @@ test uses a deterministic relay stub. Each real-worker run uses its own room.
 Deploy the worker with `npx wrangler deploy` before publishing the updated page.
 The existing SQLite Durable Object binding is reused; its table is created on
 startup. Confirm production recovery from a fresh browser with all peers closed,
-then verify on a physical watch. This environment has no Cloudflare credentials,
-so production deployment cannot be performed here.
+then verify on a physical watch. Deployment uses
+`acmeproducts/stuff/.github/workflows/deploy-peace-chat.yml` and its existing
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets; credentials
+never leave GitHub Actions. Production worker checks passed in run
+[41614274364](https://github.com/acmeproducts/stuff/actions/runs/41614274364),
+including pagination beyond 300 entries, deletion protection, and reading the
+real room. A stale history response observed during deployment prompted explicit
+`Cache-Control: no-store` on history responses and unique client request URLs.
 
 Previously discarded history is recoverable only if retained in a browser,
 export, or relay buffer. Browser storage quotas still apply; failures are shown,

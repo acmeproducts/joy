@@ -3988,6 +3988,7 @@
                     const url = new URL(RELAY_SIGNAL_HTTP_URL);
                     url.searchParams.set('session', RELAY_SESSION_ID);
                     url.searchParams.set('chat', '1');
+                    url.searchParams.set('_', String(Date.now()));
                     if (cursor !== null) url.searchParams.set('cursor', cursor);
                     const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
                     if (!response.ok) throw new Error(`Chat recovery failed (${response.status})`);

@@ -283,7 +283,7 @@ export class SignalSession {
         const rows = [...this.state.storage.sql.exec('SELECT position, payload FROM peace_chat WHERE position > ? ORDER BY position LIMIT 51', after)];
         const page = rows.slice(0, 50);
         return new Response(JSON.stringify({ entries: page.map(row => JSON.parse(row.payload)), cursor: rows.length > 50 ? page.at(-1).position : null }), {
-          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
+          headers: { ...corsHeaders(), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
         });
       }
       if (wantsSnapshot) {

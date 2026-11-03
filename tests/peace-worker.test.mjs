@@ -26,6 +26,7 @@ async function history(session) {
   do {
     const response = await session.fetch(new Request(`https://example.org/signal?session=room&chat=1&cursor=${cursor}`));
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
     const page = await response.json(); entries.push(...page.entries); cursor = page.cursor;
   } while (cursor !== null);
   return entries;

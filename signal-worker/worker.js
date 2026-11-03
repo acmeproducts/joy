@@ -62,7 +62,7 @@ export class SignalSession {
     this.lastActivity = 0;
     this.approvedClients = new Set();
     this.ready = this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get([
+      const storedResult = await this.state.storage.get([
         'seq',
         'messages',
         HOST_KEY,
@@ -70,8 +70,16 @@ export class SignalSession {
         LAST_ACTIVITY_KEY,
         APPROVED_CLIENTS_KEY
       ]);
+      const stored = storedResult instanceof Map ? Object.fromEntries(storedResult) : storedResult;
       this.seq = stored.seq || 0;
       this.messages = stored.messages || [];
+      // Chat has its own durable lifetime; relay pruning/reset never touches it.
+      this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS peace_chat (position INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, payload TEXT NOT NULL)');
+      for (const message of this.messages) {
+        if (message.id && (message.type === 'chat-room' || message.type === 'chat-room-delete')) {
+          this.storeChat(message);
+        }
+      }
       this.hostId = stored[HOST_KEY] || null;
       this.hostUpdatedAt = stored[HOST_UPDATED_AT_KEY] || 0;
       this.lastActivity = stored[LAST_ACTIVITY_KEY] || 0;
@@ -79,6 +87,26 @@ export class SignalSession {
         this.approvedClients = new Set(stored[APPROVED_CLIENTS_KEY].filter(Boolean));
       }
     });
+  }
+
+  storeChat(message) {
+    if (typeof message.id !== 'string' || !message.id || message.id.length > 200) throw new Error('Invalid chat id');
+    const sql = this.state.storage.sql;
+    const current = [...sql.exec('SELECT payload FROM peace_chat WHERE id = ?', message.id)][0];
+    const existing = current ? JSON.parse(current.payload) : null;
+    if (existing?.deleted) return;
+    const deleted = message.type === 'chat-room-delete' || message.deleted === true;
+    if (existing && !deleted) return;
+    const entry = {
+      id: message.id,
+      senderId: existing?.senderId || message.senderId || message.from || 'legacy-peer',
+      name: existing?.name || String(message.name || 'Peer').slice(0, 40),
+      ts: existing?.ts || Number(message.ts) || Date.now(),
+      message: deleted ? 'Post deleted.' : String(message.text ?? message.message ?? ''),
+      attachments: deleted ? [] : (Array.isArray(message.attachments) ? message.attachments : []),
+      deleted, pending: false, status: 'sent'
+    };
+    sql.exec('INSERT INTO peace_chat (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload', entry.id, JSON.stringify(entry));
   }
 
   isHostStale(now = Date.now()) {
@@ -190,9 +218,10 @@ export class SignalSession {
 
   async persistAndBroadcast(message, options = {}) {
     const { transient = false, skipSenderId } = options;
+    if (message.type === 'chat-room' || message.type === 'chat-room-delete') this.storeChat(message);
     message.seq = ++this.seq;
     await this.touchSession();
-    if (!transient) {
+    if (!transient && !['chat-room', 'chat-room-delete'].includes(message.type)) {
       this.messages.push(message);
       if (this.messages.length > MAX_HISTORY) {
         this.messages.splice(0, this.messages.length - MAX_HISTORY);
@@ -249,6 +278,14 @@ export class SignalSession {
         return new Response('Missing session', { status: 400, headers: corsHeaders() });
       }
       this.sessionId = sessionId;
+      if (url.searchParams.get('chat') === '1') {
+        const after = Math.max(0, Number(url.searchParams.get('cursor')) || 0);
+        const rows = [...this.state.storage.sql.exec('SELECT position, payload FROM peace_chat WHERE position > ? ORDER BY position LIMIT 51', after)];
+        const page = rows.slice(0, 50);
+        return new Response(JSON.stringify({ entries: page.map(row => JSON.parse(row.payload)), cursor: rows.length > 50 ? page.at(-1).position : null }), {
+          headers: { ...corsHeaders(), 'Content-Type': 'application/json' }
+        });
+      }
       if (wantsSnapshot) {
         if (!clientId) {
           return new Response('Client id required for snapshot', {
@@ -293,6 +330,16 @@ export class SignalSession {
       }
       this.sessionId = sessionId;
       message.session = sessionId;
+      if (message.type === 'chat-room-migrate') {
+        if (!Array.isArray(message.entries) || message.entries.length > 50) return new Response('Invalid migration batch', { status: 400, headers: corsHeaders() });
+        for (const entry of message.entries) {
+          if (!entry || typeof entry.id !== 'string' || !entry.id || entry.id.length > 200) return new Response('Invalid chat id', { status: 400, headers: corsHeaders() });
+        }
+        this.state.storage.transactionSync(() => {
+          for (const entry of message.entries) this.storeChat({ ...entry, type: entry.deleted ? 'chat-room-delete' : 'chat-room' });
+        });
+        return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders(), 'Content-Type': 'application/json' } });
+      }
       const isTransient = message.transient === true;
       if (message.type === 'snapshot') {
         await this.state.storage.put(SNAPSHOT_KEY, message);

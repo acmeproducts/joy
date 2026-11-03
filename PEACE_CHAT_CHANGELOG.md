@@ -1,5 +1,11 @@
 # Peace chat: persistent transcript and watch usability
 
+## Launcher label correction — November 3, 2026
+
+Removed the visible “Chat” word from the session beacon at the owner's request.
+The participant count and existing open/close action remain. The button retains
+its accessible name. The visible label is retired and should not be restored.
+
 ## Name-entry correction — November 3, 2026
 
 The owner reported that launch accepted a generated date/time twice and asked

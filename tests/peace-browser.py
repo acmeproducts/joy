@@ -154,7 +154,46 @@ with sync_playwright() as p:
         if (box.scrollTop !== 80) throw Error('reading position lost');
         if (loadAltarChat().length < 350) throw Error('history trimmed');
     }''')
+    page.bring_to_front()
+    cdp = context.new_cdp_session(page)
+    for width, height in [(162,197), (176,215), (198,242), (240,280)]:
+        page.set_viewport_size({'width':width, 'height':height})
+        history = page.locator('#peer-chat-history')
+        history.evaluate('(box) => box.scrollTop = 0')
+        page.wait_for_timeout(250)
+        rect = history.bounding_box()
+        assert rect['height'] >= height - 100, f'Toolbar/composer consume too much watch space at {width}px: {rect}'
+        x = rect['x'] + rect['width'] / 2
+        start = rect['y'] + rect['height'] - 8
+        end = rect['y'] + 8
+        cdp.send('Input.dispatchTouchEvent', {'type':'touchStart', 'touchPoints':[{'x':x,'y':start}]})
+        for step in range(1,11):
+            cdp.send('Input.dispatchTouchEvent', {'type':'touchMove', 'touchPoints':[{'x':x,'y':start+(end-start)*step/10}]})
+            if step == 5:
+                page.evaluate('''() => {
+                    const box = document.querySelector('#peer-chat-history');
+                    window.swipeNode = box.firstElementChild;
+                    renderPeerChat();
+                    if (box.firstElementChild !== window.swipeNode) throw Error('Refresh interrupted active swipe');
+                }''')
+            page.wait_for_timeout(20)
+        cdp.send('Input.dispatchTouchEvent', {'type':'touchEnd', 'touchPoints':[]})
+        page.wait_for_timeout(250)
+        assert history.evaluate('(box) => box.scrollTop') > 10, f'Touch scroll blocked at {width}px'
+        history.focus()
+        assert history.evaluate('(box) => document.activeElement === box'), 'Transcript must accept keyboard/crown focus'
+        page.keyboard.press('End')
+        page.wait_for_timeout(250)
+        assert history.evaluate('(box) => box.scrollTop + box.clientHeight >= box.scrollHeight - 2'), 'Cannot reach the end of the transcript'
+        page.keyboard.press('Home')
+        page.wait_for_timeout(250)
+        assert history.evaluate('(box) => box.scrollTop') == 0, 'Cannot reach the start of the transcript'
+        page.mouse.move(x, (start+end)/2)
+        before = history.evaluate('(box) => box.scrollTop')
+        page.mouse.wheel(0,200)
+        page.wait_for_timeout(250)
+        assert history.evaluate('(box) => box.scrollTop') > before, f'Wheel/crown scroll blocked at {width}px'
     # Baseline also throws this unrelated session-telemetry error on pagehide.
     assert not [error for error in errors if error != 'splashSheetSource is not defined'], errors
     browser.close()
-print('PASS: watch/phone/desktop geometry, invalid-name repair, Settings rename, draft preservation, identity, links, reload, offline queue, fresh-browser recovery, shared deletion')
+print('PASS: watch touch swipes, wheel/crown-style input, Home/End, swipe-safe refresh, geometry, invalid-name repair, Settings rename, identity, links, offline queue, recovery, shared deletion')

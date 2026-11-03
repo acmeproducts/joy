@@ -1,5 +1,28 @@
 # Peace chat: persistent transcript and watch usability
 
+## Watch scrolling — November 3, 2026
+
+The owner requested fully scrollable, watch-friendly chat. Baseline Chromium
+swipes and wheel scrolling worked, so the physical-watch failure was not reproduced
+in the lab. The baseline nevertheless disabled touch gestures at the body level,
+used a two-row toolbar, and replaced message nodes during live refreshes.
+
+- While chat is open, the body permits vertical gestures; the canvas retains its
+  own gesture handling. Transcript and Tools use native momentum scrolling with
+  contained overscroll. The transcript has an accessible focus target for keyboard
+  and crown-style wheel navigation.
+- A single-row watch toolbar increases transcript height from 132px to 161px in
+  the measured 198×242 viewport. Composer and close controls remain available;
+  Tools and attachment previews scroll within bounded areas. Translated text
+  uses the full message width on watches.
+- Live refreshes defer replacing message nodes until a swipe/scroll settles,
+  preserving native gestures and the existing reading-position behavior.
+- Browser checks pass for touch swipes, wheel input, Home/End access to both ends
+  of a 350-entry transcript, refresh during an active swipe, and usable viewing
+  space at 162, 176, 198, and 240px widths. Existing identity, link, persistence,
+  phone, and desktop checks also pass. Physical-watch behavior remains unverified.
+- Retired the two-row watch toolbar and immediate rerendering during gestures.
+
 ## Launcher label correction — November 3, 2026
 
 Removed the visible “Chat” word from the session beacon at the owner's request.

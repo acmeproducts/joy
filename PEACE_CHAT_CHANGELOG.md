@@ -1,5 +1,26 @@
 # Peace chat: persistent transcript and watch usability
 
+## Name-entry correction — November 3, 2026
+
+The owner reported that launch accepted a generated date/time twice and asked
+for name editing in Settings. Launch had prefilled the saved value and validated
+only that it was nonempty; periodic profile refreshes could also overwrite an
+unfinished session-name edit after focus moved away from the field.
+
+- Launch now starts blank whenever entry is required. Invalid saved timestamps,
+  blank names, and null/undefined values lose their confirmation and require a
+  valid name. Valid confirmed names continue to skip the prompt.
+- One validator covers launch, Settings, and the existing session editor. Errors
+  keep the form open and leave the current name intact. Settings saves persist
+  without reloading the page; background updates preserve unfinished edits.
+- Settings has a labeled name field, Save name button, and inline feedback, and
+  fits watch widths. Chat-panel renaming remains removed.
+- Before the fix, both new name/config acceptance checks failed. The corrected
+  validator, invalid-storage repair, and browser naming checks pass, along with
+  transcript, watch layout, links, offline replay, and deletion checks.
+- Removed timestamp prefilling and reload-on-name-save: neither is a valid way
+  to collect or correct a person's name. Physical-watch verification is pending.
+
 ## Requirements and implementation
 
 The owner requires that the transcript is never wiped, chat fills a watch's

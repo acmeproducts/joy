@@ -46,11 +46,24 @@ def route_request(route):
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
     context = browser.new_context(viewport={'width': 198, 'height': 242}, has_touch=True)
+    context.add_init_script("""if (!localStorage.getItem('name-test-seeded')) {
+        localStorage.setItem('relax_join_name', 'Nov 03, 01:53 AM');
+        localStorage.setItem('relax_name_confirmed', '1');
+        localStorage.setItem('name-test-seeded', '1');
+    }""")
     context.route('**/*', route_request)
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto('http://peace.test/peace.html')
+    assert page.locator('#launch-name').input_value() == ''
+    for invalid in ['', '   ', 'null', 'Nov 03, 01:53 AM']:
+        page.locator('#launch-name').fill(invalid)
+        page.locator('#launch-name-dialog button').click()
+        assert page.locator('#launch-name-dialog').is_visible()
+        assert page.evaluate('joinState.name') == ''
+        assert page.locator('#launch-name-status').inner_text()
+    assert page.evaluate('updateLocalName(null)') is False
     page.locator('#launch-name').fill('  Alice  ')
     page.locator('#launch-name-dialog button').click()
     page.locator('#session-beacon').click()
@@ -65,6 +78,27 @@ with sync_playwright() as p:
     assert page.locator('#peer-chat-history a').count() == 1
     assert page.evaluate('joinState.name') == 'Alice'
     assert page.locator('#peer-chat-local-name').count() == 0
+    page.locator('#peer-chat-window-close').click()
+    page.locator('#settings-trigger').click()
+    config = page.locator('#config-name-input')
+    assert config.input_value() == 'Alice'
+    assert config.bounding_box()['x'] >= 0
+    for invalid in ['', 'null', '2026-11-03']:
+        config.fill(invalid)
+        page.locator('#config-name-form button').click()
+        assert page.evaluate('joinState.name') == 'Alice'
+        assert page.locator('#config-name-status').inner_text() != 'Name saved.'
+    config.fill('Alicia')
+    config.blur()
+    page.evaluate('updateLocalProfileUI()')
+    assert config.input_value() == 'Alicia', 'Background refresh clobbered name draft'
+    page.locator('#config-name-form button').click()
+    assert page.evaluate('joinState.name') == 'Alicia'
+    assert page.locator('#config-name-status').inner_text() == 'Name saved.'
+    page.reload()
+    assert page.locator('#launch-name-dialog').count() == 0
+    assert page.evaluate('joinState.name') == 'Alicia'
+    page.locator('#session-beacon').click()
     for width, height in [(162,197),(176,215),(198,242),(240,280),(390,844),(1280,800)]:
         page.set_viewport_size({'width': width, 'height': height})
         box = page.locator('#peer-chat-window').bounding_box()
@@ -123,4 +157,4 @@ with sync_playwright() as p:
     # Baseline also throws this unrelated session-telemetry error on pagehide.
     assert not [error for error in errors if error != 'splashSheetSource is not defined'], errors
     browser.close()
-print('PASS: watch/phone/desktop geometry, identity, links, reload, offline queue, fresh-browser recovery, shared deletion')
+print('PASS: watch/phone/desktop geometry, invalid-name repair, Settings rename, draft preservation, identity, links, reload, offline queue, fresh-browser recovery, shared deletion')

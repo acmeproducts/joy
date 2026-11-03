@@ -14,6 +14,8 @@
             -webkit-tap-highlight-color: transparent;
             background-color: #000;
         }
+        body.chat-open { touch-action: pan-y; }
+        #gameCanvas { touch-action: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
@@ -47,9 +49,10 @@
 
         #peer-chat-tools { flex: none; position: relative; padding: 0 8px; }
         #peer-chat-tools summary { cursor: pointer; padding: 8px; min-height: 36px; }
-        .chat-tools-content { max-height: 45vh; overflow-y: auto; touch-action: pan-y; padding: 4px; }
+        .chat-tools-content { max-height: 45vh; overflow-y: auto; touch-action: pan-y; padding: 4px; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
         #peer-chat-scroll { padding: 4px; overflow: hidden; display: flex; }
-        #peer-chat-history { flex: 1; height: auto; min-height: 0; padding: 4px; touch-action: pan-y; overflow-wrap: anywhere; }
+        #peer-chat-history { flex: 1; height: auto; min-height: 0; padding: 4px; touch-action: pan-y; overflow-wrap: anywhere;
+            overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
         #peer-chat-input { min-width: 0; }
         #peer-chat-window { touch-action: pan-y; }
         #peer-chat-history button { min-width: 32px; min-height: 32px; }
@@ -58,18 +61,25 @@
         #launch-name-dialog input { width: 100%; min-width: 0; border: 1px solid #aaa; padding: 8px; }
         #launch-name-dialog button { min-height: 36px; background: #2563eb; color: white; border-radius: 6px; }
         @media (max-width: 480px) {
+            #peer-chat-window:not(.hidden) { display: grid; grid-template-columns: minmax(44px, 1fr) auto; grid-template-rows: 32px minmax(0, 1fr); }
+            #peer-chat-window > .flex-1 { grid-column: 1 / -1; grid-row: 2; overflow: hidden; }
             #settings-panel { width: 100vw; max-width: 100vw; }
             #settings-panel > div { padding: 8px; }
             #peer-chat-window { left: 0 !important; top: var(--chat-top, 0px) !important; transform: none !important;
                 width: 100vw !important; max-width: 100vw !important; min-width: 0 !important;
-                height: var(--chat-height, 100dvh) !important; max-height: var(--chat-height, 100dvh) !important;
+                height: var(--chat-height, 100vh) !important; max-height: var(--chat-height, 100vh) !important;
+                height: min(var(--chat-height, 100dvh), 100dvh) !important; max-height: min(var(--chat-height, 100dvh), 100dvh) !important;
                 min-height: 0 !important; border: 0; border-radius: 0; }
-            #peer-chat-window-handle { padding: 0 4px; min-height: 32px; cursor: default; }
+            #peer-chat-window-handle { grid-column: 2; grid-row: 1; min-width: 0; padding: 0 4px; min-height: 32px; cursor: default; border-bottom: 0; gap: 2px; touch-action: pan-y; }
+            #peer-chat-sync-status { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             #peer-chat-window-resize { display: none; }
             #peer-chat-window button { min-height: 32px; }
             #peer-chat-history > div { width: 100%; font-size: 14px; padding: 4px; }
+            #peer-chat-history .grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+            #peer-chat-tools { grid-column: 1; grid-row: 1; position: static; padding: 0 2px; align-self: center; }
             #peer-chat-tools summary { padding: 2px 4px; min-height: 28px; font-size: 12px; }
-            #peer-chat-tools[open] .chat-tools-content { position: absolute; inset: 28px 0 auto; background: white; z-index: 2; max-height: 55dvh; }
+            #peer-chat-tools[open] .chat-tools-content { position: absolute; inset: 32px 0 auto; background: white; z-index: 2; max-height: 55vh; max-height: min(55dvh, calc(var(--chat-height, 100dvh) - 36px)); }
+            #peer-chat-attachments { max-height: 30vh; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
             #peer-chat-window .border-t { padding: 4px; }
             #peer-chat-window .border-t > .flex { gap: 3px; }
             #peer-chat-input { padding: 4px; font-size: 16px; width: 0; }
@@ -199,7 +209,7 @@
         <div class="flex-1 min-h-0 flex flex-col">
 
             <div class="px-4 py-3 space-y-3 flex-1 min-h-0 overflow-y-auto" id="peer-chat-scroll">
-            <div id="peer-chat-history" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
+            <div id="peer-chat-history" tabindex="0" role="region" aria-label="Messages" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-700 h-56 overflow-y-auto space-y-2"></div>
 
             </div>
 
@@ -1555,6 +1565,8 @@
         const peerConnectionHistory = new Map();
         const peerChatHistory = new Map();
         let altarChatHistory = [];
+        let peerChatInteractionUntil = 0;
+        let peerChatRenderTimer = null;
         let activePeerModalId = null;
         let presenceTimer = null;
         let presenceRenderTimer = null;
@@ -2332,6 +2344,7 @@
 
         function showPeerChatWindow() {
             if (!peerChatWindow) return;
+            document.body.classList.add('chat-open');
             peerChatWindow.classList.remove('hidden');
             initializePeerChatWindowSize();
             initializePeerChatWindowPosition();
@@ -2339,6 +2352,10 @@
 
         function closePeerChatWindow() {
             if (peerChatWindow) peerChatWindow.classList.add('hidden');
+            document.body.classList.remove('chat-open');
+            clearTimeout(peerChatRenderTimer);
+            peerChatRenderTimer = null;
+            peerChatInteractionUntil = 0;
         }
 
         function bindPeerChatWindowDrag() {
@@ -2469,6 +2486,7 @@
             renderPeerChatMembers();
             renderPeerChat();
             clearUnreadChat();
+            document.getElementById('peer-chat-history').focus({ preventScroll: true });
         }
 
         function closePeerModal() {
@@ -2477,6 +2495,15 @@
         }
 
         function renderPeerChat() {
+            // Replacing message nodes during a swipe cancels native momentum on
+            // small touch browsers. Render the latest history after scrolling settles.
+            clearTimeout(peerChatRenderTimer);
+            const remaining = peerChatInteractionUntil - Date.now();
+            if (remaining > 0 && isPeerChatOpen()) {
+                peerChatRenderTimer = setTimeout(renderPeerChat, remaining + 1);
+                return;
+            }
+            peerChatRenderTimer = null;
             const peerId = 'altar';
             const chatHistory = loadAltarChat();
             const chatBox = document.getElementById('peer-chat-history');
@@ -4856,6 +4883,12 @@
             };
         }
         updateChatAttachmentUI();
+        const scrollableChatHistory = document.getElementById('peer-chat-history');
+        ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel', 'scroll'].forEach(type => {
+            scrollableChatHistory.addEventListener(type, () => {
+                if (isPeerChatOpen()) peerChatInteractionUntil = Date.now() + 200;
+            }, { passive: true });
+        });
         bindPeerChatWindowDrag();
         bindPeerChatWindowResize();
         document.getElementById('peer-chat-send').onclick=() => {

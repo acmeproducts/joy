@@ -58,6 +58,8 @@
         #launch-name-dialog input { width: 100%; min-width: 0; border: 1px solid #aaa; padding: 8px; }
         #launch-name-dialog button { min-height: 36px; background: #2563eb; color: white; border-radius: 6px; }
         @media (max-width: 480px) {
+            #settings-panel { width: 100vw; max-width: 100vw; }
+            #settings-panel > div { padding: 8px; }
             #peer-chat-window { left: 0 !important; top: var(--chat-top, 0px) !important; transform: none !important;
                 width: 100vw !important; max-width: 100vw !important; min-width: 0 !important;
                 height: var(--chat-height, 100dvh) !important; max-height: var(--chat-height, 100dvh) !important;
@@ -240,6 +242,13 @@
         </div>
 
         <div class="p-6 space-y-8 flex-1">
+
+            <form id="config-name-form" class="space-y-2" novalidate>
+                <label for="config-name-input" class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Your name</label>
+                <input id="config-name-input" type="text" maxlength="40" required autocomplete="off" autocapitalize="words" enterkeyhint="done" aria-describedby="config-name-status" class="w-full min-w-0 px-3 py-2 text-base border border-gray-200 rounded-lg" placeholder="Enter your name">
+                <button type="submit" class="w-full py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg">Save name</button>
+                <p id="config-name-status" role="status" class="text-xs text-gray-600"></p>
+            </form>
 
             <div class="flex justify-between items-center">
                 <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Sound</span>
@@ -1475,8 +1484,26 @@
                 element.addEventListener(eventName, markFilePickerActive, { passive: true });
             });
         }
+        function getJoinNameError(value) {
+            if (typeof value !== 'string' || !value.trim()) return 'Enter your name.';
+            const name = value.trim();
+            if (/^(null|undefined|nan|invalid date)$/i.test(name)) return 'Enter your name.';
+            if (name.length > 40) return 'Use 40 characters or fewer.';
+            if (/\p{N}{1,2}[:：]\p{N}{2}/u.test(name) || /^\p{N}{1,4}[/.-]\p{N}{1,2}[/.-]\p{N}{1,4}$/u.test(name)) {
+                return 'Enter your name, not a date or time.';
+            }
+            return '';
+        }
         function ensureJoinName() {
-            try { return (localStorage.getItem(JOIN_NAME_STORAGE_KEY) || '').trim(); }
+            try {
+                const stored = localStorage.getItem(JOIN_NAME_STORAGE_KEY);
+                if (getJoinNameError(stored)) {
+                    localStorage.removeItem(JOIN_NAME_STORAGE_KEY);
+                    localStorage.removeItem('relax_name_confirmed');
+                    return '';
+                }
+                return stored.trim();
+            }
             catch (_) { return ''; }
         }
         const joinState = { name: ensureJoinName() };
@@ -1484,27 +1511,38 @@
             let confirmed = false;
             try { confirmed = localStorage.getItem('relax_name_confirmed') === '1'; } catch (_) {}
             if (confirmed && joinState.name) return;
+            if (document.getElementById('launch-name-dialog')) return;
             const dialog = document.createElement('dialog');
             dialog.id = 'launch-name-dialog';
-            dialog.innerHTML = '<form method="dialog"><label for="launch-name">Your name</label><input id="launch-name" maxlength="40" required autocomplete="given-name"><button type="submit">Start</button><p role="status"></p></form>';
+            dialog.innerHTML = '<form method="dialog" novalidate><label for="launch-name">Your name</label><input id="launch-name" type="text" maxlength="40" required autocomplete="off" autocapitalize="words" enterkeyhint="done" aria-describedby="launch-name-status"><button type="submit">Start</button><p id="launch-name-status" role="status"></p></form>';
             document.body.appendChild(dialog);
             const input = dialog.querySelector('input');
-            input.value = joinState.name;
+            input.value = '';
             dialog.addEventListener('cancel', event => event.preventDefault());
             dialog.querySelector('form').addEventListener('submit', event => {
                 event.preventDefault();
                 const name = input.value.trim();
-                if (!name) { input.setCustomValidity('Enter your name'); input.reportValidity(); return; }
-                input.setCustomValidity('');
-                updateLocalName(name);
+                const error = getJoinNameError(name);
+                if (error) {
+                    dialog.querySelector('p').textContent = error;
+                    input.setAttribute('aria-invalid', 'true');
+                    input.focus();
+                    return;
+                }
+                if (!updateLocalName(name)) {
+                    dialog.querySelector('p').textContent = 'Name could not be saved. Please try again.';
+                    return;
+                }
                 try {
-                    localStorage.setItem('relax_name_confirmed', '1');
                     localStorage.setItem('relax_joined_at', new Date().toISOString());
                 } catch (_) { dialog.querySelector('p').textContent = 'Name cannot be saved on this browser.'; }
                 dialog.close();
                 dialog.remove();
             });
-            input.addEventListener('input', () => input.setCustomValidity(''));
+            input.addEventListener('input', () => {
+                input.removeAttribute('aria-invalid');
+                dialog.querySelector('p').textContent = '';
+            });
             dialog.showModal();
         }
         window.addEventListener('DOMContentLoaded', requestLaunchName);
@@ -3502,8 +3540,12 @@
 
         function updateLocalProfileUI() {
             if (localNameDisplay) localNameDisplay.textContent = joinState.name || 'Unnamed';
-            if (localNameInput && document.activeElement !== localNameInput) {
+            if (localNameInput && !localNameInput.dataset.dirty && document.activeElement !== localNameInput) {
                 localNameInput.value = joinState.name || '';
+            }
+            const configNameInput = document.getElementById('config-name-input');
+            if (configNameInput && !configNameInput.dataset.dirty && document.activeElement !== configNameInput) {
+                configNameInput.value = joinState.name || '';
             }
             const status = resolveLocalStatus();
             if (localStatusDot) localStatusDot.className = `w-2.5 h-2.5 rounded-full ${status.dotClass}`;
@@ -3512,16 +3554,25 @@
         }
 
         function updateLocalName(nextName) {
-            const trimmed = (nextName || '').trim();
-            if (!trimmed) return;
-            joinState.name = trimmed;
+            const error = getJoinNameError(nextName);
+            if (error) { showUiNotice(error); return false; }
+            const trimmed = nextName.trim();
             try {
                 localStorage.setItem(JOIN_NAME_STORAGE_KEY, trimmed);
-            } catch (_) {}
+                localStorage.setItem('relax_name_confirmed', '1');
+            } catch (_) {
+                showUiNotice('Name could not be saved. Please try again.');
+                return false;
+            }
+            joinState.name = trimmed;
+            [localNameInput, document.getElementById('config-name-input')].forEach(input => {
+                if (input) { delete input.dataset.dirty; input.value = trimmed; }
+            });
             updateLocalProfileUI();
             updateLocalChatNames();
             sendPresence('rename');
             appendDeviceLog('identity', `Updated display name to "${trimmed}".`);
+            return true;
         }
 
         function sendPresence(reason = 'interval') {
@@ -4989,9 +5040,9 @@
         }
 
         if (updateNameBtn && localNameInput) {
+            localNameInput.addEventListener('input', () => { localNameInput.dataset.dirty = 'true'; });
             updateNameBtn.onclick = () => {
                 updateLocalName(localNameInput.value);
-                requestAutoReload('name-update');
             };
             localNameInput.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
@@ -5000,6 +5051,27 @@
                 }
             });
         }
+
+        const configNameForm = document.getElementById('config-name-form');
+        const configNameInput = document.getElementById('config-name-input');
+        const configNameStatus = document.getElementById('config-name-status');
+        configNameInput.addEventListener('input', () => {
+            configNameInput.dataset.dirty = 'true';
+            configNameInput.removeAttribute('aria-invalid');
+            configNameStatus.textContent = '';
+        });
+        configNameForm.addEventListener('submit', event => {
+            event.preventDefault();
+            const error = getJoinNameError(configNameInput.value);
+            if (error) {
+                configNameStatus.textContent = error;
+                configNameInput.setAttribute('aria-invalid', 'true');
+                configNameInput.focus();
+                return;
+            }
+            configNameStatus.textContent = updateLocalName(configNameInput.value)
+                ? 'Name saved.' : 'Name could not be saved. Please try again.';
+        });
 
         updateLocalProfileUI();
         updateLocalChatNames();
